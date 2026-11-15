@@ -1,7 +1,8 @@
 /* ============================================================
-   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 23)
+   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 24)
    Карты бесплатны, рука по таймеру 30 сек. Бот разыгрывает карты.
    Уровни карт и фигур передаются в бой. Единицы: шанс за победу.
+   Потолок кубков: 140 — дальше ни прибавляем, ни отнимаем.
    ============================================================ */
 (function (global) {
 'use strict';
@@ -24,6 +25,11 @@ const TICK_MS = 100;
 
 const SEARCH_LIMIT_MS = 3000;
 const RESUME_LIMIT_MS = 6 * 60 * 60 * 1000;
+
+/* ---- потолок кубков ---- */
+const CUPS_CAP = 140;
+const CAP_KEY  = 'arenaCupsCap';
+
 const FRIENDLY_WAIT_MS = 90000;
 
 const AWAY_GRACE_MS = 15000;
@@ -304,6 +310,7 @@ Net.init = async function (opts){
 
   if (res.error) throw res.error;
   Net.me = res.data;
+  await Net._enforceCap();
   return res.data;
 };
 
@@ -313,7 +320,29 @@ Net.refresh = async function (){
     .eq('player_key', Net.key).maybeSingle();
 
   if (res.data) Net.me = res.data;
+  await Net._enforceCap();
   return Net.me;
+};
+
+/* дошёл до 140 — фиксируем навсегда: ни прибавить, ни отнять */
+Net._enforceCap = async function (){
+  const me = Net.me;
+  if (!me) return;
+
+  try {
+    if (me.cups >= CUPS_CAP){
+      localStorage.setItem(CAP_KEY, '1');
+    } else if (localStorage.getItem(CAP_KEY) !== '1'){
+      return;
+    }
+
+    if (me.cups !== CUPS_CAP){
+      await Net.sb.from('arena_players')
+        .update({ cups: CUPS_CAP })
+        .eq('player_key', Net.key);
+      me.cups = CUPS_CAP;
+    }
+  } catch (e){}
 };
 
 Net.rename = async function (raw){
@@ -1258,7 +1287,11 @@ Net._estimateCups = function (winner){
   else if (winner === 'draw') delta = 0;
   else delta = -Arena.lossFor(myCups, Arena.deltaFor(oppCups, myCups));
 
-  const after = Math.max(Arena.floorOf(myCups), myCups + delta);
+  let after = Math.max(Arena.floorOf(myCups), myCups + delta);
+
+  /* потолок: на 140 замираем — ни прибавляем, ни отнимаем */
+  if (myCups >= CUPS_CAP) after = myCups;
+  if (after > CUPS_CAP) after = CUPS_CAP;
 
   if (Net.mySide === 'a') return { a_before:myCups, a_after:after, b_before:oppCups, b_after:oppCups };
   return { a_before:oppCups, a_after:oppCups, b_before:myCups, b_after:after };
@@ -1505,6 +1538,10 @@ Net._finish = function (payload){
   if (typeof before !== 'number') before = Net.me ? Net.me.cups : 0;
   if (typeof after !== 'number') after = before;
 
+  /* потолок 140: на вершине кубки замирают */
+  if (before >= CUPS_CAP) after = before;
+  if (after > CUPS_CAP) after = CUPS_CAP;
+
   const opp = Net.players
     ? (Net.mySide === 'a' ? Net.players.b : Net.players.a)
     : { name: 'Враг' };
@@ -1553,6 +1590,7 @@ Net.leaveMatch = async function (){
 Net.DRAW_OFFER_MAX = DRAW_OFFER_MAX;
 Net.SPELL_TYPES = SPELL_TYPES;
 Net.HAND_SIZE = HAND_SIZE;
+Net.CUPS_CAP = CUPS_CAP;
 
 global.Net = Net;
 
