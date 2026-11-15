@@ -1,48 +1,67 @@
 /* ============================================================
-   chests.js — сундуки за победы (VER 3)
-   • Настоящие сундуки в SVG, цвет и металл зависят от ценности.
+   chests.js — сундуки за победы (VER 4)
+   • Прокачка выдаётся конкретной карте, а не в общий котёл.
+   • Награда показывается по одной штуке: карта, карта, монеты.
    • За каждую настоящую победу — серебряный сундук.
    • Редко — более ценный сундук, по одному типу на арену.
-   • Открытие по таймеру. Таймер можно сократить кристаллами.
    • Изредка сюрприз: сундук на ступень выше.
-   • После боя сундук показывается в окне результата.
+   ────────────────────────────────────────────────────────────
+   Подключение:
+     главная:    <script src="chests.js?v=4"></script>
+     экран боя:  <script src="chests.js?v=4"></script>
+                 (лобби там нет — блок не появится сам, только начисление)
    ============================================================ */
 (function (global) {
 'use strict';
 
-const KEY = 'chessChests';
-const UNITS_KEY = 'chessUnits';
+const KEY       = 'chessChests';      /* 4 ячейки */
+const CARD_KEY  = 'chessCardUnits';   /* {тип карты: прокачка} */
 const COINS_KEY = 'cr_coins';
 const GEMS_KEY  = 'cr_gems';
-const SLOTS = 4;
+const SLOTS     = 4;
 
 /* Настройки */
-const PREMIUM_CHANCE  = 0.12; // шанс, что помимо серебряного выпадет более ценный сундук
-const SURPRISE_CHANCE = 0.04; // шанс сюрприза при открытии: сундук на ступень выше
-const GEMS_PER_HOUR   = 2;    // кристаллов за час ожидания
-const TIME_MULT       = 1;    // 1 = реальное время. Для теста поставь 0.001
+const PREMIUM_CHANCE  = 0.12;  // шанс, что помимо серебряного выпадет ценный
+const SURPRISE_CHANCE = 0.04;  // шанс сюрприза: сундук на ступень выше
+const GEMS_PER_HOUR   = 2;     // кристаллов за час ожидания
+const TIME_MULT       = 1;     // 1 = реальное время. Для теста 0.001
 
-/* Порядок = ценность. Индекс 0 — серебряный (всегда). Арена N открывает индекс N-1. */
+/* Карты — ровно те же id, что в chess-deck.html */
+const CARDS = [
+  { id:'f', name:'Ярость',       icon:'⚡'  },
+  { id:'s', name:'Щит',          icon:'🛡️' },
+  { id:'c', name:'Рокировка',    icon:'🔄'  },
+  { id:'u', name:'Превращение',  icon:'👑'  },
+  { id:'g', name:'Подкрепление', icon:'➕'  },
+  { id:'x', name:'Чистка',       icon:'🗡️' },
+  { id:'z', name:'Заморозка',    icon:'❄️' },
+  { id:'l', name:'Перевербовка', icon:'🤝'  },
+  { id:'b', name:'Блокада',      icon:'🧱'  },
+  { id:'e', name:'Взрыв',        icon:'💣'  }
+];
+
+/* Порядок = ценность. 0 — серебряный. Арена N открывает индекс N-1.
+   cards — сколько разных карт падает, unit — сколько прокачки каждой. */
 const CHESTS = [
-  { name:'Серебряный',  rarity:'Обычный',     hours:3,  coins:[120,260],  units:[0,1],
+  { name:'Серебряный',  rarity:'Обычный',     hours:3,  coins:[120,260],  cards:[1,1], unit:[15,30],
     pal:{ w:['#9aa4b4','#4b5563'], m:['#f8fafc','#94a3b8'], glow:'#cbd5e1' } },
-  { name:'Золотой',     rarity:'Редкий',      hours:6,  coins:[300,520],  units:[0,2],
+  { name:'Золотой',     rarity:'Редкий',      hours:6,  coins:[300,520],  cards:[1,2], unit:[20,40],
     pal:{ w:['#b45309','#6b2f0b'], m:['#fef3c7','#f59e0b'], glow:'#fbbf24' } },
-  { name:'Кристальный', rarity:'Редкий',      hours:9,  coins:[450,750],  units:[1,2],
+  { name:'Кристальный', rarity:'Редкий',      hours:9,  coins:[450,750],  cards:[2,2], unit:[25,50],
     pal:{ w:['#1d4f91','#0b2a55'], m:['#e0f2fe','#38bdf8'], glow:'#7dd3fc' } },
-  { name:'Магический',  rarity:'Эпический',   hours:12, coins:[650,1000], units:[1,3],
+  { name:'Магический',  rarity:'Эпический',   hours:12, coins:[650,1000], cards:[2,3], unit:[35,65],
     pal:{ w:['#6d28d9','#2e1065'], m:['#f5d0fe','#c084fc'], glow:'#a78bfa' } },
-  { name:'Королевский', rarity:'Эпический',   hours:16, coins:[900,1400], units:[2,3],
+  { name:'Королевский', rarity:'Эпический',   hours:16, coins:[900,1400], cards:[2,3], unit:[45,80],
     pal:{ w:['#9d174d','#4a0722'], m:['#fbcfe8','#ec4899'], glow:'#f472b6' } },
-  { name:'Драконий',    rarity:'Эпический',   hours:20, coins:[1300,1900],units:[2,4],
+  { name:'Драконий',    rarity:'Эпический',   hours:20, coins:[1300,1900],cards:[3,3], unit:[55,95],
     pal:{ w:['#c2410c','#6b2508'], m:['#fed7aa','#f97316'], glow:'#f97316' } },
-  { name:'Теневой',     rarity:'Легендарный', hours:24, coins:[1800,2600],units:[3,5],
+  { name:'Теневой',     rarity:'Легендарный', hours:24, coins:[1800,2600],cards:[3,3], unit:[70,110],
     pal:{ w:['#334155','#0b1120'], m:['#cbd5e1','#475569'], glow:'#64748b' } },
-  { name:'Небесный',    rarity:'Легендарный', hours:30, coins:[2400,3400],units:[3,6],
+  { name:'Небесный',    rarity:'Легендарный', hours:30, coins:[2400,3400],cards:[3,4], unit:[85,130],
     pal:{ w:['#0284c7','#0a3d62'], m:['#e0f2fe','#7dd3fc'], glow:'#38bdf8' } },
-  { name:'Адский',      rarity:'Легендарный', hours:36, coins:[3200,4500],units:[4,7],
+  { name:'Адский',      rarity:'Легендарный', hours:36, coins:[3200,4500],cards:[4,4], unit:[100,155],
     pal:{ w:['#991b1b','#3f0909'], m:['#fecaca','#f59e0b'], glow:'#ef4444' } },
-  { name:'Легендарный', rarity:'Легендарный', hours:48, coins:[4500,6500],units:[5,9],
+  { name:'Легендарный', rarity:'Легендарный', hours:48, coins:[4500,6500],cards:[4,4], unit:[120,190],
     pal:{ w:['#eab308','#713f12'], m:['#fffbeb','#facc15'], glow:'#facc15' } }
 ];
 const TOP = CHESTS.length - 1;
@@ -103,6 +122,22 @@ function num(key){
 function setNum(key, n){ try { localStorage.setItem(key, String(Math.max(0, n))); } catch (e){} }
 function rnd(range){ return range[0] + Math.floor(Math.random() * (range[1] - range[0] + 1)); }
 
+/* прокачка конкретной карты — тот же ключ, что читает chess-deck.html */
+function readCardUnits(){
+  try {
+    const o = JSON.parse(localStorage.getItem(CARD_KEY) || '{}');
+    return (o && typeof o === 'object') ? o : {};
+  } catch (e){ return {}; }
+}
+function addCardUnits(id, n){
+  const o = readCardUnits();
+  o[id] = (parseInt(o[id] || 0, 10) || 0) + n;
+  try { localStorage.setItem(CARD_KEY, JSON.stringify(o)); } catch (e){}
+}
+function cardUnitsOf(id){
+  return parseInt(readCardUnits()[id] || 0, 10) || 0;
+}
+
 /* ---------- уведомления ---------- */
 
 function note(msg, color){
@@ -127,7 +162,6 @@ function isOpening(){
 
 /* ---------- выпадение после победы ---------- */
 
-/* Более ценный сундук: тип из уже открытых арен. Чем ценнее — тем реже. */
 function rollPremium(arena){
   const maxT = Math.min(arena - 1, TOP);
   if (maxT < 1) return -1;
@@ -144,7 +178,6 @@ function rollPremium(arena){
 
 function freeSlot(){ return slots.indexOf(null); }
 
-/* Возвращает { silver, premium } для показа после боя */
 function onWin(beforeCups){
   const arena = arenaOf(beforeCups);
   const premium = rollPremium(arena);
@@ -206,51 +239,137 @@ function skip(i){
   note('Сундук готов к открытию', '#43e97b');
 }
 
+/* ---------- награда ---------- */
+
+/* Список: сначала карты (каждая отдельной строкой), потом монеты */
+function buildReward(tier){
+  const c = CHESTS[tier];
+  const want = rnd(c.cards);
+  const taken = [];
+  const items = [];
+
+  for (let k = 0; k < want && taken.length < CARDS.length; k++){
+    const pool = CARDS.filter(function(x){ return taken.indexOf(x.id) < 0; });
+    if (!pool.length) break;
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    taken.push(pick.id);
+    items.push({
+      type: 'card',
+      id: pick.id,
+      name: pick.name,
+      icon: pick.icon,
+      units: rnd(c.unit)
+    });
+  }
+
+  items.push({ type:'coins', amount: rnd(c.coins) });
+  return items;
+}
+
 function claim(i){
   const s = slots[i];
   if (!s || s.st !== 'open') return;
   if (Date.now() < s.end) return;
 
-  const base = s.t;
-  let tier = base;
+  let tier = s.t;
   let surprise = false;
   if (tier < TOP && Math.random() < SURPRISE_CHANCE){
     tier = tier + 1;
     surprise = true;
   }
 
-  const c = CHESTS[tier];
-  const reward = { coins: rnd(c.coins), units: rnd(c.units) };
+  const items = buildReward(tier);
 
-  setNum(COINS_KEY, num(COINS_KEY) + reward.coins);
-  setNum(UNITS_KEY, num(UNITS_KEY) + reward.units);
+  /* выдаём сразу всё — а показываем по одной штуке */
+  items.forEach(function(it){
+    if (it.type === 'card') addCardUnits(it.id, it.units);
+    else if (it.type === 'coins') setNum(COINS_KEY, num(COINS_KEY) + it.amount);
+  });
 
   slots[i] = null;
   save(); render();
-  showReward(tier, reward, surprise);
+
+  try {
+    global.dispatchEvent(new CustomEvent('chests:grant', { detail:{ items:items } }));
+  } catch (e){}
+
+  showReward(tier, items, surprise);
   if (typeof global.updateTopbar === 'function') global.updateTopbar();
 }
 
-/* ---------- окно награды (из лобби) ---------- */
+/* ---------- окно награды: по одной штуке ---------- */
 
-function showReward(tier, r, surprise){
+let rvItems = [];
+let rvIdx = -1;
+
+function showReward(tier, items, surprise){
   const ov = document.getElementById('chReward');
-  if (!ov) return;
+  if (!ov){
+    /* окна нет (экран боя) — просто сообщаем состав */
+    const names = items.map(function(it){
+      return it.type === 'card' ? (it.name + ' +' + it.units) : ('🪙 +' + it.amount);
+    });
+    note('🎁 ' + names.join(' · '), CHESTS[tier].pal.glow);
+    return;
+  }
+
   const c = CHESTS[tier];
   ov.querySelector('.chr-icon').innerHTML = chestSvg(c, 120);
   const nm = ov.querySelector('.chr-name');
   nm.textContent = c.name + ' сундук';
   nm.style.color = c.pal.glow;
+
   ov.querySelector('.chr-surprise').innerHTML = surprise
     ? '<div class="chr-sur">⭐ СЮРПРИЗ! Сундук оказался ценнее</div>'
     : '';
-  const parts = [];
-  parts.push('<div class="chr-row">🪙 <b>+' + r.coins + '</b> монет</div>');
-  parts.push(r.units
-    ? '<div class="chr-row">🔹 <b>+' + r.units + '</b> единиц прокачки</div>'
-    : '<div class="chr-row">🔹 единиц в этот раз нет</div>');
-  ov.querySelector('.chr-list').innerHTML = parts.join('');
+
+  rvItems = items.slice();
+  rvIdx = -1;
+
   ov.classList.add('open');
+  nextReveal();
+}
+
+function nextReveal(){
+  const ov = document.getElementById('chReward');
+  if (!ov) return;
+
+  const box = ov.querySelector('.chr-list');
+  const btn = ov.querySelector('.chr-ok');
+  if (!box || !btn) return;
+
+  rvIdx++;
+
+  if (rvIdx >= rvItems.length){
+    box.innerHTML = '<div class="chr-done">Всё получено</div>';
+    btn.textContent = 'Забрать';
+    btn.dataset.done = '1';
+    return;
+  }
+
+  const it = rvItems[rvIdx];
+
+  if (it.type === 'card'){
+    box.innerHTML =
+      '<div class="chr-item">' +
+        '<div class="chr-ic">' + it.icon + '</div>' +
+        '<div class="chr-t">' + it.name + '</div>' +
+        '<div class="chr-s">+' + it.units + ' прокачки этой карте</div>' +
+        '<div class="chr-step">' + (rvIdx + 1) + ' / ' + rvItems.length + '</div>' +
+      '</div>';
+  } else {
+    box.innerHTML =
+      '<div class="chr-item">' +
+        '<div class="chr-ic">🪙</div>' +
+        '<div class="chr-t">Монеты</div>' +
+        '<div class="chr-s">+' + it.amount + '</div>' +
+        '<div class="chr-step">' + (rvIdx + 1) + ' / ' + rvItems.length + '</div>' +
+      '</div>';
+  }
+
+  const last = (rvIdx === rvItems.length - 1);
+  btn.textContent = last ? 'Забрать' : 'Дальше';
+  btn.dataset.done = last ? '1' : '0';
 }
 
 /* ---------- окно результата боя ---------- */
@@ -271,11 +390,11 @@ function showResultChest(res){
 
   if (!res.silver){
     el.innerHTML = '<div class="chr-res-t">Сундук не получен</div>' +
-      '<div class="chr-res-s">Все 4 ячейки заняты. Освободи место в лобби.</div>';
+      '<div class="chr-res-s">Все 4 ячейки заняты. Освободи место.</div>';
   } else {
     let html = '<div class="chr-res-art">' + chestSvg(CHESTS[0], 84) + '</div>' +
       '<div class="chr-res-t">Получен серебряный сундук</div>' +
-      '<div class="chr-res-s">Открой его в лобби, когда таймер закончится (' + CHESTS[0].hours + ' ч)</div>';
+      '<div class="chr-res-s">Открой его, когда таймер закончится (' + CHESTS[0].hours + ' ч)</div>';
     if (res.premium > 0){
       const p = CHESTS[res.premium];
       html += '<div class="chr-res-prem" style="--c:' + p.pal.glow + '">' +
@@ -289,7 +408,7 @@ function showResultChest(res){
   box.insertBefore(el, btn);
 }
 
-/* ---------- отрисовка лобби ---------- */
+/* ---------- отрисовка ---------- */
 
 function fmt(ms){
   const t = Math.max(0, Math.ceil(ms / 1000));
@@ -394,7 +513,16 @@ function injectStyle(){
     '@keyframes chLid{0%{transform:scale(.4) rotate(-6deg);opacity:0}100%{transform:scale(1) rotate(0);opacity:1}}',
     '.chr-name{font-size:19px;font-weight:900;margin:8px 0 8px;text-shadow:0 3px 0 #061433}',
     '.chr-sur{font-size:12px;font-weight:900;color:#3b1f00;background:linear-gradient(180deg,#ffe27a,#ffb300);border-radius:10px;padding:7px 8px;margin-bottom:10px;box-shadow:0 3px 0 #b45309}',
-    '.chr-list{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}',
+    '.chr-list{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;min-height:132px;justify-content:center}',
+
+    '.chr-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:14px 8px;border-radius:12px;background:rgba(2,6,23,.5);border:2px solid #3f67b8;animation:chrIn .28s ease-out}',
+    '@keyframes chrIn{from{transform:translateY(10px);opacity:0}to{transform:none;opacity:1}}',
+    '.chr-ic{font-size:40px;line-height:1;filter:drop-shadow(0 3px 3px rgba(0,0,0,.6))}',
+    '.chr-t{font-size:16px;font-weight:900;color:#fff}',
+    '.chr-s{font-size:13px;font-weight:900;color:#ffe27a}',
+    '.chr-step{font-size:10px;font-weight:800;color:#9fc4ff;letter-spacing:.5px}',
+    '.chr-done{font-size:15px;font-weight:900;color:#86efac;padding:20px 8px}',
+
     '.chr-row{font-size:14px;font-weight:800;padding:8px;border-radius:10px;background:rgba(2,6,23,.45);border:1px solid #3f67b8}',
     '.chr-row b{color:#ffe27a}',
     '.chr-ok{width:100%;padding:12px;border:0;border-radius:12px;font-size:15px;font-weight:900;color:#3b1f00;background:linear-gradient(180deg,#ffe27a,#ffb300);box-shadow:0 4px 0 #b45309;cursor:pointer}',
@@ -413,46 +541,70 @@ function injectStyle(){
   document.head.appendChild(st);
 }
 
-/* ---------- встраивание в лобби ---------- */
+/* ---------- встраивание ---------- */
+
+/* Куда ставить блок: в лобби экрана боя, иначе перед кнопкой «В БОЙ»,
+   иначе перед нижним меню, иначе в конец страницы. */
+function findAnchor(){
+  const lobby = document.getElementById('lobby');
+  if (lobby){
+    const rule = document.getElementById('ruleBox');
+    if (rule && rule.parentNode === lobby) return { host:lobby, before:rule.nextSibling };
+    return { host:lobby, before:null };
+  }
+  const play = document.getElementById('playBtn') || document.querySelector('.play-btn');
+  if (play && play.parentNode) return { host:play.parentNode, before:play };
+  const nav = document.querySelector('.bottom-nav,.nav');
+  if (nav && nav.parentNode) return { host:nav.parentNode, before:nav };
+  return { host:document.body, before:null };
+}
 
 function build(){
   injectStyle();
 
-  const lobby = document.getElementById('lobby');
-  const rule  = document.getElementById('ruleBox');
-  if (!lobby) return;
+  if (!document.getElementById('chSlots')){
+    const a = findAnchor();
+    const wrap = document.createElement('div');
+    wrap.id = 'chWrap';
+    wrap.innerHTML =
+      '<h3>🎁 Сундуки за победы <small>1 открыт · 4 ячейки</small></h3>' +
+      '<div id="chSlots"></div>';
+    a.host.insertBefore(wrap, a.before);
+  }
 
-  const wrap = document.createElement('div');
-  wrap.id = 'chWrap';
-  wrap.innerHTML =
-    '<h3>🎁 Сундуки за победы <small>1 открыт · 4 ячейки</small></h3>' +
-    '<div id="chSlots"></div>';
+  const wrap = document.getElementById('chWrap');
 
-  if (rule && rule.parentNode === lobby) lobby.insertBefore(wrap, rule.nextSibling);
-  else lobby.appendChild(wrap);
+  if (!document.getElementById('chReward')){
+    const ov = document.createElement('div');
+    ov.id = 'chReward';
+    ov.innerHTML =
+      '<div class="chr-box">' +
+        '<div class="chr-icon"></div>' +
+        '<div class="chr-name"></div>' +
+        '<div class="chr-surprise"></div>' +
+        '<div class="chr-list"></div>' +
+        '<button class="chr-ok">Дальше</button>' +
+      '</div>';
+    document.body.appendChild(ov);
 
-  const ov = document.createElement('div');
-  ov.id = 'chReward';
-  ov.innerHTML =
-    '<div class="chr-box">' +
-      '<div class="chr-icon"></div>' +
-      '<div class="chr-name"></div>' +
-      '<div class="chr-surprise"></div>' +
-      '<div class="chr-list"></div>' +
-      '<button class="chr-ok">Ура!</button>' +
-    '</div>';
-  document.body.appendChild(ov);
-  ov.querySelector('.chr-ok').onclick = function(){ ov.classList.remove('open'); };
+    ov.querySelector('.chr-ok').onclick = function(){
+      if (this.dataset.done === '1'){ ov.classList.remove('open'); return; }
+      nextReveal();
+    };
+  }
 
-  wrap.addEventListener('click', function(e){
-    const b = e.target.closest('[data-act]');
-    if (!b) return;
-    const i = parseInt(b.getAttribute('data-i'), 10);
-    const act = b.getAttribute('data-act');
-    if (act === 'start') startOpen(i);
-    else if (act === 'skip') skip(i);
-    else if (act === 'claim') claim(i);
-  });
+  if (wrap && !wrap.dataset.wired){
+    wrap.dataset.wired = '1';
+    wrap.addEventListener('click', function(e){
+      const b = e.target.closest('[data-act]');
+      if (!b) return;
+      const i = parseInt(b.getAttribute('data-i'), 10);
+      const act = b.getAttribute('data-act');
+      if (act === 'start') startOpen(i);
+      else if (act === 'skip') skip(i);
+      else if (act === 'claim') claim(i);
+    });
+  }
 
   render();
   setInterval(tick, 1000);
@@ -472,7 +624,6 @@ function hookResult(){
     lastResultKey = key;
 
     const res = onWin(r.before || 0);
-    /* даём арене отрисовать окно результата, потом добавляем сундук в него */
     setTimeout(function(){ showResultChest(res); }, 150);
   });
 }
@@ -487,8 +638,10 @@ else start();
 
 global.Chests = {
   CHESTS: CHESTS,
+  CARDS: CARDS,
   PREMIUM_CHANCE: PREMIUM_CHANCE,
   SURPRISE_CHANCE: SURPRISE_CHANCE,
+  cardUnits: cardUnitsOf,
   render: render,
   onWin: onWin
 };
