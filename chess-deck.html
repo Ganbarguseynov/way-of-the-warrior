@@ -202,7 +202,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.5;
     <div class="chip">🪙 <span id="deck-coins">0</span></div>
     <div class="chip">💎 <span id="deck-gems">0</span></div>
     <div class="chip units">🔹 <span id="deck-units">0</span></div>
-    <div class="chip ver">v16</div>
+    <div class="chip ver">v17</div>
   </div>
 
   <div class="tabs">
@@ -238,7 +238,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.5;
   <!-- ФИГУРЫ -->
   <div id="screen-pieces" class="screen">
     <div class="panel">
-      <div class="note">🔹 Единицы: <b id="pieces-units">0</b> · 3% шанс за победу в бою с игроком</div>
+      <div class="note">🔹 Единицы фигур: <b id="pieces-units">0</b> · 3% шанс за победу в бою с игроком</div>
       <div class="note" style="margin-top:6px;font-weight:700;font-size:11.5px">Шахматные фигуры не входят в колоду из 4 карт. Уровень фигуры — это её HP: ур.2 держит один удар, ур.3 — два.</div>
     </div>
     <div id="piece-list" style="margin-top:10px"></div>
@@ -313,6 +313,7 @@ const SPELL_TYPES=['f','s','c','u','g','x','z','l','b','e'];
 const HAND_SIZE=4, SLOT_COUNT=10, PER_PAGE=5;
 const DECKS_KEY='chessDecks', ACTIVE_KEY='chessDeckActive', DEFAULT_DECK=['f','s','c','u'];
 const CARD_LV_KEY='chessCardLv', PIECE_LV_KEY='chessPieceLv', UNITS_KEY='chessUnits';
+const CARD_UNITS_KEY='chessCardUnits';   /* прокачка конкретной карты — заполняет chests.js */
 const LV_COST={2:100,3:200}, LV_MAX=3;
 
 const UPGRADABLE_PIECES=[
@@ -401,7 +402,33 @@ function pipsHtml(n){
   return out+'</span>';
 }
 
-/* покупка уровня: общая для карт и фигур */
+/* ---------- прокачка конкретной карты (приходит из сундуков) ---------- */
+
+function cardUnitsOf(t){
+  const o=readObj(CARD_UNITS_KEY);
+  const n=parseInt(o[t]||0,10);
+  return (isFinite(n)&&n>0)?n:0;
+}
+function spendCardUnits(t,n){
+  const o=readObj(CARD_UNITS_KEY);
+  o[t]=Math.max(0,cardUnitsOf(t)-n);
+  writeObj(CARD_UNITS_KEY,o);
+}
+function buyCardLevel(t){
+  const cur=clampLv(readObj(CARD_LV_KEY)[t]);
+  if(cur>=LV_MAX){ showToast('Уже максимальный уровень','#ffd447'); return false; }
+  const cost=LV_COST[cur+1], have=cardUnitsOf(t);
+  if(have<cost){
+    showToast('«'+cardName(t)+'»: нужно '+cost+' 🔹, у неё '+have,'#f4665e');
+    return false;
+  }
+  const o=readObj(CARD_LV_KEY); o[t]=cur+1; writeObj(CARD_LV_KEY,o);
+  spendCardUnits(t,cost);
+  showToast('⬆ '+cardName(t)+': '+(cur+1)+'-й уровень','#43e97b');
+  return true;
+}
+
+/* покупка уровня фигуры: за общие единицы */
 function buyLevel(storeKey,id,label){
   const cur=clampLv(readObj(storeKey)[id]);
   if(cur>=LV_MAX){ showToast('Уже максимальный уровень','#ffd447'); return false; }
@@ -521,7 +548,7 @@ let sortByLevel=false;
 
 function cardHtml(c){
   const d=currentDeck(), lv=lvOfCard(c.type), pos=d.indexOf(c.type);
-  const units=getUnits(), max=lv>=LV_MAX;
+  const units=cardUnitsOf(c.type), max=lv>=LV_MAX;
   const cost=LV_COST[lv+1];
   const can=!max && units>=cost;
   const pct=max?100:Math.min(100,units/cost*100);
@@ -555,7 +582,7 @@ $('collGrid').onclick=function(e){
   if(up){
     e.stopPropagation();
     const t=up.getAttribute('data-up');
-    if(buyLevel(CARD_LV_KEY,t,cardName(t))) renderDeck();
+    if(buyCardLevel(t)) renderDeck();
     return;
   }
   const card=e.target.closest('.cc');
@@ -616,7 +643,7 @@ function renderModal(){
   const max=lv>=LV_MAX;
   $('cbUp').disabled=max;
   $('cbUpTop').textContent=max?'Максимум':'Улучшить';
-  $('cbUpCost').textContent=max?'—':(LV_COST[lv+1]+' 🔹 (у тебя '+getUnits()+')');
+  $('cbUpCost').textContent=max?'—':(LV_COST[lv+1]+' 🔹 (у карты '+cardUnitsOf(c.type)+')');
   const pick=$('cbPick');
   pick.textContent=inDeck?'Убрать из колоды':'В колоду';
   pick.className='cb-pick'+(inDeck?' rm':'');
@@ -643,7 +670,7 @@ $('cmDots').onclick=function(e){
 $('cbRep').onclick=function(){ mPage=0; renderModal(); };
 $('cbUp').onclick=function(){
   if(!mType) return;
-  if(buyLevel(CARD_LV_KEY,mType,cardName(mType))) renderDeck();
+  if(buyCardLevel(mType)) renderDeck();
 };
 $('cbPick').onclick=function(){
   if(!mType) return;
