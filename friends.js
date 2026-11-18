@@ -1,7 +1,8 @@
 /* ============================================================
-   friends.js — друзья и вызовы на дружескую партию (VER 3)
+   friends.js — друзья и вызовы на дружескую партию (VER 4)
    Вызов живёт, пока отправитель на связи.
    Нет пульса 12 секунд — вызов исчезает у всех.
+   Режим боя передаётся в вызове и в ссылке.
    ============================================================ */
 (function (global) {
 'use strict';
@@ -14,6 +15,9 @@ const ALIVE_MS = 12000;
 
 /* как часто отправитель отмечается */
 const BEAT_MS = 3000;
+
+const MODE_KEY = 'arenaMode';
+const MODE_IDS = ['classic','nocards','noelixir','pure','blitz','siege'];
 
 const Friends = {
   sb: null,
@@ -54,6 +58,21 @@ Friends.cups = function (){
 Friends.arenaOf = function (c){
   return Math.min(10, Math.floor(Math.max(0, c) / 1000) + 1);
 };
+
+/* режим, выбранный в лобби боя */
+Friends.mode = function (){
+  let v = null;
+  try { v = localStorage.getItem(MODE_KEY); } catch (e){}
+  return MODE_IDS.indexOf(v) >= 0 ? v : 'classic';
+};
+
+Friends.setMode = function (id){
+  if (MODE_IDS.indexOf(id) < 0) return false;
+  try { localStorage.setItem(MODE_KEY, id); } catch (e){ return false; }
+  return true;
+};
+
+Friends.MODE_IDS = MODE_IDS;
 
 function uuid(){
   if (global.crypto && global.crypto.randomUUID) return global.crypto.randomUUID();
@@ -165,18 +184,21 @@ Friends.incoming = async function (){
 };
 
 /* состояние вызова.
-   null — вызова нет: отменён, принят, или отправитель ушёл */
+   null — вызова нет: отменён, принят, или отправитель ушёл.
+   Режим: строка mode, если колонка есть; иначе classic. */
 Friends.status = async function (id){
   const sb = Friends.client();
   const res = await sb
     .from('arena_challenges')
-    .select('id,status,from_key,from_name,from_cups,arena,heartbeat')
+    .select('*')
     .eq('id', id)
     .maybeSingle();
 
   if (res.error || !res.data) return null;
 
   const row = res.data;
+
+  if (!row.mode || MODE_IDS.indexOf(row.mode) < 0) row.mode = 'classic';
 
   if (row.status !== 'pending') return row;
 
@@ -226,12 +248,30 @@ Friends.cancelBeacon = function (id){
   } catch (e){}
 };
 
-Friends.invite = async function (toKey, toName, toCups){
+/* ---------------- отправка вызова ---------------- */
+
+/* Режим едет вместе с вызовом. Если серверная функция ещё не знает
+   про p_mode, она ответит ошибкой — тогда отправляем без него,
+   и режим доедет только через ссылку у отправителя. */
+Friends.invite = async function (toKey, toName, toCups, mode){
   const sb = Friends.client();
   const id = uuid();
   const arena = Math.min(Friends.arenaOf(Friends.cups()), Friends.arenaOf(toCups || 0));
+  const md = (MODE_IDS.indexOf(mode) >= 0) ? mode : Friends.mode();
 
-  const res = await sb.rpc('challenge_send', {
+  const withMode = await sb.rpc('challenge_send', {
+    p_id:    id,
+    p_from:  Friends.key(),
+    p_name:  Friends.name(),
+    p_cups:  Friends.cups(),
+    p_to:    toKey,
+    p_arena: arena,
+    p_mode:  md
+  });
+
+  if (!withMode.error) return { id: id, arena: arena, mode: md };
+
+  const plain = await sb.rpc('challenge_send', {
     p_id:    id,
     p_from:  Friends.key(),
     p_name:  Friends.name(),
@@ -240,18 +280,23 @@ Friends.invite = async function (toKey, toName, toCups){
     p_arena: arena
   });
 
-  if (res.error) return null;
-  return { id: id, arena: arena };
+  if (plain.error) return null;
+  return { id: id, arena: arena, mode: md };
 };
 
-Friends.play = function (id, role, oppKey, oppName, oppCups, arena){
+/* ---------------- переход в бой ---------------- */
+
+Friends.play = function (id, role, oppKey, oppName, oppCups, arena, mode){
+  const md = (MODE_IDS.indexOf(mode) >= 0) ? mode : Friends.mode();
+
   const q =
     '?ch=' + encodeURIComponent(id) +
     '&role=' + encodeURIComponent(role) +
     '&opp=' + encodeURIComponent(oppKey || '') +
     '&name=' + encodeURIComponent(oppName || 'Соперник') +
     '&cups=' + encodeURIComponent(String(oppCups || 0)) +
-    '&arena=' + encodeURIComponent(String(arena || 1));
+    '&arena=' + encodeURIComponent(String(arena || 1)) +
+    '&mode=' + encodeURIComponent(md);
 
   global.location.href = 'chess-arena.html' + q;
 };
