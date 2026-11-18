@@ -159,7 +159,7 @@ body{margin:0;color:#fff;min-height:100dvh;padding-bottom:80px;user-select:none}
 <button class="nb" onclick="location.href='leaderboard.html'"><i>🏆</i><span>Рейтинг</span></button>
 </div>
 
-<script src="friends.js?v=3"></script>
+<script src="friends.js?v=4"></script>
 <script src="profile.js?v=3"></script>
 <script>
 var SB=supabase.createClient('https://qnpriwfxzuoymoumdtrl.supabase.co','sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
@@ -168,6 +168,7 @@ var MAXM=30;
 var EMB=['🛡️','👑','⚔️','🐺','🦅','🔥','💀','🐉','⭐','🦁','⚡','♟️'];
 var EMO=['😀','😂','😍','🔥','⚔️','🏆','🤝','👑','💀','🛡️','⚡','😭','👍','🎯','♟️','🙌','😎','🤔','💪','🎉'];
 var BAD=['хуй','хуя','хую','хуё','хуе','пизд','ебал','ебан','ебат','ебуч','ебло','бля','мудак','мудо','пидор','пидар','пидр','педик','залуп','дроч','манда','шлюх','гандон','сука','суки','сучк','гнида','уёб','уеб','нахуй','похуй','жоп','срак','говн','дерьм','твар','мраз','fuck','shit','bitch','cunt','asshole','bastard','slut','whore','pussy','nigg','retard'];
+var MODENAME={classic:'Классика',nocards:'Без карт',noelixir:'Без эликсира',pure:'Чистые шахматы',blitz:'Блиц',siege:'Осада'};
 function norm(t){t=String(t||'').toLowerCase();var m={'0':'o','1':'i','3':'e','4':'a','5':'s','7':'t','@':'a','$':'s'};var o='';for(var i=0;i<t.length;i++){var c=t.charAt(i);o+=(m[c]!==undefined)?m[c]:c;}return o.replace(/ё/g,'е').replace(/[^a-zа-я]/g,'');}
 function badw(t){var s=norm(t);if(!s)return false;for(var i=0;i<BAD.length;i++){if(s.indexOf(BAD[i])>=0)return true;}return false;}
 
@@ -605,10 +606,12 @@ function bind(s){
 async function invite(key,name,cups){
   if(!window.Friends){toast('friends.js не подключён');return;}
   if(!key)return;
-  var r=await Friends.invite(key,name,cups);
+  var md=(window.Friends&&Friends.mode)?Friends.mode():'classic';
+  var r=await Friends.invite(key,name,cups,md);
   if(!r){toast('Не удалось отправить вызов');return;}
-  toast('Вызов отправлен: '+name);
-  setTimeout(function(){Friends.play(r.id,'host',key,name,cups,r.arena);},400);
+  var show=r.mode||md;
+  toast('Вызов отправлен: '+name+' · '+(MODENAME[show]||'Классика'));
+  setTimeout(function(){Friends.play(r.id,'host',key,name,cups,r.arena,show);},400);
 }
 
 async function joinClan(id,btn){
