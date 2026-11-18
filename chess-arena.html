@@ -23,6 +23,22 @@ body.battle-mode .bottom-nav,body.battle-mode #verTag{display:none!important}
 #pFloor{font-size:11px;color:#64748b;margin-top:6px}
 #progWrap{height:8px;background:#020617;border-radius:5px;overflow:hidden;margin-top:10px}
 #progFill{height:100%;width:0;background:linear-gradient(90deg,#b5541f,#ffcc00);transition:width .4s}
+
+/* режимы */
+#modeBox{margin-bottom:12px}
+#modeHead{display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:900;letter-spacing:.6px;color:#94a3b8;margin:0 4px 6px}
+#modeHead b{color:#5ee0ff}
+#modeRow{display:flex;gap:7px;overflow-x:auto;padding:2px 2px 6px;scrollbar-width:none}
+#modeRow::-webkit-scrollbar{display:none}
+.mchip{flex:0 0 auto;min-width:96px;padding:9px 10px;border-radius:12px;border:2px solid #334155;background:linear-gradient(145deg,#1e293b,#0f172a);color:#cbd5e1;cursor:pointer;text-align:left}
+.mchip i{display:block;font-style:normal;font-size:17px;line-height:1;margin-bottom:5px}
+.mchip b{display:block;font-size:12px;font-weight:900;color:#fff;white-space:nowrap}
+.mchip span{display:block;font-size:9px;font-weight:700;color:#7c8ba1;margin-top:3px;line-height:1.25}
+.mchip.on{border-color:#5ee0ff;background:linear-gradient(145deg,#0e2a3d,#071e2c);box-shadow:0 0 14px rgba(94,224,255,.35)}
+.mchip.on b{color:#5ee0ff}
+.mchip.on span{color:#9ec9e0}
+#modeDesc{font-size:11.5px;color:#94a3b8;line-height:1.4;margin:0 4px;min-height:32px}
+
 #playBtn{width:100%;padding:16px;border:0;border-radius:12px;font-size:17px;font-weight:900;letter-spacing:1px;cursor:pointer;background:linear-gradient(145deg,#22c55e,#15803d);color:#fff;box-shadow:0 6px 16px rgba(34,197,94,.35)}
 #playBtn:active{transform:scale(.98)}
 #playBtn.searching{background:linear-gradient(145deg,#475569,#1e293b)}
@@ -63,6 +79,11 @@ body.battle-mode .bottom-nav,body.battle-mode #verTag{display:none!important}
 @keyframes elixPlus{0%{opacity:0;transform:translate(-50%,10px) scale(.5)}25%{opacity:1}100%{opacity:0;transform:translate(-50%,-26px) scale(1.15)}}
 .elix-spark{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;z-index:6;pointer-events:none;background:radial-gradient(circle,#fff,rgba(255,110,225,.6) 45%,transparent 72%);animation:elixSpark .55s ease-out forwards}
 @keyframes elixSpark{0%{transform:scale(.3);opacity:1}60%{transform:scale(2.4);opacity:.7}100%{transform:scale(3.2);opacity:0}}
+
+/* заглушки вместо эликсира и руки */
+.off-strip{width:min(95vw,420px);margin-top:8px;border-radius:15px;display:flex;align-items:center;justify-content:center;gap:8px;font-weight:900;text-align:center;border:2px dashed #334155;background:rgba(15,23,42,.7);color:#64748b}
+#elixOff{height:50px;font-size:12.5px}
+#handOff{height:72px;font-size:12.5px;border-radius:16px;padding:0 14px;line-height:1.35}
 
 #handPanel{width:min(95vw,420px);display:flex;gap:10px;align-items:center;margin-top:8px}
 .hc{position:relative;width:104px;height:72px;flex-shrink:0;border-radius:12px;border:2px solid #5ee0ff;background:linear-gradient(180deg,#0e2a3d,#071e2c);color:#e6fbff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;box-shadow:0 4px 0 #03131e;padding:0}
@@ -152,7 +173,7 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
 </style>
 </head>
 <body data-arena="1">
-<div id="verTag">v42</div>
+<div id="verTag">v43</div>
 
 <div id="lobby">
   <div class="card">
@@ -162,6 +183,13 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
     <div id="pFloor"></div>
     <div id="progWrap"><div id="progFill"></div></div>
   </div>
+
+  <div id="modeBox">
+    <div id="modeHead"><span>РЕЖИМ БОЯ</span><b id="modeCur">Классика</b></div>
+    <div id="modeRow"></div>
+    <div id="modeDesc"></div>
+  </div>
+
   <button id="playBtn" disabled>В БОЙ</button>
   <div id="statusMsg"></div>
   <div id="ruleBox"></div>
@@ -181,6 +209,7 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
   </div>
   <div id="checkBar"></div>
   <div id="board"></div>
+
   <div class="elix-wrap" id="myElix">
     <div class="elix-bar" id="myElixBar">
       <div class="elix-fill" id="myElixFill"><div class="elix-bubbles" id="elixBubbles"></div></div>
@@ -188,6 +217,8 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
     </div>
     <div class="elix-num" id="myElixNum">5</div>
   </div>
+  <div class="off-strip hidden" id="elixOff">∞&nbsp; Эликсир не нужен — ходы бесплатные</div>
+
   <div id="handPanel">
     <button id="handCard" class="hc empty">
       <span class="hc-free">FREE</span>
@@ -201,6 +232,8 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
       <button id="skipBtn" disabled>Пропустить</button>
     </div>
   </div>
+  <div class="off-strip hidden" id="handOff">🃏 Карты в этом режиме отключены</div>
+
   <div id="castHint"></div>
   <div id="tools">
     <button id="drawBtn">🤝 Ничья (2)</button>
@@ -250,7 +283,7 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
 
 <script src="arena.js?v=22"></script>
 <script src="friends.js?v=3"></script>
-<script src="net.js?v=24"></script>
+<script src="net.js?v=25"></script>
 <script>
 const sb = supabase.createClient('https://qnpriwfxzuoymoumdtrl.supabase.co','sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
 const tg = window.Telegram.WebApp;
@@ -259,12 +292,23 @@ const $ = function(id){ return document.getElementById(id); };
 const DRAW_MAX = 2;
 const SP = Arena.SPELLS;
 
+const FALLBACK_MODE = { id:'classic', name:'Классика', icon:'🃏', short:'Карты + эликсир',
+  desc:'Полные правила: карты, эликсир, 5 минут.', cards:true, elixir:true, energyMult:1, time:300 };
+
 let sel=null, cells=[], cellSig=[], lastTimeTxt='', lastSpeedTxt='', searching=false;
 let checkState=-1, drawState='', promoPending=null;
 let armed=null;
 let handSig='';
 let stateAt=Date.now();
 let handLoop=null;
+let curMode=FALLBACK_MODE;
+
+function modeDef(){
+  if(window.Net && typeof Net.modeDef==='function'){
+    return Net.modeDef(Net.matchMode || Net.mode) || FALLBACK_MODE;
+  }
+  return FALLBACK_MODE;
+}
 
 let toastTimer=null;
 function toast(text){
@@ -282,6 +326,46 @@ function playerKey(){
 }
 function playerName(){ return localStorage.getItem('userName')||'Игрок'; }
 
+/* ================= РЕЖИМЫ ================= */
+
+function renderModeRow(){
+  const row=$('modeRow');
+  if(!row) return;
+  const list=(window.Net && Net.MODES) ? Net.MODES : [FALLBACK_MODE];
+  const cur=(window.Net && Net.mode) ? Net.mode : 'classic';
+  let html='';
+  for(let i=0;i<list.length;i++){
+    const m=list[i];
+    html+='<button class="mchip'+(m.id===cur?' on':'')+'" data-mode="'+m.id+'">'+
+      '<i>'+m.icon+'</i><b>'+m.name+'</b><span>'+m.short+'</span></button>';
+  }
+  row.innerHTML=html;
+  const def=(window.Net && typeof Net.modeDef==='function') ? Net.modeDef(cur) : FALLBACK_MODE;
+  $('modeCur').textContent=def.name;
+  $('modeDesc').textContent=def.desc;
+}
+$('modeRow').onclick=function(e){
+  const b=e.target.closest('[data-mode]');
+  if(!b) return;
+  if(searching){ toast('Сначала отмени поиск'); return; }
+  const id=b.getAttribute('data-mode');
+  if(window.Net && Net.setMode) Net.setMode(id);
+  renderModeRow();
+};
+
+function applyModeUI(){
+  const def=curMode;
+  $('myElix').classList.toggle('hidden', !def.elixir);
+  $('elixOff').classList.toggle('hidden', !!def.elixir);
+  $('handPanel').classList.toggle('hidden', !def.cards);
+  $('handOff').classList.toggle('hidden', !!def.cards);
+  if(!def.cards){
+    $('castHint').textContent='';
+    armed=null;
+    handSig='';
+  }
+}
+
 /* ================= РУКА ================= */
 
 function myDeal(s){
@@ -289,6 +373,7 @@ function myDeal(s){
 }
 
 function renderHand(s){
+  if(!curMode.cards) return;
   const d=myDeal(s);
   const cur=(d && d.cur) ? d.cur : null;
   if(armed && armed!==cur) armed=null;
@@ -319,6 +404,7 @@ function renderHand(s){
 }
 
 function handTick(){
+  if(!curMode.cards) return;
   const s=Net.state;
   if(!s||!document.body.classList.contains('battle-mode')) return;
   const d=myDeal(s); if(!d) return;
@@ -338,6 +424,7 @@ function handStop(){
 }
 
 $('handCard').onclick=function(){
+  if(!curMode.cards) return;
   const s=Net.state; if(!s||s.over) return;
   const d=myDeal(s);
   if(!d||!d.cur){ toast('Карта ещё не выпала'); return; }
@@ -348,6 +435,7 @@ $('handCard').onclick=function(){
 };
 
 $('skipBtn').onclick=function(){
+  if(!curMode.cards) return;
   const s=Net.state; if(!s||s.over) return;
   const d=myDeal(s); if(!d||!d.cur) return;
   armed=null; handSig='';
@@ -397,15 +485,16 @@ function elixPaint(){
   }
 }
 function elixRate(){
+  const mult=curMode.energyMult||1;
   if(window.Arena && typeof Arena.energyRate==='function'){
     const r=Arena.energyRate(Net.state);
-    if(typeof r==='number' && isFinite(r) && r>0) return r;
+    if(typeof r==='number' && isFinite(r) && r>0) return r*mult;
   }
-  return 0.5;
+  return 0.5*mult;
 }
 function elixFrame(now){
   const s=Net.state;
-  if(!s||s.over||!document.body.classList.contains('battle-mode')){ elixLoopOn=false; return; }
+  if(!curMode.elixir||!s||s.over||!document.body.classList.contains('battle-mode')){ elixLoopOn=false; return; }
   let dt=elixLastFrame?(now-elixLastFrame):16;
   if(dt>200) dt=200;
   elixLastFrame=now;
@@ -423,10 +512,11 @@ function elixFrame(now){
   requestAnimationFrame(elixFrame);
 }
 function elixStart(){
-  if(elixLoopOn) return;
+  if(elixLoopOn||!curMode.elixir) return;
   elixLoopOn=true; elixLastFrame=0; requestAnimationFrame(elixFrame);
 }
 function renderElix(s,my){
+  if(!curMode.elixir) return;
   if(!elixStarted && s && s.energy){
     const v=s.energy[my];
     if(typeof v==='number' && isFinite(v)){
@@ -451,19 +541,24 @@ function renderLobby(){
   $('progFill').style.width=Math.max(0,Math.min(100,pct))+'%';
   $('ruleBox').textContent=Arena.ARENAS[arena-1].rule;
   document.body.dataset.arena=arena;
+  renderModeRow();
   if(window.Chests && Chests.render) Chests.render();
 }
 async function startSearch(){
   if(searching||!Net.me) return;
   searching=true;
+  const def=(window.Net && typeof Net.modeDef==='function') ? Net.modeDef(Net.mode) : FALLBACK_MODE;
   $('playBtn').classList.add('searching');
   $('playBtn').textContent='ОТМЕНА';
+  $('modeDesc').textContent='Ищем соперника в режиме «'+def.name+'» — другие режимы не подходят.';
   await Net.findMatch();
 }
 function stopSearch(){
   searching=false;
   $('playBtn').classList.remove('searching');
   $('playBtn').textContent='В БОЙ';
+  const def=(window.Net && typeof Net.modeDef==='function') ? Net.modeDef(Net.mode) : FALLBACK_MODE;
+  $('modeDesc').textContent=def.desc;
 }
 $('playBtn').onclick=async function(){
   if(searching){ await Net.cancelQueue(); stopSearch(); $('statusMsg').textContent=''; return; }
@@ -475,6 +570,7 @@ Net.on('error',function(d){ toast(d.message); });
 Net.on('start',function(info){
   stopSearch();
   $('statusMsg').textContent='';
+  curMode=(window.Net && typeof Net.modeDef==='function') ? Net.modeDef(info.mode||Net.mode) : FALLBACK_MODE;
   document.body.classList.add('battle-mode');
   $('lobby').classList.add('hidden');
   $('battle').classList.remove('hidden');
@@ -486,6 +582,7 @@ Net.on('start',function(info){
   lastTimeTxt=''; lastSpeedTxt='';
   stateAt=Date.now();
   document.body.dataset.arena=info.arena;
+  applyModeUI();
   buildBoard();
   for(let i=0;i<cellSig.length;i++) cellSig[i]='';
   elixReset(); elixBuildBubbles(); handStart();
@@ -498,8 +595,12 @@ Net.on('start',function(info){
   $('stakeWin').textContent='+'+win;
   $('stakeLose').textContent='−'+lose;
   if(info.friendly){ $('stakeWin').textContent='±0'; $('stakeLose').textContent='±0'; }
+  const tl=$('timeLabel');
+  const t0=curMode.time||300;
+  tl.textContent=Math.floor(t0/60)+':'+String(t0%60).padStart(2,'0');
+  lastTimeTxt=tl.textContent;
   if(info.state) render(info.state);
-  else { $('timeLabel').textContent='…'; toast('Собираем доску…'); }
+  else { tl.textContent='…'; toast('Собираем доску…'); }
 });
 
 Net.on('state',function(s){ render(s); });
@@ -527,7 +628,8 @@ Net.on('result',function(r){
   const won=r.winner===r.mySide, draw=r.winner==='draw';
   $('ovTitle').textContent=draw?'НИЧЬЯ':(won?'ПОБЕДА':'ПОРАЖЕНИЕ');
   $('ovTitle').style.color=draw?'#9fb6c4':(won?'#ffcc00':'#ef4444');
-  $('ovArena').textContent='Арена «'+Arena.ARENAS[Net.arena-1].name+'»';
+  const rm=(window.Net && typeof Net.modeDef==='function') ? Net.modeDef(r.mode||Net.matchMode) : curMode;
+  $('ovArena').textContent='Арена «'+Arena.ARENAS[Net.arena-1].name+'» · '+rm.name;
   const sign=r.delta>0?'+':'';
   $('ovDelta').textContent=draw?'±0':sign+r.delta+' 🏆';
   $('ovDelta').style.color=r.delta<0?'#ef4444':'#ffcc00';
@@ -573,6 +675,7 @@ function onCell(dx,dy){
   const x=xy[0], y=xy[1];
 
   if(armed){
+    if(!curMode.cards){ armed=null; return; }
     if(!Arena.cardTargetOk(s,my,armed,x,y)){
       toast(SP[armed].hint);
       return;
@@ -597,8 +700,8 @@ function onCell(dx,dy){
       return;
     }
     const mover=s.board[sel.y][sel.x];
-    const need=Arena.moveCost(s, mover);
-    if(s.energy[my]<need){ sel=null; render(s); toast('Нужно '+need+' эликсира'); return; }
+    const need=curMode.elixir ? Arena.moveCost(s, mover) : 0;
+    if(curMode.elixir && s.energy[my]<need){ sel=null; render(s); toast('Нужно '+need+' эликсира'); return; }
     if(Arena.isPromotion(s, sel.x, sel.y, x, y)){
       promoPending={fx:sel.x,fy:sel.y,tx:x,ty:y};
       sel=null; render(s);
@@ -686,7 +789,7 @@ function render(s){
     const pc=s.board[y] && s.board[y][x];
     const isLight=((x+y)%2===0);
     const isSel=!!(sel && sel.x===x && sel.y===y);
-    const isTgt=!!(armed && Arena.cardTargetOk(s,my,armed,x,y));
+    const isTgt=!!(armed && curMode.cards && Arena.cardTargetOk(s,my,armed,x,y));
     const key=x+':'+y;
     const isMove=!!moveSet[key];
     const isCap=isMove && !!pc;
@@ -716,7 +819,7 @@ function render(s){
       sp.className='piece '+(mine?'mine':'theirs')+(pc.shield?' shielded':'')+(pc.rage?' raging':'')+(frozen?' frozen':'');
       sp.textContent=def?(mine?def.w:def.b):'?';
       el.appendChild(sp);
-      if(def && typeof def.cost==='number'){
+      if(def && typeof def.cost==='number' && curMode.elixir){
         const cb=document.createElement('div');
         cb.className='cost-badge'; cb.textContent=def.cost;
         el.appendChild(cb);
@@ -747,7 +850,7 @@ function render(s){
   const base=(Arena && Arena.ENERGY_PER_SEC)?Arena.ENERGY_PER_SEC:0.5;
   const rate=elixRate(), mult=rate/base;
   let speedTxt='';
-  if(mult>1.001){
+  if(curMode.elixir && mult>1.001){
     speedTxt='×'+(Math.abs(mult-Math.round(mult))<0.05?Math.round(mult):mult.toFixed(1))+' ⚡';
   }
   if(speedTxt!==lastSpeedTxt){
@@ -760,7 +863,7 @@ function render(s){
   const tl=$('timeLabel');
   let timeTxt='', timeColor='';
   let left=s.timeLeft;
-  if(typeof left!=='number'||!isFinite(left)) left=Arena.MAIN_TIME;
+  if(typeof left!=='number'||!isFinite(left)) left=(curMode.time||Arena.MAIN_TIME);
   const t=Math.max(0,Math.ceil(left));
   const txt2=Math.floor(t/60)+':'+String(t%60).padStart(2,'0');
   if(s.phase==='overtime'){ timeTxt='ДОП '+txt2; timeColor='#ef4444'; }
@@ -826,6 +929,7 @@ boot();
   var oppName=qs.get('name')||'Соперник';
   var oppCups=parseInt(qs.get('cups')||'0',10)||0;
   var arena=parseInt(qs.get('arena')||'1',10)||1;
+  var mode=qs.get('mode')||'classic';
   var started=false, killed=false, tick=null, poll=null;
 
   function stopAll(){
@@ -891,7 +995,7 @@ boot();
     try{ Net.leaveMatch(); }catch(e){}
     if(role==='host'){
       overlay('Вызов отправлен','Ждём, пока '+oppName+' примет вызов…');
-      Net.startFriendlyHost({ matchId:chId, oppKey:oppKey, oppName:oppName, oppCups:oppCups, arena:arena });
+      Net.startFriendlyHost({ matchId:chId, oppKey:oppKey, oppName:oppName, oppCups:oppCups, arena:arena, mode:mode });
       Friends.startBeat(chId);
       poll=setInterval(async function(){
         if(killed||started) return;
@@ -899,7 +1003,7 @@ boot();
         if(!st||st.status==='declined'){ toast('Вызов отменён'); goBack(); }
       },2500);
     } else {
-      Net.joinFriendly({ matchId:chId, oppKey:oppKey, oppName:oppName, oppCups:oppCups, arena:arena });
+      Net.joinFriendly({ matchId:chId, oppKey:oppKey, oppName:oppName, oppCups:oppCups, arena:arena, mode:mode });
       overlay('Загружаем партию','Соединяемся с '+oppName+'…');
     }
   }
