@@ -1,7 +1,7 @@
 /* ============================================================
-   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 24)
-   Карты бесплатны, рука по таймеру 30 сек. Бот разыгрывает карты.
-   Уровни карт и фигур передаются в бой. Единицы: шанс за победу.
+   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 25)
+   Режимы боя. У каждого режима своя очередь: игроки ищут
+   соперника только внутри своего режима.
    Потолок кубков: 140. Дойдя до него, кубки больше не меняются.
    ============================================================ */
 (function (global) {
@@ -14,13 +14,13 @@ const SETUP_KEY  = 'chessSetup';
 const DECK_KEY   = 'chessDecks';
 const DECK_ACTIVE_KEY = 'chessDeckActive';
 const NAME_KEY   = 'userName';
+const MODE_KEY   = 'arenaMode';
 
 const CARD_LV_KEY  = 'chessCardLv';
 const PIECE_LV_KEY = 'chessPieceLv';
 const UNITS_KEY    = 'chessUnits';
 const UNIT_CHANCE  = 0.03;
 
-/* потолок кубков */
 const CUPS_CAP = 140;
 const CAP_KEY  = 'arenaCupsCap';
 
@@ -43,6 +43,41 @@ const DRAW_OFFER_MAX = 2;
 const SPELL_TYPES = ['f','s','c','u','g','x','z','l','b','e'];
 const HAND_SIZE = 4;
 const DEFAULT_DECK = ['f','s','c','u'];
+
+/* ---------------- режимы ---------------- */
+
+/* cards   — выдаются ли карты
+   elixir  — тратится ли эликсир на ходы
+   energyMult — скорость накопления эликсира
+   time    — время партии в секундах */
+const MODES = [
+  { id:'classic',  name:'Классика',        icon:'🃏', short:'Карты + эликсир',
+    desc:'Полные правила: карты, эликсир, 5 минут.',
+    cards:true,  elixir:true,  energyMult:1,   time:300 },
+  { id:'nocards',  name:'Без карт',        icon:'♟',  short:'Эликсир, без карт',
+    desc:'Карты отключены. Только фигуры и эликсир.',
+    cards:false, elixir:true,  energyMult:1,   time:300 },
+  { id:'noelixir', name:'Без эликсира',    icon:'♾️', short:'Карты, ходы бесплатно',
+    desc:'Карты есть, эликсира нет — любой ход бесплатный.',
+    cards:true,  elixir:false, energyMult:1,   time:300 },
+  { id:'pure',     name:'Чистые шахматы',  icon:'⚔️', short:'Ни карт, ни эликсира',
+    desc:'Только шахматы: ни карт, ни эликсира. 10 минут.',
+    cards:false, elixir:false, energyMult:1,   time:600 },
+  { id:'blitz',    name:'Блиц',            icon:'⚡', short:'2 минуты, эликсир ×2',
+    desc:'Карты и эликсир, но 2 минуты и эликсир копится вдвое быстрее.',
+    cards:true,  elixir:true,  energyMult:2,   time:120 },
+  { id:'siege',    name:'Осада',           icon:'🏰', short:'8 минут, эликсир ×1.6',
+    desc:'Долгая партия: 8 минут и ускоренный эликсир.',
+    cards:true,  elixir:true,  energyMult:1.6, time:480 }
+];
+const MODE_BY_ID = {};
+for (let i = 0; i < MODES.length; i++) MODE_BY_ID[MODES[i].id] = MODES[i];
+
+function readMode(){
+  let v = null;
+  try { v = localStorage.getItem(MODE_KEY); } catch (e){}
+  return MODE_BY_ID[v] ? v : 'classic';
+}
 
 const BOT_NAMES = [
   'Дмитрий','Алексей','Максим','Артём','Сергей','Кирилл','Иван','Никита',
@@ -73,6 +108,9 @@ const BOT_NAMES = [
 const Net = {
   sb: null, key: null, name: null, me: null,
   handlers: {},
+
+  mode: readMode(),
+  matchMode: null,
 
   queueCh: null, matchCh: null, matchId: null,
   mySide: null, arena: 1, players: null, setups: null, decks: null, levels: null,
@@ -125,6 +163,28 @@ function shuffled(list){
   return a;
 }
 
+/* ---------------- режим ---------------- */
+
+Net.MODES = MODES;
+
+Net.modeDef = function (id){
+  return MODE_BY_ID[id] || MODE_BY_ID[readMode()] || MODES[0];
+};
+
+Net.currentMode = function (){ return Net.modeDef(Net.mode); };
+
+Net.setMode = function (id){
+  if (!MODE_BY_ID[id]) return false;
+  Net.mode = id;
+  try { localStorage.setItem(MODE_KEY, id); } catch (e){}
+  return true;
+};
+
+/* режим идущего матча */
+function matchDef(){
+  return MODE_BY_ID[Net.matchMode] || Net.currentMode();
+}
+
 /* ---------------- уровни и единицы ---------------- */
 
 function readLvObj(k){
@@ -152,6 +212,7 @@ Net.myLevels = function (){
 function slimState(s){
   return {
     id: s.id, arena: s.arena, players: s.players,
+    mode: s.mode || null,
     board: s.board, energy: s.energy, energyAcc: s.energyAcc,
     hand: s.hand, spellUsed: s.spellUsed,
     deal: s.deal, blocked: s.blocked,
@@ -182,6 +243,70 @@ function ensureSpellFields(s){
   if (!s.drawOffer) s.drawOffer = { a:false, b:false };
   return s;
 }
+
+/* ---------------- режим: надстройка над Arena ---------------- */
+
+/* Ставит режим в готовое состояние: время и метка режима. */
+Net._applyModeInit = function (s){
+  if (!s) return s;
+  const def = matchDef();
+
+  s.mode = def.id;
+
+  if (typeof s.timeLeft === 'number') s.timeLeft = def.time;
+  if (s.phase === 'overtime') s.phase = 'main';
+
+  if (!s.energy) s.energy = { a:0, b:0 };
+  s.energy.a = 10;
+  s.energy.b = 10;
+
+  if (!def.elixir){
+    s.energy.a = 10;
+    s.energy.b = 10;
+  }
+
+  if (!def.cards){
+    if (s.deal){
+      if (s.deal.a) s.deal.a.cur = null;
+      if (s.deal.b) s.deal.b.cur = null;
+    }
+    if (!s.hand) s.hand = { a:[], b:[] };
+    s.hand.a = [];
+    s.hand.b = [];
+  }
+
+  return s;
+};
+
+/* Каждый тик хоста: держит режимные условия. */
+Net._applyModeTick = function (s, dt){
+  if (!s || s.over) return;
+  const def = matchDef();
+
+  if (!s.energy) s.energy = { a:0, b:0 };
+
+  /* без эликсира — на счету всегда максимум */
+  if (!def.elixir){
+    s.energy.a = 10;
+    s.energy.b = 10;
+    return;
+  }
+
+  /* ускоренное накопление — добираем сверх того, что дал Arena.tick */
+  const mult = def.energyMult || 1;
+  if (mult > 1 && dt > 0){
+    const base = (global.Arena && Arena.ENERGY_PER_SEC) ? Arena.ENERGY_PER_SEC : 0.5;
+    const extra = base * (mult - 1) * dt;
+    s.energy.a = Math.min(10, (s.energy.a || 0) + extra);
+    s.energy.b = Math.min(10, (s.energy.b || 0) + extra);
+  }
+
+  /* без карт — карта на руке не появляется */
+  if (!def.cards && s.deal){
+    if (s.deal.a) s.deal.a.cur = null;
+    if (s.deal.b) s.deal.b.cur = null;
+  }
+};
 
 /* ---------------- журнал ходов ---------------- */
 
@@ -329,8 +454,6 @@ Net.refresh = async function (){
 
 /* ---------------- потолок кубков ---------------- */
 
-/* Дошёл до 140 — фиксируем навсегда: ни прибавить, ни отнять.
-   Флаг в localStorage нужен на случай, если сервер опустит кубки. */
 Net._enforceCap = async function (){
   const me = Net.me;
   if (!me) return;
@@ -383,6 +506,7 @@ Net._writeRecord = function (){
       matchId: Net.matchId,
       side:    Net.mySide,
       arena:   Net.arena,
+      mode:    Net.matchMode,
       players: Net.players,
       decks:   Net.decks,
       levels:  Net.levels,
@@ -453,7 +577,7 @@ Net.findMatch = async function (){
   await ch.subscribe(async function (status){
     if (status === 'SUBSCRIBED'){
       await ch.track({
-        key: Net.key, name: Net.name,
+        key: Net.key, name: Net.name, mode: Net.mode,
         cups: Net.me ? Net.me.cups : 0, since: Date.now()
       });
       Net._tryPair();
@@ -488,7 +612,12 @@ Net._presenceList = function (ch){
     const arr = raw[k] || [];
     for (let i = 0; i < arr.length; i++){
       const p = arr[i];
-      if (p && p.key) list.push({ key: p.key, name: p.name || 'Игрок', cups: +p.cups || 0 });
+      if (p && p.key) list.push({
+        key: p.key,
+        name: p.name || 'Игрок',
+        mode: p.mode || 'classic',
+        cups: +p.cups || 0
+      });
     }
   });
 
@@ -499,10 +628,15 @@ Net._tryPair = function (){
   if (!Net.queueCh || Net.matchId || Net.pending) return;
 
   const all = Net._presenceList(Net.queueCh);
-  const others = all.filter(function (p){ return p.key !== Net.key; });
+
+  /* только свой режим — очереди не пересекаются */
+  const others = all.filter(function (p){
+    return p.key !== Net.key && p.mode === Net.mode;
+  });
 
   if (!others.length){
-    Net.emit('status', { text: 'Ищем соперника…' });
+    const def = Net.currentMode();
+    Net.emit('status', { text: 'Ищем соперника · ' + def.name + '…' });
     return;
   }
 
@@ -522,14 +656,14 @@ Net._tryPair = function (){
   const matchId = uuid();
   const arena = Math.min(Arena.arenaOf(myCups), Arena.arenaOf(opp.cups));
 
-  Net.pending = { to: opp.key, matchId: matchId, arena: arena, opp: opp };
+  Net.pending = { to: opp.key, matchId: matchId, arena: arena, mode: Net.mode, opp: opp };
 
   Net.emit('status', { text: 'Соперник найден: ' + opp.name + ' (' + opp.cups + ' 🏆)' });
 
   Net.queueCh.send({
     type: 'broadcast', event: 'invite',
     payload: {
-      from: Net.key, to: opp.key, matchId: matchId, arena: arena,
+      from: Net.key, to: opp.key, matchId: matchId, arena: arena, mode: Net.mode,
       name: Net.name, cups: myCups,
       setup: Net.mySetup(), deck: Net.myDeck(), levels: Net.myLevels()
     }
@@ -543,18 +677,19 @@ Net._tryPair = function (){
 Net._onInvite = function (p){
   if (!p || p.to !== Net.key) return;
   if (Net.matchId || Net.pending) return;
+  if ((p.mode || 'classic') !== Net.mode) return;
 
   Net.queueCh.send({
     type: 'broadcast', event: 'accept',
     payload: {
-      from: Net.key, to: p.from, matchId: p.matchId,
+      from: Net.key, to: p.from, matchId: p.matchId, mode: p.mode || 'classic',
       name: Net.name, cups: Net.me ? Net.me.cups : 0,
       setup: Net.mySetup(), deck: Net.myDeck(), levels: Net.myLevels()
     }
   });
 
   Net._beginMatch({
-    matchId: p.matchId, arena: p.arena, side: 'b',
+    matchId: p.matchId, arena: p.arena, side: 'b', mode: p.mode || 'classic',
     oppKey: p.from, oppName: p.name, oppCups: p.cups,
     oppSetup: p.setup, oppDeck: p.deck, oppLevels: p.levels
   });
@@ -566,6 +701,7 @@ Net._onAccept = function (p){
 
   Net._beginMatch({
     matchId: Net.pending.matchId, arena: Net.pending.arena, side: 'a',
+    mode: Net.pending.mode,
     oppKey: p.from, oppName: p.name, oppCups: p.cups,
     oppSetup: p.setup, oppDeck: p.deck, oppLevels: p.levels
   });
@@ -573,8 +709,12 @@ Net._onAccept = function (p){
 
 /* ---------------- канал матча ---------------- */
 
+function matchChannelName(){
+  return 'arena_match_' + (Net.matchMode || 'classic') + '_' + Net.matchId;
+}
+
 Net._attach = async function (){
-  const ch = Net.sb.channel('arena_match_' + Net.matchId, {
+  const ch = Net.sb.channel(matchChannelName(), {
     config: { broadcast: { self: false }, presence: { key: Net.key } }
   });
   Net.matchCh = ch;
@@ -653,6 +793,7 @@ Net._beginMatch = async function (m){
   Net.friendly = false;
   Net.friendlyHost = false;
   Net.matchId = m.matchId;
+  Net.matchMode = m.mode || Net.mode;
   Net.mySide = m.side;
   Net.host = (m.side === 'a');
   Net.arena = m.arena || 1;
@@ -681,7 +822,10 @@ Net._beginMatch = async function (m){
   if (Net.host){
     Net._hostStart();
   } else {
-    Net.emit('start', { side:'b', arena:Net.arena, opponent:Net.players.a, state:null });
+    Net.emit('start', {
+      side:'b', arena:Net.arena, opponent:Net.players.a,
+      state:null, mode: Net.matchMode
+    });
   }
 };
 
@@ -697,6 +841,7 @@ Net.startFriendlyHost = async function (o){
   Net.friendly = true;
   Net.friendlyHost = true;
   Net.matchId = o.matchId;
+  Net.matchMode = o.mode || Net.mode;
   Net.mySide = 'a';
   Net.host = true;
   Net.arena = o.arena || Math.min(Arena.arenaOf(myCups), Arena.arenaOf(o.oppCups || 0));
@@ -719,7 +864,7 @@ Net.startFriendlyHost = async function (o){
 
   Net.emit('start', {
     side: 'a', arena: Net.arena, opponent: Net.players.b,
-    state: null, friendly: true, waiting: true
+    state: null, friendly: true, waiting: true, mode: Net.matchMode
   });
 };
 
@@ -766,6 +911,7 @@ Net.joinFriendly = async function (o){
   Net.friendly = true;
   Net.friendlyHost = false;
   Net.matchId = o.matchId;
+  Net.matchMode = o.mode || Net.mode;
   Net.mySide = 'b';
   Net.host = false;
   Net.arena = o.arena || 1;
@@ -788,7 +934,7 @@ Net.joinFriendly = async function (o){
 
   Net.emit('start', {
     side: 'b', arena: Net.arena, opponent: Net.players.a,
-    state: null, friendly: true
+    state: null, friendly: true, mode: Net.matchMode
   });
 
   if (Net.matchCh){
@@ -845,6 +991,7 @@ Net._startBotMatch = async function (){
   const rivalKey = 'pl_' + Math.random().toString(36).slice(2, 12);
 
   Net.matchId = uuid();
+  Net.matchMode = Net.mode;
   Net.mySide = 'a';
   Net.host = true;
   Net.botMode = true;
@@ -942,7 +1089,6 @@ Net._botLosing = function (s, side){
 
 /* ---------------- карты у бота ---------------- */
 
-/* Оценка цели для карты. null — карту сюда не тратим. */
 function botScore(s, card, x, y){
   const pc = s.board[y][x];
 
@@ -1001,6 +1147,7 @@ function botScore(s, card, x, y){
 
 Net._botCast = function (s){
   if (!s || s.over) return false;
+  if (!matchDef().cards) return false;
 
   const d = s.deal && s.deal.b;
   if (!d || !d.cur) return false;
@@ -1018,7 +1165,6 @@ Net._botCast = function (s){
   }
 
   if (!best){
-    /* ничего полезного — иногда пропускает, чтобы не застрять */
     if (Math.random() < 0.5){
       Arena.skipCard(s, 'b');
       return true;
@@ -1107,6 +1253,7 @@ Net._catchUp = function (s, awayMs, absentSide){
     left -= dt;
 
     Arena.tick(s, dt);
+    Net._applyModeTick(s, dt);
     if (s.over) break;
 
     Net._autoMove(s, foe);
@@ -1141,11 +1288,14 @@ Net._hostStart = function (){
   });
 
   ensureSpellFields(Net.state);
+  Net._applyModeInit(Net.state);
+
+  const def = matchDef();
 
   Net.emit('start', {
     side: 'a', arena: Net.arena,
     opponent: Net.players.b, state: Net.state,
-    friendly: Net.friendly
+    friendly: Net.friendly, mode: def.id
   });
 
   Net.saveMark = 0;
@@ -1169,6 +1319,7 @@ Net._startLoop = function (){
 
     Net.lastSeen = Date.now();
     Arena.tick(Net.state, dt);
+    Net._applyModeTick(Net.state, dt);
 
     acc += dt * 1000;
     if (acc >= PUSH_MS){ acc = 0; Net._push(); }
@@ -1241,10 +1392,13 @@ Net._applyIntent = function (msg, side){
   if (!Net.state || !msg) return;
 
   const s = Net.state;
+  const def = matchDef();
   let res = null;
 
   if (msg.t === 'draw' || msg.t === 'undraw'){
     res = Net._drawIntent(side, msg.t);
+  } else if ((msg.t === 'cast' || msg.t === 'skip') && !def.cards){
+    res = { ok:false, error:'В этом режиме карт нет' };
   } else {
     switch (msg.t){
       case 'move':   res = Arena.move(s, side, msg.fx, msg.fy, msg.tx, msg.ty, msg.promo); break;
@@ -1281,7 +1435,6 @@ Net._applyIntent = function (msg, side){
 
 /* ---------------- конец боя ---------------- */
 
-/* Расчёт кубков. Потолок 140: дойдя до него, кубки замирают. */
 Net._estimateCups = function (winner){
   const myCups = Net.me ? Net.me.cups : 0;
   const oppCups = Net.players
@@ -1296,7 +1449,6 @@ Net._estimateCups = function (winner){
   let after;
 
   if (myCups >= CUPS_CAP){
-    /* потолок пройден — значение не двигаем ни вверх, ни вниз */
     after = CUPS_CAP;
   } else {
     let delta = 0;
@@ -1375,6 +1527,7 @@ Net._hostFinish = function (){
     winner:  s.winner,
     matchId: Net.matchId,
     arena:   Net.arena,
+    mode:    Net.matchMode,
     cups:    Net._estimateCups(s.winner),
     seconds: Math.round(s.elapsed || 0),
     setup_a: Net.setups ? Net.setups.a : null,
@@ -1434,6 +1587,7 @@ Net.tryResume = async function (){
   const isBot = !!rec.bot;
 
   Net.matchId = rec.matchId;
+  Net.matchMode = rec.mode || 'classic';
   Net.mySide = rec.side;
   Net.host = (rec.side === 'a');
   Net.arena = rec.arena || 1;
@@ -1472,7 +1626,10 @@ Net.tryResume = async function (){
     Net.botMode = true;
     Net.host = true;
 
-    Net.emit('start', { side:'a', arena:Net.arena, opponent:Net.players.b, state:saved });
+    Net.emit('start', {
+      side:'a', arena:Net.arena, opponent:Net.players.b,
+      state:saved, mode: Net.matchMode
+    });
 
     if (away > 2500) Net._catchUp(saved, away, Net.mySide);
 
@@ -1495,7 +1652,10 @@ Net.tryResume = async function (){
     const away = saved.savedAt ? (Date.now() - saved.savedAt) : 0;
     Net.state = saved;
 
-    Net.emit('start', { side:'a', arena:Net.arena, opponent:Net.players.b, state:saved });
+    Net.emit('start', {
+      side:'a', arena:Net.arena, opponent:Net.players.b,
+      state:saved, mode: Net.matchMode
+    });
 
     if (away > 2500) Net._catchUp(saved, away, Net.mySide);
 
@@ -1509,7 +1669,10 @@ Net.tryResume = async function (){
     return true;
   }
 
-  Net.emit('start', { side:'b', arena:Net.arena, opponent:Net.players.a, state:null });
+  Net.emit('start', {
+    side:'b', arena:Net.arena, opponent:Net.players.a,
+    state:null, mode: Net.matchMode
+  });
 
   if (Net.matchCh) Net.matchCh.send({ type:'broadcast', event:'hello', payload:{ from: Net.key } });
 
@@ -1554,7 +1717,6 @@ Net._finish = function (payload){
   if (typeof before !== 'number') before = Net.me ? Net.me.cups : 0;
   if (typeof after !== 'number') after = before;
 
-  /* потолок: 140 и выше — кубки не двигаются */
   if (before >= CUPS_CAP) after = before;
   if (after > CUPS_CAP) after = CUPS_CAP;
 
@@ -1573,6 +1735,7 @@ Net._finish = function (payload){
     floor: Arena.floorOf(after),
     opponent: opp,
     friendly: wasFriendly,
+    mode: payload.mode || Net.matchMode,
     unitWon: false
   });
 
