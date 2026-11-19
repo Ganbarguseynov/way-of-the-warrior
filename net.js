@@ -1,8 +1,13 @@
 /* ============================================================
-   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 25)
-   Режимы боя. У каждого режима своя очередь: игроки ищут
-   соперника только внутри своего режима.
-   Потолок кубков: 140. Дойдя до него, кубки больше не меняются.
+   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 27)
+   Четыре режима:
+     classic  — карты + эликсир, общие 5 минут
+     nocards  — без карт, эликсир, общие 5 минут
+     noelixir — карты, без эликсира, по очереди, по 3 минуты
+     pure     — без карт и эликсира, по очереди, по 3 минуты
+   В режимах с очередью тикают только часы того, чей ход.
+   Кончились — он проиграл.
+   Потолок кубков: 140.
    ============================================================ */
 (function (global) {
 'use strict';
@@ -40,35 +45,36 @@ const LOG_MAX = 700;
 
 const DRAW_OFFER_MAX = 2;
 
+/* в режимах с очередью общие часы Arena держим выключенными:
+   за партию они не успеют дойти до нуля */
+const TURN_CLOCK_GUARD = 50000;
+
 const SPELL_TYPES = ['f','s','c','u','g','x','z','l','b','e'];
 const HAND_SIZE = 4;
 const DEFAULT_DECK = ['f','s','c','u'];
 
 /* ---------------- режимы ---------------- */
 
-/* cards   — выдаются ли карты
-   elixir  — тратится ли эликсир на ходы
-   energyMult — скорость накопления эликсира
-   time    — время партии в секундах */
 const MODES = [
-  { id:'classic',  name:'Классика',        icon:'🃏', short:'Карты + эликсир',
-    desc:'Полные правила: карты, эликсир, 5 минут.',
-    cards:true,  elixir:true,  energyMult:1,   time:300 },
-  { id:'nocards',  name:'Без карт',        icon:'♟',  short:'Эликсир, без карт',
-    desc:'Карты отключены. Только фигуры и эликсир.',
-    cards:false, elixir:true,  energyMult:1,   time:300 },
-  { id:'noelixir', name:'Без эликсира',    icon:'♾️', short:'Карты, ходы бесплатно',
-    desc:'Карты есть, эликсира нет — любой ход бесплатный.',
-    cards:true,  elixir:false, energyMult:1,   time:300 },
-  { id:'pure',     name:'Чистые шахматы',  icon:'⚔️', short:'Ни карт, ни эликсира',
-    desc:'Только шахматы: ни карт, ни эликсира. 10 минут.',
-    cards:false, elixir:false, energyMult:1,   time:600 },
-  { id:'blitz',    name:'Блиц',            icon:'⚡', short:'2 минуты, эликсир ×2',
-    desc:'Карты и эликсир, но 2 минуты и эликсир копится вдвое быстрее.',
-    cards:true,  elixir:true,  energyMult:2,   time:120 },
-  { id:'siege',    name:'Осада',           icon:'🏰', short:'8 минут, эликсир ×1.6',
-    desc:'Долгая партия: 8 минут и ускоренный эликсир.',
-    cards:true,  elixir:true,  energyMult:1.6, time:480 }
+  { id:'classic',
+    name:'Классика', icon:'🃏', short:'Карты + эликсир, 5 минут',
+    desc:'Обычные правила: карты, эликсир, общие 5 минут. Ходить можно в любой момент.',
+    cards:true,  elixir:true,  turn:false, time:300 },
+
+  { id:'nocards',
+    name:'Без карт', icon:'♟', short:'Эликсир, карт нет',
+    desc:'Карты отключены. Эликсир и общие 5 минут, ходить можно в любой момент.',
+    cards:false, elixir:true,  turn:false, time:300 },
+
+  { id:'noelixir',
+    name:'Без эликсира', icon:'⏱️', short:'По очереди, по 3 мин',
+    desc:'Карты есть, эликсира нет. Ходы строго по очереди. У каждого свои 3 минуты: у кого кончились — тот проиграл.',
+    cards:true,  elixir:false, turn:true,  time:180 },
+
+  { id:'pure',
+    name:'Без карт и эликсира', icon:'⚔️', short:'По очереди, по 3 мин',
+    desc:'Только шахматы. Ходы строго по очереди, у каждого свои 3 минуты: у кого кончились — тот проиграл.',
+    cards:false, elixir:false, turn:true,  time:180 }
 ];
 const MODE_BY_ID = {};
 for (let i = 0; i < MODES.length; i++) MODE_BY_ID[MODES[i].id] = MODES[i];
@@ -213,6 +219,7 @@ function slimState(s){
   return {
     id: s.id, arena: s.arena, players: s.players,
     mode: s.mode || null,
+    turnMode: !!s.turnMode, turn: s.turn || null, clocks: s.clocks || null,
     board: s.board, energy: s.energy, energyAcc: s.energyAcc,
     hand: s.hand, spellUsed: s.spellUsed,
     deal: s.deal, blocked: s.blocked,
@@ -246,24 +253,16 @@ function ensureSpellFields(s){
 
 /* ---------------- режим: надстройка над Arena ---------------- */
 
-/* Ставит режим в готовое состояние: время и метка режима. */
 Net._applyModeInit = function (s){
   if (!s) return s;
   const def = matchDef();
 
   s.mode = def.id;
-
-  if (typeof s.timeLeft === 'number') s.timeLeft = def.time;
-  if (s.phase === 'overtime') s.phase = 'main';
+  s.turnMode = !!def.turn;
 
   if (!s.energy) s.energy = { a:0, b:0 };
   s.energy.a = 10;
   s.energy.b = 10;
-
-  if (!def.elixir){
-    s.energy.a = 10;
-    s.energy.b = 10;
-  }
 
   if (!def.cards){
     if (s.deal){
@@ -275,36 +274,61 @@ Net._applyModeInit = function (s){
     s.hand.b = [];
   }
 
+  if (def.turn){
+    s.turn = 'a';
+    s.clocks = { a: def.time, b: def.time };
+    s.timeLeft = TURN_CLOCK_GUARD;
+    s.phase = 'main';
+  } else {
+    s.turn = null;
+    s.clocks = null;
+    if (typeof s.timeLeft === 'number') s.timeLeft = def.time;
+    if (s.phase === 'overtime') s.phase = 'main';
+  }
+
   return s;
 };
 
-/* Каждый тик хоста: держит режимные условия. */
 Net._applyModeTick = function (s, dt){
   if (!s || s.over) return;
   const def = matchDef();
 
   if (!s.energy) s.energy = { a:0, b:0 };
 
-  /* без эликсира — на счету всегда максимум */
   if (!def.elixir){
     s.energy.a = 10;
     s.energy.b = 10;
-    return;
+  } else {
+    const mult = def.energyMult || 1;
+    if (mult > 1 && dt > 0){
+      const base = (global.Arena && Arena.ENERGY_PER_SEC) ? Arena.ENERGY_PER_SEC : 0.5;
+      const extra = base * (mult - 1) * dt;
+      s.energy.a = Math.min(10, (s.energy.a || 0) + extra);
+      s.energy.b = Math.min(10, (s.energy.b || 0) + extra);
+    }
   }
 
-  /* ускоренное накопление — добираем сверх того, что дал Arena.tick */
-  const mult = def.energyMult || 1;
-  if (mult > 1 && dt > 0){
-    const base = (global.Arena && Arena.ENERGY_PER_SEC) ? Arena.ENERGY_PER_SEC : 0.5;
-    const extra = base * (mult - 1) * dt;
-    s.energy.a = Math.min(10, (s.energy.a || 0) + extra);
-    s.energy.b = Math.min(10, (s.energy.b || 0) + extra);
-  }
-
-  /* без карт — карта на руке не появляется */
   if (!def.cards && s.deal){
     if (s.deal.a) s.deal.a.cur = null;
     if (s.deal.b) s.deal.b.cur = null;
+  }
+
+  if (!def.turn) return;
+
+  s.turnMode = true;
+  if (!s.turn) s.turn = 'a';
+  if (!s.clocks) s.clocks = { a: def.time, b: def.time };
+
+  /* общие часы Arena в этом режиме не участвуют */
+  if (typeof s.timeLeft !== 'number' || s.timeLeft < TURN_CLOCK_GUARD) s.timeLeft = TURN_CLOCK_GUARD;
+  if (s.phase === 'overtime') s.phase = 'main';
+
+  const who = s.turn;
+  const left = (typeof s.clocks[who] === 'number') ? s.clocks[who] : def.time;
+  s.clocks[who] = Math.max(0, left - dt);
+
+  if (s.clocks[who] <= 0){
+    Arena.finish(s, who === 'a' ? 'b' : 'a');
   }
 };
 
@@ -501,6 +525,7 @@ Net.leaderboard = async function (limit){
 /* ---------------- запись текущего матча ---------------- */
 
 Net._writeRecord = function (){
+  if (Net.friendly) return;
   try {
     localStorage.setItem(RECORD_KEY, JSON.stringify({
       matchId: Net.matchId,
@@ -629,7 +654,6 @@ Net._tryPair = function (){
 
   const all = Net._presenceList(Net.queueCh);
 
-  /* только свой режим — очереди не пересекаются */
   const others = all.filter(function (p){
     return p.key !== Net.key && p.mode === Net.mode;
   });
@@ -710,6 +734,7 @@ Net._onAccept = function (p){
 /* ---------------- канал матча ---------------- */
 
 function matchChannelName(){
+  if (Net.friendly) return 'arena_friendly_' + Net.matchId;
   return 'arena_match_' + (Net.matchMode || 'classic') + '_' + Net.matchId;
 }
 
@@ -726,12 +751,19 @@ Net._attach = async function (){
   ch.on('broadcast', { event: 'state' }, function (msg){
     if (Net.host) return;
 
-    Net.state = ensureSpellFields(payloadOf(msg));
+    const incoming = ensureSpellFields(payloadOf(msg));
+
+    if (incoming && incoming.mode && MODE_BY_ID[incoming.mode] && incoming.mode !== Net.matchMode){
+      Net.matchMode = incoming.mode;
+      Net.emit('mode', { mode: Net.matchMode });
+    }
+
+    Net.state = incoming;
     if (Net.resumeTimer){ clearTimeout(Net.resumeTimer); Net.resumeTimer = null; }
     Net.emit('state', Net.state);
 
     if (Net.state && Net.state.over && !Net.finished){
-      Net._finish({ winner: Net.state.winner, matchId: Net.matchId, cups: null });
+      Net._finish({ winner: Net.state.winner, matchId: Net.matchId, cups: null, mode: Net.matchMode });
     }
   });
 
@@ -841,7 +873,7 @@ Net.startFriendlyHost = async function (o){
   Net.friendly = true;
   Net.friendlyHost = true;
   Net.matchId = o.matchId;
-  Net.matchMode = o.mode || Net.mode;
+  Net.matchMode = (o.mode && MODE_BY_ID[o.mode]) ? o.mode : Net.mode;
   Net.mySide = 'a';
   Net.host = true;
   Net.arena = o.arena || Math.min(Arena.arenaOf(myCups), Arena.arenaOf(o.oppCups || 0));
@@ -851,6 +883,8 @@ Net.startFriendlyHost = async function (o){
   Net.lastSeen = Date.now();
   Net._logReset();
 
+  try { localStorage.removeItem(RECORD_KEY); } catch (e){}
+
   Net.players = {
     a: { key: Net.key, name: Net.name, cups: myCups },
     b: { key: o.oppKey, name: o.oppName || 'Друг', cups: o.oppCups || 0 }
@@ -859,7 +893,6 @@ Net.startFriendlyHost = async function (o){
   Net.decks = decksFor('a', Net.myDeck(), null);
   Net.levels = levelsFor('a', Net.myLevels(), null);
 
-  Net._writeRecord();
   await Net._attach();
 
   Net.emit('start', {
@@ -879,7 +912,6 @@ Net._friendlyBuildFor = function (p){
   Net.setups = { a: Net.mySetup(), b: oppSetup };
   Net.decks  = decksFor('a', Net.myDeck(), p ? p.deck : null);
   Net.levels = levelsFor('a', Net.myLevels(), p ? p.levels : null);
-  Net._writeRecord();
   Net._hostStart();
 };
 
@@ -911,7 +943,7 @@ Net.joinFriendly = async function (o){
   Net.friendly = true;
   Net.friendlyHost = false;
   Net.matchId = o.matchId;
-  Net.matchMode = o.mode || Net.mode;
+  Net.matchMode = (o.mode && MODE_BY_ID[o.mode]) ? o.mode : Net.mode;
   Net.mySide = 'b';
   Net.host = false;
   Net.arena = o.arena || 1;
@@ -921,6 +953,8 @@ Net.joinFriendly = async function (o){
   Net.lastSeen = Date.now();
   Net._logReset();
 
+  try { localStorage.removeItem(RECORD_KEY); } catch (e){}
+
   Net.players = {
     a: { key: o.oppKey, name: o.oppName || 'Друг', cups: o.oppCups || 0 },
     b: { key: Net.key, name: Net.name, cups: myCups }
@@ -929,7 +963,6 @@ Net.joinFriendly = async function (o){
   Net.decks  = decksFor('b', Net.myDeck(), null);
   Net.levels = levelsFor('b', Net.myLevels(), null);
 
-  Net._writeRecord();
   await Net._attach();
 
   Net.emit('start', {
@@ -1147,7 +1180,10 @@ function botScore(s, card, x, y){
 
 Net._botCast = function (s){
   if (!s || s.over) return false;
-  if (!matchDef().cards) return false;
+
+  const def = matchDef();
+  if (!def.cards) return false;
+  if (def.turn && s.turn && s.turn !== 'b') return false;
 
   const d = s.deal && s.deal.b;
   if (!d || !d.cur) return false;
@@ -1215,6 +1251,11 @@ Net._pickMove = function (s, side){
 };
 
 Net._autoMove = function (s, side){
+  const def = matchDef();
+
+  /* в режиме с очередью чужой ход не трогаем */
+  if (def.turn && s.turn && side !== s.turn) return false;
+
   const pick = Net._pickMove(s, side);
   if (!pick) return false;
 
@@ -1223,6 +1264,7 @@ Net._autoMove = function (s, side){
 
   if (res && res.ok){
     Net._logMove(side, pick.fx, pick.fy, pick.tx, pick.ty, promo, s);
+    if (def.turn && s.turn === side) s.turn = (side === 'a') ? 'b' : 'a';
     return true;
   }
   return false;
@@ -1259,7 +1301,8 @@ Net._catchUp = function (s, awayMs, absentSide){
     Net._autoMove(s, foe);
   }
 
-  if (!s.over && awayMs > AWAY_GRACE_MS) Arena.finish(s, foe);
+  /* в режиме с очередью отсутствующий теряет по своим часам, а не по таймауту */
+  if (!s.over && awayMs > AWAY_GRACE_MS && !matchDef().turn) Arena.finish(s, foe);
 };
 
 Net.checkAway = function (){
@@ -1397,6 +1440,10 @@ Net._applyIntent = function (msg, side){
 
   if (msg.t === 'draw' || msg.t === 'undraw'){
     res = Net._drawIntent(side, msg.t);
+  } else if (msg.t === 'resign'){
+    res = Arena.resign(s, side);
+  } else if (def.turn && s.turn && side !== s.turn){
+    res = { ok:false, error:'Сейчас ход соперника' };
   } else if ((msg.t === 'cast' || msg.t === 'skip') && !def.cards){
     res = { ok:false, error:'В этом режиме карт нет' };
   } else {
@@ -1406,7 +1453,6 @@ Net._applyIntent = function (msg, side){
       case 'skip':   res = Arena.skipCard(s, side); break;
       case 'night':  res = Arena.castNight(s, side); break;
       case 'unlock': res = Arena.unlock(s, side, msg.x, msg.y); break;
-      case 'resign': res = Arena.resign(s, side); break;
       default: return;
     }
   }
@@ -1426,6 +1472,11 @@ Net._applyIntent = function (msg, side){
     else if (msg.t === 'resign') Net._logEvent('r', side, s);
     else if (msg.t === 'draw') Net._logEvent('d', side, s);
     else if (msg.t === 'undraw') Net._logEvent('u', side, s);
+
+    /* ход переходит сопернику */
+    if (def.turn && msg.t === 'move' && s.turn === side){
+      s.turn = (side === 'a') ? 'b' : 'a';
+    }
   }
 
   if (s.over){ Net._hostFinish(); return; }
@@ -1587,7 +1638,7 @@ Net.tryResume = async function (){
   const isBot = !!rec.bot;
 
   Net.matchId = rec.matchId;
-  Net.matchMode = rec.mode || 'classic';
+  Net.matchMode = MODE_BY_ID[rec.mode] ? rec.mode : 'classic';
   Net.mySide = rec.side;
   Net.host = (rec.side === 'a');
   Net.arena = rec.arena || 1;
@@ -1700,7 +1751,6 @@ Net._finish = function (payload){
 
   const wasFriendly = !!Net.friendly;
 
-  /* Единицы: только за победу в бою с живым игроком */
   if (!wasFriendly && !wasBot && payload.winner === Net.mySide && Math.random() < UNIT_CHANCE){
     addUnits(1);
   }
@@ -1724,6 +1774,8 @@ Net._finish = function (payload){
     ? (Net.mySide === 'a' ? Net.players.b : Net.players.a)
     : { name: 'Враг' };
 
+  const outMode = payload.mode || Net.matchMode;
+
   Net.botMode = false;
 
   Net.emit('result', {
@@ -1735,7 +1787,7 @@ Net._finish = function (payload){
     floor: Arena.floorOf(after),
     opponent: opp,
     friendly: wasFriendly,
-    mode: payload.mode || Net.matchMode,
+    mode: outMode,
     unitWon: false
   });
 
