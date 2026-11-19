@@ -1,12 +1,13 @@
 /* ============================================================
-   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 27)
+   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 28)
    Четыре режима:
      classic  — карты + эликсир, общие 5 минут
      nocards  — без карт, эликсир, общие 5 минут
      noelixir — карты, без эликсира, по очереди, по 3 минуты
      pure     — без карт и эликсира, по очереди, по 3 минуты
    В режимах с очередью тикают только часы того, чей ход.
-   Кончились — он проиграл.
+   Кончились — он проиграл, если у соперника есть материал для мата,
+   иначе ничья.
    Потолок кубков: 140.
    ============================================================ */
 (function (global) {
@@ -126,7 +127,7 @@ const Net = {
   saveMark: 0, queueSince: 0, pending: null,
   finished: false, finishing: false,
 
-  botMode: false, botTimer: null, fallbackTimer: null,
+  botMode: false, botTimer: null, fallbackTimer: null, botThinkUntil: 0,
 
   friendly: false, friendlyHost: false,
 
@@ -289,6 +290,58 @@ Net._applyModeInit = function (s){
   return s;
 };
 
+function sideMaterial(s, side){
+  let minors = 0, heavy = false;
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++){
+    const pc = s.board[y][x];
+    if (!pc || pc.side !== side || pc.type === 'king') continue;
+    if (pc.type === 'knight' || pc.type === 'bishop') minors++;
+    else heavy = true;
+  }
+  return { minors: minors, heavy: heavy };
+}
+
+function cannotMate(s, side){
+  const m = sideMaterial(s, side);
+  return !m.heavy && m.minors <= 1;
+}
+
+function sideHasMove(s, side){
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++){
+    const pc = s.board[y][x];
+    if (!pc || pc.side !== side) continue;
+    if (Arena.legalMoves(s, x, y).length) return true;
+  }
+  return false;
+}
+
+Net._checkEnd = function (s){
+  if (!s || s.over) return;
+  if (cannotMate(s, 'a') && cannotMate(s, 'b')){ Arena.finish(s, 'draw'); return; }
+
+  const other = { a:'b', b:'a' };
+  const sides = (matchDef().turn && s.turn) ? [s.turn] : ['a', 'b'];
+  for (let i = 0; i < sides.length; i++){
+    const side = sides[i];
+    if (sideHasMove(s, side)) continue;
+    if (Arena.kingAttacked(s, side)) Arena.finish(s, other[side]);
+    else Arena.finish(s, 'draw');
+    return;
+  }
+};
+
+Net._endOnTime = function (s, loser){
+  const winner = loser === 'a' ? 'b' : 'a';
+  Arena.finish(s, cannotMate(s, winner) ? 'draw' : winner);
+};
+
+Net._botThinkMs = function (){
+  const r = Math.random();
+  if (r < 0.15) return 1500 + Math.random() * 2500;
+  if (r < 0.85) return 4000 + Math.random() * 10000;
+  return 14000 + Math.random() * 14000;
+};
+
 Net._applyModeTick = function (s, dt){
   if (!s || s.over) return;
   const def = matchDef();
@@ -313,13 +366,12 @@ Net._applyModeTick = function (s, dt){
     if (s.deal.b) s.deal.b.cur = null;
   }
 
-  if (!def.turn) return;
+  if (!def.turn){ Net._checkEnd(s); return; }
 
   s.turnMode = true;
   if (!s.turn) s.turn = 'a';
   if (!s.clocks) s.clocks = { a: def.time, b: def.time };
 
-  /* общие часы Arena в этом режиме не участвуют */
   if (typeof s.timeLeft !== 'number' || s.timeLeft < TURN_CLOCK_GUARD) s.timeLeft = TURN_CLOCK_GUARD;
   if (s.phase === 'overtime') s.phase = 'main';
 
@@ -328,8 +380,10 @@ Net._applyModeTick = function (s, dt){
   s.clocks[who] = Math.max(0, left - dt);
 
   if (s.clocks[who] <= 0){
-    Arena.finish(s, who === 'a' ? 'b' : 'a');
+    Net._endOnTime(s, who);
+    return;
   }
+  Net._checkEnd(s);
 };
 
 /* ---------------- журнал ходов ---------------- */
@@ -1035,6 +1089,7 @@ Net._startBotMatch = async function (){
   Net.finishing = false;
   Net.state = null;
   Net.lastSeen = Date.now();
+  Net.botThinkUntil = 0;
   Net._logReset();
 
   Net.players = {
@@ -1059,7 +1114,16 @@ Net._botTick = function (){
   if (Net.botTimer){ clearTimeout(Net.botTimer); Net.botTimer = null; }
   if (!Net.botMode || Net.finished) return;
 
-  const wait = 850 + Math.random() * 850;
+  const s = Net.state;
+  const thinking = matchDef().turn && s && !s.over && s.turn === 'b' && !(s.drawOffer && s.drawOffer.a);
+
+  let wait = 850 + Math.random() * 850;
+  if (thinking){
+    if (!Net.botThinkUntil) Net.botThinkUntil = Date.now() + Net._botThinkMs();
+    wait = Math.max(300, Net.botThinkUntil - Date.now());
+  } else {
+    Net.botThinkUntil = 0;
+  }
 
   Net.botTimer = setTimeout(function (){
     Net.botTimer = null;
@@ -1073,7 +1137,7 @@ Net._botTick = function (){
       Net._applyIntent({ t: accept ? 'draw' : 'undraw' }, 'b');
     } else {
       if (Net._botCast(st)) Net._push();
-      Net._botMove();
+      if (Net._botMove()) Net.botThinkUntil = 0;
     }
 
     Net._botTick();
@@ -1108,8 +1172,7 @@ Net._botLosing = function (s, side){
   let inCheck = false;
   try { inCheck = Arena.kingAttacked(s, side); } catch (e){}
 
-  let canMove = true;
-  try { canMove = Arena.sideHasAnyLegal(s, side); } catch (e){}
+  const canMove = sideHasMove(s, side);
 
   if (!canMove) return true;
   if (gap <= -8) return true;
@@ -1272,10 +1335,10 @@ Net._autoMove = function (s, side){
 
 Net._botMove = function (){
   const s = Net.state;
-  if (!s || s.over) return;
-
-  if (!Net._autoMove(s, 'b')) return;
+  if (!s || s.over) return false;
+  if (!Net._autoMove(s, 'b')) return false;
   Net._push();
+  return true;
 };
 
 /* ---------------- догон времени ---------------- */
@@ -1478,6 +1541,8 @@ Net._applyIntent = function (msg, side){
       s.turn = (side === 'a') ? 'b' : 'a';
     }
   }
+
+  Net._checkEnd(s);
 
   if (s.over){ Net._hostFinish(); return; }
 
@@ -1816,6 +1881,7 @@ Net.leaveMatch = async function (){
   Net.botMode = false;
   Net.friendly = false;
   Net.friendlyHost = false;
+  Net.botThinkUntil = 0;
 };
 
 Net.DRAW_OFFER_MAX = DRAW_OFFER_MAX;
