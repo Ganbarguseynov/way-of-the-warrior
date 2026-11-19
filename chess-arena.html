@@ -30,7 +30,7 @@ body.battle-mode .bottom-nav,body.battle-mode #verTag{display:none!important}
 #modeRow::-webkit-scrollbar{display:none}
 .mchip{flex:0 0 auto;min-width:96px;padding:9px 10px;border-radius:12px;border:2px solid #334155;background:linear-gradient(145deg,#1e293b,#0f172a);color:#cbd5e1;cursor:pointer;text-align:left}
 .mchip i{display:block;font-style:normal;font-size:17px;line-height:1;margin-bottom:5px}
-.mchip b{display:block;font-size:12px;font-weight:900;color:#fff;white-space:nowrap}
+.mchip b{display:block;font-size:11.5px;font-weight:900;color:#fff;white-space:nowrap}
 .mchip span{display:block;font-size:9px;font-weight:700;color:#7c8ba1;margin-top:3px;line-height:1.25}
 .mchip.on{border-color:#5ee0ff;background:linear-gradient(145deg,#0e2a3d,#071e2c);box-shadow:0 0 14px rgba(94,224,255,.35)}
 .mchip.on b{color:#5ee0ff}
@@ -52,8 +52,17 @@ body.battle-mode .bottom-nav,body.battle-mode #verTag{display:none!important}
 #topBar b{color:#ffcc00}
 #timeBox{display:flex;align-items:center;gap:6px}
 #timeLabel{font-weight:900;font-variant-numeric:tabular-nums;font-size:15px;min-width:52px;text-align:right}
-#speedTag{font-size:10px;font-weight:900;color:#3b1f00;background:linear-gradient(180deg,#ffe082,#ffb300);padding:2px 7px;border-radius:6px;border:1px solid #fff;line-height:1.35;animation:spdPulse 1.3s ease-in-out infinite}
-@keyframes spdPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+#speedTag{font-size:10px;font-weight:900;color:#3b1f00;background:linear-gradient(180deg,#ffe082,#ffb300);padding:2px 7px;border-radius:6px;border:1px solid #fff;line-height:1.35}
+#clockRow{width:min(95vw,420px);display:flex;gap:8px;margin-bottom:6px}
+.clk{flex:1;min-width:0;padding:4px 9px;border-radius:10px;background:linear-gradient(145deg,#1e293b,#0f172a);border:2px solid #334155;display:flex;justify-content:space-between;align-items:center;gap:6px}
+.clk span{font-size:9px;font-weight:800;color:#7c8ba1;letter-spacing:.4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.clk b{font-size:17px;font-weight:900;font-variant-numeric:tabular-nums;color:#cbd5e1;line-height:1.1}
+.clk.on{border-color:#5ee0ff;background:linear-gradient(145deg,#0e2a3d,#071e2c);box-shadow:0 0 12px rgba(94,224,255,.35)}
+.clk.on b{color:#5ee0ff}
+.clk.low{border-color:#ef4444;box-shadow:0 0 12px rgba(239,68,68,.45)}
+.clk.low b{color:#ef4444}
+#turnBar{width:min(95vw,420px);height:22px;line-height:22px;text-align:center;font-size:11.5px;font-weight:900;letter-spacing:1px;border-radius:8px;margin-bottom:6px;background:linear-gradient(145deg,#0e2a3d,#071e2c);color:#5ee0ff;border:1px solid #3f5c9e;white-space:nowrap;overflow:hidden}
+#turnBar.wait{background:linear-gradient(145deg,#1e293b,#0f172a);color:#94a3b8;border-color:#334155}
 #checkBar{width:min(95vw,420px);height:24px;line-height:24px;text-align:center;font-size:12px;font-weight:900;letter-spacing:1.2px;color:#fff;border-radius:8px;margin-bottom:6px;white-space:nowrap;overflow:hidden;background:linear-gradient(145deg,#ef4444,#991b1b);box-shadow:0 0 18px rgba(239,68,68,.55);visibility:hidden;opacity:0}
 #checkBar.on{visibility:visible;opacity:1;animation:barPulse .8s infinite alternate}
 @keyframes barPulse{from{opacity:.72}to{opacity:1}}
@@ -95,7 +104,9 @@ body.battle-mode .bottom-nav,body.battle-mode #verTag{display:none!important}
 #skipBtn{align-self:flex-start;padding:6px 12px;border-radius:9px;border:1px solid #475569;background:linear-gradient(145deg,#475569,#1e293b);color:#fff;font-size:11px;font-weight:800;cursor:pointer}
 #skipBtn:disabled{opacity:.35}
 #castHint{width:min(95vw,420px);text-align:center;font-size:12px;font-weight:800;color:#5ee0ff;min-height:16px;margin-top:4px;line-height:1.3}
-#board{--side:min(95vw,420px,calc(100dvh - 326px));width:var(--side);height:var(--side);display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);border:3px solid #334155;border-radius:12px;overflow:hidden;background:var(--dark);box-shadow:0 12px 34px rgba(0,0,0,.85);position:relative;contain:layout paint}
+#board{--side:min(95vw,420px,calc(100dvh - 326px));width:var(--side);height:var(--side);display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);border:3px solid #334155;border-radius:12px;overflow:hidden;background:var(--dark);box-shadow:0 12px 34px rgba(0,0,0,.85);position:relative;contain:layout paint;transition:filter .15s}
+body.turn-mode #board{--side:min(95vw,420px,calc(100dvh - 372px))}
+#board.locked{filter:grayscale(.4) brightness(.82)}
 .cell{position:relative;display:flex;align-items:center;justify-content:center;font-size:clamp(15px,5vw,26px);cursor:pointer;overflow:hidden}
 .cell.light{background:var(--light)}
 .cell.dark{background:var(--dark)}
@@ -165,7 +176,7 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
 </style>
 </head>
 <body data-arena="1">
-<div id="verTag">v44</div>
+<div id="verTag">v45</div>
 
 <div id="lobby">
   <div class="card">
@@ -199,6 +210,13 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
     <span>Ставка <b id="stakeWin">+30</b> / <b id="stakeLose" style="color:#ef4444">−30</b></span>
     <span id="timeBox"><span id="speedTag" class="hidden"></span><span id="timeLabel">5:00</span></span>
   </div>
+
+  <div id="clockRow" class="hidden">
+    <div class="clk" id="clkOpp"><span id="clkOppName">Соперник</span><b id="clkOppVal">3:00</b></div>
+    <div class="clk" id="clkMe"><span>Ты</span><b id="clkMeVal">3:00</b></div>
+  </div>
+  <div id="turnBar" class="hidden">ТВОЙ ХОД</div>
+
   <div id="checkBar"></div>
   <div id="board"></div>
 
@@ -274,8 +292,8 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
 </div>
 
 <script src="arena.js?v=22"></script>
-<script src="friends.js?v=4"></script>
-<script src="net.js?v=26"></script>
+<script src="friends.js?v=5"></script>
+<script src="net.js?v=27"></script>
 <script>
 const sb = supabase.createClient('https://qnpriwfxzuoymoumdtrl.supabase.co','sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
 const tg = window.Telegram.WebApp;
@@ -285,15 +303,17 @@ const DRAW_MAX = 2;
 const SP = Arena.SPELLS;
 
 const FALLBACK_MODE = { id:'classic', name:'Классика', icon:'🃏', short:'Карты + эликсир',
-  desc:'Полные правила: карты, эликсир, 5 минут.', cards:true, elixir:true, energyMult:1, time:300 };
+  desc:'Обычные правила: карты, эликсир, общие 5 минут.',
+  cards:true, elixir:true, turn:false, time:300 };
 
 let sel=null, cells=[], cellSig=[], lastTimeTxt='', lastSpeedTxt='', searching=false;
 let checkState=-1, drawState='', promoPending=null;
 let armed=null;
-let handSig='';
+let handSig='', turnSig='';
 let stateAt=Date.now();
 let handLoop=null;
 let curMode=FALLBACK_MODE;
+let turnLocal=0, turnLocalAt=0;
 
 let toastTimer=null;
 function toast(text){
@@ -321,7 +341,7 @@ function modeDef(id){
 function renderModeRow(){
   const row=$('modeRow');
   if(!row) return;
-  const list=(window.Net && Net.MODES) ? Net.MODES : [FALLBACK_MODE];
+  const list=(window.Net && Net.MODES && Net.MODES.length) ? Net.MODES : [FALLBACK_MODE];
   const cur=(window.Net && Net.mode) ? Net.mode : 'classic';
   let html='';
   for(let i=0;i<list.length;i++){
@@ -345,16 +365,85 @@ $('modeRow').onclick=function(e){
 
 function applyModeUI(){
   const def=curMode;
+  const turnMode=!!def.turn;
+
+  document.body.classList.toggle('turn-mode',turnMode);
+
   $('myElix').classList.toggle('hidden', !def.elixir);
   $('elixOff').classList.toggle('hidden', !!def.elixir);
   $('handPanel').classList.toggle('hidden', !def.cards);
   $('handOff').classList.toggle('hidden', !!def.cards);
+
+  $('clockRow').classList.toggle('hidden', !turnMode);
+  $('turnBar').classList.toggle('hidden', !turnMode);
+  $('timeBox').classList.toggle('hidden', turnMode);
+
   if(!def.cards){
     $('castHint').textContent='';
     armed=null;
     handSig='';
   }
+  if(!turnMode){
+    $('board').classList.remove('locked');
+    turnSig='';
+    turnLocal=0;
+  }
 }
+
+/* ================= ЧАСЫ И ОЧЕРЕДЬ ================= */
+
+function fmtClock(sec){
+  const t=Math.max(0,Math.ceil(sec||0));
+  return Math.floor(t/60)+':'+String(t%60).padStart(2,'0');
+}
+
+function myTurnNow(s){
+  if(!curMode.turn) return true;
+  if(!s) return false;
+  return (s.turn||'a')===Net.mySide;
+}
+
+function renderTurnUI(s,my,opp){
+  if(!curMode.turn){
+    $('board').classList.remove('locked');
+    return;
+  }
+
+  const cl=(s&&s.clocks)||{a:curMode.time||180,b:curMode.time||180};
+  const mine=(typeof cl[my]==='number')?cl[my]:(curMode.time||180);
+  const theirs=(typeof cl[opp]==='number')?cl[opp]:(curMode.time||180);
+  const who=(s&&s.turn)||'a';
+  const mineTurn=(who===my);
+
+  $('clkMeVal').textContent=fmtClock(mine);
+  $('clkOppVal').textContent=fmtClock(theirs);
+  $('clkMe').className='clk'+(mineTurn?' on':'')+(mine<=20?' low':'');
+  $('clkOpp').className='clk'+(!mineTurn?' on':'')+(theirs<=20?' low':'');
+
+  const key=who+'|'+(mineTurn?'1':'0')+'|'+(mine<10?'1':'0')+'|'+(theirs<10?'1':'0')+'|'+(s&&s.over?'X':'');
+  if(key!==turnSig){
+    turnSig=key;
+    const tb=$('turnBar');
+    if(s&&s.over){ tb.textContent='ПАРТИЯ ОКОНЧЕНА'; tb.classList.add('wait'); }
+    else if(mineTurn){ tb.textContent='ТВОЙ ХОД'; tb.classList.remove('wait'); }
+    else { tb.textContent='ХОД СОПЕРНИКА'; tb.classList.add('wait'); }
+    $('board').classList.toggle('locked',!(s&&!s.over&&mineTurn));
+  }
+}
+
+function turnTick(){
+  if(!curMode.turn) return;
+  const s=Net.state;
+  if(!s||s.over||!document.body.classList.contains('battle-mode')) return;
+  if(!turnLocalAt) return;
+  const my=Net.mySide;
+  if((s.turn||'a')!==my) return;
+  const spent=(Date.now()-turnLocalAt)/1000;
+  const left=Math.max(0,turnLocal-spent);
+  $('clkMeVal').textContent=fmtClock(left);
+  $('clkMe').className='clk on'+(left<=20?' low':'');
+}
+setInterval(turnTick,200);
 
 /* ================= РУКА ================= */
 
@@ -416,6 +505,7 @@ function handStop(){
 $('handCard').onclick=function(){
   if(!curMode.cards) return;
   const s=Net.state; if(!s||s.over) return;
+  if(!myTurnNow(s)){ toast('Сейчас ход соперника'); return; }
   const d=myDeal(s);
   if(!d||!d.cur){ toast('Карта ещё не выпала'); return; }
   if(armed===d.cur){ armed=null; }
@@ -427,6 +517,7 @@ $('handCard').onclick=function(){
 $('skipBtn').onclick=function(){
   if(!curMode.cards) return;
   const s=Net.state; if(!s||s.over) return;
+  if(!myTurnNow(s)){ toast('Сейчас ход соперника'); return; }
   const d=myDeal(s); if(!d||!d.cur) return;
   armed=null; handSig='';
   Net.intent({ t:'skip' });
@@ -566,9 +657,10 @@ Net.on('start',function(info){
   $('bootErr').classList.add('hidden');
   $('drawPanel').classList.add('hidden');
   $('promoPanel').classList.add('hidden');
-  sel=null; promoPending=null; armed=null; checkState=-1; drawState=''; handSig='';
+  sel=null; promoPending=null; armed=null; checkState=-1; drawState=''; handSig=''; turnSig='';
   lastTimeTxt=''; lastSpeedTxt='';
   stateAt=Date.now();
+  turnLocal=0; turnLocalAt=0;
   document.body.dataset.arena=info.arena;
   applyModeUI();
   buildBoard();
@@ -580,12 +672,13 @@ Net.on('start',function(info){
   const win = diff===0?30:(diff<0?31:29);
   const lose= Arena.lossFor(myCups,win);
   $('oppLabel').textContent=(info.opponent?info.opponent.name:'Соперник')+' ('+oppCups+' 🏆)';
+  $('clkOppName').textContent=(info.opponent?info.opponent.name:'Соперник');
   $('stakeWin').textContent='+'+win;
   $('stakeLose').textContent='−'+lose;
   if(info.friendly){ $('stakeWin').textContent='±0'; $('stakeLose').textContent='±0'; }
   const tl=$('timeLabel');
   const t0=curMode.time||300;
-  tl.textContent=Math.floor(t0/60)+':'+String(t0%60).padStart(2,'0');
+  tl.textContent=fmtClock(t0);
   lastTimeTxt=tl.textContent;
   if(info.state) render(info.state);
   else { tl.textContent='…'; toast('Собираем доску…'); }
@@ -593,13 +686,11 @@ Net.on('start',function(info){
 
 Net.on('state',function(s){ render(s); });
 
-/* гость в вызове получил режим хоста из первого пакета */
 Net.on('mode',function(d){
   if(!d||!d.mode) return;
   curMode=modeDef(d.mode);
   applyModeUI();
-  const t0=curMode.time||300;
-  if(!Net.state) $('timeLabel').textContent=Math.floor(t0/60)+':'+String(t0%60).padStart(2,'0');
+  if(!Net.state) $('timeLabel').textContent=fmtClock(curMode.time||300);
   if(Net.state) render(Net.state);
 });
 
@@ -623,6 +714,7 @@ Net.on('result',function(r){
   $('promoPanel').classList.add('hidden');
   $('overlay').classList.remove('hidden');
   promoPending=null; armed=null; elixLoopOn=false;
+  turnLocal=0; turnLocalAt=0;
   const won=r.winner===r.mySide, draw=r.winner==='draw';
   $('ovTitle').textContent=draw?'НИЧЬЯ':(won?'ПОБЕДА':'ПОРАЖЕНИЕ');
   $('ovTitle').style.color=draw?'#9fb6c4':(won?'#ffcc00':'#ef4444');
@@ -668,6 +760,9 @@ function onCell(dx,dy){
   const s=Net.state;
   if(!s||s.over||promoPending) return;
   const my=Net.mySide;
+
+  if(!myTurnNow(s)){ toast('Сейчас ход соперника'); return; }
+
   const xy=toCanon(dx,dy);
   const x=xy[0], y=xy[1];
 
@@ -756,6 +851,11 @@ function render(s){
   const my=Net.mySide, opp=(my==='a')?'b':'a', rot=(my==='b');
   const now=s.elapsed||0;
 
+  if(curMode.turn && typeof s.clocks==='object' && s.clocks){
+    const v0=s.clocks[my];
+    if(typeof v0==='number' && isFinite(v0)){ turnLocal=v0; turnLocalAt=Date.now(); }
+  }
+
   let myCheck=false, opCheck=false;
   if(s.check){ myCheck=!!s.check[my]; opCheck=!!s.check[opp]; }
   else { myCheck=Arena.kingAttacked(s,my); opCheck=Arena.kingAttacked(s,opp); }
@@ -840,6 +940,7 @@ function render(s){
     if(isMove) el.classList.add(isCap?'cap':'move');
   }
 
+  renderTurnUI(s,my,opp);
   renderElix(s,my);
   renderHand(s);
   handTick();
@@ -856,6 +957,8 @@ function render(s){
     st.textContent=speedTxt;
     st.classList.toggle('hidden',!speedTxt);
   }
+
+  if(curMode.turn) return;
 
   const tl=$('timeLabel');
   let timeTxt='', timeColor='';
