@@ -1,5 +1,5 @@
 /* ============================================================
-   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 28)
+   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 29)
    Четыре режима:
      classic  — карты + эликсир, общие 5 минут
      nocards  — без карт, эликсир, общие 5 минут
@@ -46,8 +46,6 @@ const LOG_MAX = 700;
 
 const DRAW_OFFER_MAX = 2;
 
-/* в режимах с очередью общие часы Arena держим выключенными:
-   за партию они не успеют дойти до нуля */
 const TURN_CLOCK_GUARD = 50000;
 
 const SPELL_TYPES = ['f','s','c','u','g','x','z','l','b','e'];
@@ -187,7 +185,6 @@ Net.setMode = function (id){
   return true;
 };
 
-/* режим идущего матча */
 function matchDef(){
   return MODE_BY_ID[Net.matchMode] || Net.currentMode();
 }
@@ -1115,33 +1112,40 @@ Net._botTick = function (){
   if (!Net.botMode || Net.finished) return;
 
   const s = Net.state;
-  const thinking = matchDef().turn && s && !s.over && s.turn === 'b' && !(s.drawOffer && s.drawOffer.a);
+  if (!s || s.over) return;
 
-  let wait = 850 + Math.random() * 850;
-  if (thinking){
-    if (!Net.botThinkUntil) Net.botThinkUntil = Date.now() + Net._botThinkMs();
-    wait = Math.max(300, Net.botThinkUntil - Date.now());
-  } else {
+  const offer = !!(s.drawOffer && s.drawOffer.a);
+  const myMove = !matchDef().turn || s.turn === 'b';
+
+  if (!offer && !myMove){
     Net.botThinkUntil = 0;
+    Net.botTimer = setTimeout(Net._botTick, 300);
+    return;
   }
 
-  Net.botTimer = setTimeout(function (){
-    Net.botTimer = null;
-    if (!Net.botMode || Net.finished) return;
+  if (!Net.botThinkUntil){
+    Net.botThinkUntil = Date.now() + (offer ? 1500 + Math.random() * 2500 : Net._botThinkMs());
+  }
 
-    const st = Net.state;
-    if (!st || st.over){ Net._botTick(); return; }
+  const left = Net.botThinkUntil - Date.now();
+  if (left > 0){
+    Net.botTimer = setTimeout(Net._botTick, Math.min(left, 400));
+    return;
+  }
 
-    if (st.drawOffer && st.drawOffer.a){
-      const accept = Net._botLosing(st, 'b');
-      Net._applyIntent({ t: accept ? 'draw' : 'undraw' }, 'b');
-    } else {
-      if (Net._botCast(st)) Net._push();
-      if (Net._botMove()) Net.botThinkUntil = 0;
-    }
+  Net.botThinkUntil = 0;
 
-    Net._botTick();
-  }, wait);
+  if (offer){
+    Net._applyIntent({ t: Net._botLosing(s, 'b') ? 'draw' : 'undraw' }, 'b');
+  } else {
+    Net._botCast(s);
+    Net._botMove();
+    if (s.over){ Net._hostFinish(); return; }
+    Net._push();
+  }
+
+  if (!Net.botMode || Net.finished || !Net.state || Net.state.over) return;
+  Net.botTimer = setTimeout(Net._botTick, 300);
 };
 
 /* бот считает, что реально проигрывает */
@@ -1316,7 +1320,6 @@ Net._pickMove = function (s, side){
 Net._autoMove = function (s, side){
   const def = matchDef();
 
-  /* в режиме с очередью чужой ход не трогаем */
   if (def.turn && s.turn && side !== s.turn) return false;
 
   const pick = Net._pickMove(s, side);
@@ -1336,9 +1339,9 @@ Net._autoMove = function (s, side){
 Net._botMove = function (){
   const s = Net.state;
   if (!s || s.over) return false;
-  if (!Net._autoMove(s, 'b')) return false;
-  Net._push();
-  return true;
+  const moved = Net._autoMove(s, 'b');
+  Net._checkEnd(s);
+  return moved;
 };
 
 /* ---------------- догон времени ---------------- */
@@ -1364,7 +1367,6 @@ Net._catchUp = function (s, awayMs, absentSide){
     Net._autoMove(s, foe);
   }
 
-  /* в режиме с очередью отсутствующий теряет по своим часам, а не по таймауту */
   if (!s.over && awayMs > AWAY_GRACE_MS && !matchDef().turn) Arena.finish(s, foe);
 };
 
@@ -1536,7 +1538,6 @@ Net._applyIntent = function (msg, side){
     else if (msg.t === 'draw') Net._logEvent('d', side, s);
     else if (msg.t === 'undraw') Net._logEvent('u', side, s);
 
-    /* ход переходит сопернику */
     if (def.turn && msg.t === 'move' && s.turn === side){
       s.turn = (side === 'a') ? 'b' : 'a';
     }
