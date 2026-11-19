@@ -1,5 +1,5 @@
 /* ============================================================
-   friends.js — друзья и вызовы на дружескую партию (VER 4)
+   friends.js — друзья и вызовы на дружескую партию (VER 5)
    Вызов живёт, пока отправитель на связи.
    Нет пульса 12 секунд — вызов исчезает у всех.
    Режим боя передаётся в вызове и в ссылке.
@@ -17,7 +17,7 @@ const ALIVE_MS = 12000;
 const BEAT_MS = 3000;
 
 const MODE_KEY = 'arenaMode';
-const MODE_IDS = ['classic','nocards','noelixir','pure','blitz','siege'];
+const MODE_IDS = ['classic','nocards','noelixir','pure'];
 
 const Friends = {
   sb: null,
