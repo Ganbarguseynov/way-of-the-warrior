@@ -334,6 +334,11 @@ Net._endOnTime = function (s, loser){
 
 Net._botThinkMs = function (){
   const r = Math.random();
+  if (matchDef().turn){
+    if (r < 0.6) return 1000 + Math.random() * 2000;
+    if (r < 0.95) return 3000 + Math.random() * 5000;
+    return 8000 + Math.random() * 6000;
+  }
   if (r < 0.15) return 1500 + Math.random() * 2500;
   if (r < 0.85) return 4000 + Math.random() * 10000;
   return 14000 + Math.random() * 14000;
