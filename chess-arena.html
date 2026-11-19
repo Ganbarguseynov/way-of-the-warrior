@@ -13,39 +13,18 @@
 html,body{overscroll-behavior:none;touch-action:manipulation}
 body{margin:0;background:var(--bg);color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;min-height:100dvh;user-select:none;overflow:hidden;-webkit-text-size-adjust:100%}
 .hidden{display:none!important}
-body.battle-mode .bottom-nav,body.battle-mode #verTag{display:none!important}
-#verTag{position:fixed;left:8px;bottom:74px;z-index:1300;font-size:10px;font-weight:900;color:#facc15;background:#0f172a;border:1px solid #facc15;padding:3px 8px;border-radius:6px;pointer-events:none}
-#lobby{width:95vw;max-width:400px;text-align:center;margin:20px auto 0;max-height:calc(100dvh - 100px);overflow-y:auto}
-.card{background:linear-gradient(145deg,#1e293b,#0f172a);border:1px solid #334155;border-radius:14px;padding:18px;margin-bottom:12px;box-shadow:0 8px 22px rgba(0,0,0,.6)}
-#pName{font-size:16px;font-weight:700;color:#94a3b8}
-#pCups{font-size:38px;font-weight:900;color:#ffcc00;margin:4px 0;text-shadow:0 0 22px rgba(255,204,0,.4)}
-#pArena{font-size:13px;font-weight:700;letter-spacing:1px;color:var(--accent)}
-#pFloor{font-size:11px;color:#64748b;margin-top:6px}
-#progWrap{height:8px;background:#020617;border-radius:5px;overflow:hidden;margin-top:10px}
-#progFill{height:100%;width:0;background:linear-gradient(90deg,#b5541f,#ffcc00);transition:width .4s}
-#modeBox{margin-bottom:12px}
-#modeHead{display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:900;letter-spacing:.6px;color:#94a3b8;margin:0 4px 6px}
-#modeHead b{color:#5ee0ff}
-#modeRow{display:flex;gap:7px;overflow-x:auto;padding:2px 2px 6px;scrollbar-width:none}
-#modeRow::-webkit-scrollbar{display:none}
-.mchip{flex:0 0 auto;min-width:96px;padding:9px 10px;border-radius:12px;border:2px solid #334155;background:linear-gradient(145deg,#1e293b,#0f172a);color:#cbd5e1;cursor:pointer;text-align:left}
-.mchip i{display:block;font-style:normal;font-size:17px;line-height:1;margin-bottom:5px}
-.mchip b{display:block;font-size:11.5px;font-weight:900;color:#fff;white-space:nowrap}
-.mchip span{display:block;font-size:9px;font-weight:700;color:#7c8ba1;margin-top:3px;line-height:1.25}
-.mchip.on{border-color:#5ee0ff;background:linear-gradient(145deg,#0e2a3d,#071e2c);box-shadow:0 0 14px rgba(94,224,255,.35)}
-.mchip.on b{color:#5ee0ff}
-.mchip.on span{color:#9ec9e0}
-#modeDesc{font-size:11.5px;color:#94a3b8;line-height:1.4;margin:0 4px;min-height:32px}
-#playBtn{width:100%;padding:16px;border:0;border-radius:12px;font-size:17px;font-weight:900;letter-spacing:1px;cursor:pointer;background:linear-gradient(145deg,#22c55e,#15803d);color:#fff;box-shadow:0 6px 16px rgba(34,197,94,.35)}
-#playBtn:active{transform:scale(.98)}
-#playBtn.searching{background:linear-gradient(145deg,#475569,#1e293b)}
-#playBtn:disabled{opacity:.45}
-#statusMsg{font-size:13px;color:#ffcc00;min-height:36px;margin-top:10px;line-height:1.35}
-#ruleBox{font-size:12px;color:#94a3b8;line-height:1.45;margin-top:10px;min-height:34px}
-#bootErr{margin-top:12px;padding:12px;border-radius:10px;background:rgba(239,68,68,.12);border:1px solid #7f1d1d;text-align:left}
-#bootErrHead{font-size:12px;font-weight:900;color:#fca5a5;margin-bottom:6px}
-#bootErrText{font-size:11px;color:#fecaca;line-height:1.45;word-break:break-word;font-family:ui-monospace,Menlo,monospace;max-height:150px;overflow-y:auto}
-#retryBtn{width:100%;margin-top:10px;padding:10px;border-radius:9px;border:1px solid #b91c1c;background:linear-gradient(145deg,#ef4444,#991b1b);color:#fff;font-size:13px;font-weight:800;cursor:pointer}
+body.battle-mode #verTag{display:none!important}
+#verTag{position:fixed;left:8px;bottom:12px;z-index:1300;font-size:10px;font-weight:900;color:#facc15;background:#0f172a;border:1px solid #facc15;padding:3px 8px;border-radius:6px;pointer-events:none}
+#wait,#fatal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:20px;z-index:1100;background:var(--bg)}
+.wait-box{width:100%;max-width:340px;text-align:center;background:linear-gradient(145deg,#1e293b,#0f172a);border:1px solid #334155;border-radius:16px;padding:24px 20px;box-shadow:0 12px 30px rgba(0,0,0,.7)}
+.wait-spin{font-size:42px;line-height:1;margin-bottom:12px;animation:waitPulse 1.1s infinite alternate}
+@keyframes waitPulse{from{transform:scale(.92);opacity:.7}to{transform:scale(1.06);opacity:1}}
+#waitText{font-size:14px;font-weight:800;color:#e2e8f0;line-height:1.4;min-height:20px}
+#waitMode{font-size:11.5px;font-weight:800;color:#5ee0ff;margin-top:6px}
+#waitCancel{width:100%;margin-top:16px;padding:12px;border:0;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;color:#fff;background:linear-gradient(145deg,#475569,#1e293b)}
+#fatalText{font-size:12px;color:#fecaca;line-height:1.45;word-break:break-word;font-family:ui-monospace,Menlo,monospace;max-height:140px;overflow-y:auto;text-align:left}
+#fatalRetry{width:100%;margin-top:14px;padding:12px;border:0;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;color:#fff;background:linear-gradient(145deg,#ef4444,#991b1b)}
+#fatalMenu{width:100%;margin-top:8px;padding:12px;border:0;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;color:#fff;background:linear-gradient(145deg,#475569,#1e293b)}
 #battle{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:6px 0 calc(8px + env(safe-area-inset-bottom));overflow:hidden;z-index:5}
 #battle>*{flex-shrink:0}
 #topBar{width:min(95vw,420px);display:flex;justify-content:space-between;align-items:center;font-size:12px;height:22px;margin-bottom:8px;color:#94a3b8}
@@ -156,11 +135,6 @@ body.turn-mode #board{--side:min(95vw,420px,calc(100dvh - 372px))}
 .ov button{width:100%;padding:13px;border:0;border-radius:10px;font-size:15px;font-weight:800;margin-top:8px;background:linear-gradient(145deg,#22c55e,#15803d);color:#fff;cursor:pointer}
 #toast{position:fixed;bottom:140px;left:50%;transform:translateX(-50%) translateY(10px);background:#1e293b;border:1px solid #475569;color:#ffcc00;padding:9px 16px;border-radius:8px;font-size:12.5px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:950;max-width:80vw;text-align:center}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-.bottom-nav{position:fixed;bottom:0;left:0;width:100%;height:68px;background:linear-gradient(180deg,#1a1a2e,#0f0f1e);border-top:1px solid rgba(255,255,255,.08);display:flex;justify-content:space-around;align-items:center;z-index:999;padding-bottom:env(safe-area-inset-bottom)}
-.nav-btn{background:transparent;border:none;color:#94a3b8;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:9px;font-weight:bold;cursor:pointer;flex:1;height:100%;gap:3px}
-.nav-btn .icon-wrap{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,#2a2a3e,#15151f)}
-.nav-btn .icon{font-size:20px}
-.nav-btn.active{color:#ffcc00}
 body[data-arena="1"]{--dark:#33241c;--light:#4a3428;--accent:#b5541f;--bg:#0f0b09}
 body[data-arena="2"]{--dark:#2a2b1f;--light:#3f4230;--accent:#8a8f4a;--bg:#0d0e0a}
 body[data-arena="3"]{--dark:#6b5236;--light:#8d6d49;--accent:#c0c8cf;--bg:#181210}
@@ -176,31 +150,22 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
 </style>
 </head>
 <body data-arena="1">
-<div id="verTag">v45</div>
+<div id="verTag">v46</div>
 
-<div id="lobby">
-  <div class="card">
-    <div id="pName">Загрузка…</div>
-    <div id="pCups">0</div>
-    <div id="pArena"></div>
-    <div id="pFloor"></div>
-    <div id="progWrap"><div id="progFill"></div></div>
+<div id="wait" class="hidden">
+  <div class="wait-box">
+    <div class="wait-spin">⚔️</div>
+    <div id="waitText">Ищем соперника…</div>
+    <div id="waitMode">Классика</div>
+    <button id="waitCancel">Отмена</button>
   </div>
+</div>
 
-  <div id="modeBox">
-    <div id="modeHead"><span>РЕЖИМ БОЯ</span><b id="modeCur">Классика</b></div>
-    <div id="modeRow"></div>
-    <div id="modeDesc"></div>
-  </div>
-
-  <button id="playBtn" disabled>В БОЙ</button>
-  <div id="statusMsg"></div>
-  <div id="ruleBox"></div>
-
-  <div id="bootErr" class="hidden">
-    <div id="bootErrHead">База не отвечает</div>
-    <div id="bootErrText"></div>
-    <button id="retryBtn">Повторить</button>
+<div id="fatal" class="hidden">
+  <div class="wait-box">
+    <div id="fatalText"></div>
+    <button id="fatalRetry">Повторить</button>
+    <button id="fatalMenu">В меню</button>
   </div>
 </div>
 
@@ -283,14 +248,6 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
 
 <div id="toast"></div>
 
-<div class="bottom-nav">
-  <button class="nav-btn" onclick="location.href='chess-shop.html'"><div class="icon-wrap"><span class="icon">🎁</span></div><span>Магазин</span></button>
-  <button class="nav-btn" onclick="location.href='chess-deck.html'"><div class="icon-wrap"><span class="icon">🃏</span></div><span>Колода</span></button>
-  <button class="nav-btn" onclick="location.href='chess-arena.html'"><div class="icon-wrap"><span class="icon">⚔️</span></div><span>Бой</span></button>
-  <button class="nav-btn" onclick="location.href='chess-social.html'"><div class="icon-wrap"><span class="icon">🛡️</span></div><span>Клан</span></button>
-  <button class="nav-btn" onclick="location.href='leaderboard.html'"><div class="icon-wrap"><span class="icon">🏆</span></div><span>Рейтинг</span></button>
-</div>
-
 <script src="arena.js?v=22"></script>
 <script src="friends.js?v=5"></script>
 <script src="net.js?v=27"></script>
@@ -336,32 +293,38 @@ function modeDef(id){
   return FALLBACK_MODE;
 }
 
-/* ================= РЕЖИМЫ ================= */
+/* ================= ЭКРАНЫ ================= */
 
-function renderModeRow(){
-  const row=$('modeRow');
-  if(!row) return;
-  const list=(window.Net && Net.MODES && Net.MODES.length) ? Net.MODES : [FALLBACK_MODE];
-  const cur=(window.Net && Net.mode) ? Net.mode : 'classic';
-  let html='';
-  for(let i=0;i<list.length;i++){
-    const m=list[i];
-    html+='<button class="mchip'+(m.id===cur?' on':'')+'" data-mode="'+m.id+'">'+
-      '<i>'+m.icon+'</i><b>'+m.name+'</b><span>'+m.short+'</span></button>';
-  }
-  row.innerHTML=html;
-  const def=modeDef(cur);
-  $('modeCur').textContent=def.name;
-  $('modeDesc').textContent=def.desc;
+function showWait(text){
+  $('fatal').classList.add('hidden');
+  $('wait').classList.remove('hidden');
+  if(text) $('waitText').textContent=text;
+  $('waitMode').textContent=modeDef(Net.mode).name;
 }
-$('modeRow').onclick=function(e){
-  const b=e.target.closest('[data-mode]');
-  if(!b) return;
-  if(searching){ toast('Сначала отмени поиск'); return; }
-  const id=b.getAttribute('data-mode');
-  if(window.Net && Net.setMode) Net.setMode(id);
-  renderModeRow();
-};
+function hideWait(){ $('wait').classList.add('hidden'); }
+
+function showFatal(e){
+  hideWait();
+  let msg='неизвестная ошибка', extra='';
+  if(e){
+    if(typeof e==='string') msg=e;
+    else{
+      msg=e.message||e.error_description||e.details||'неизвестная ошибка';
+      if(e.code) extra+='\nкод: '+e.code;
+      if(e.hint) extra+='\nподсказка: '+e.hint;
+    }
+  }
+  $('fatalText').textContent=msg+extra;
+  $('fatal').classList.remove('hidden');
+}
+
+function toMenu(){
+  handStop();
+  document.body.classList.remove('battle-mode');
+  location.href='chess-main.html';
+}
+
+/* ================= РЕЖИМ ================= */
 
 function applyModeUI(){
   const def=curMode;
@@ -609,52 +572,36 @@ function renderElix(s,my){
   elixPaint(); elixStart();
 }
 
-/* ================= ЛОББИ ================= */
+/* ================= ПОИСК ================= */
 
-function renderLobby(){
-  const me=Net.me; if(!me) return;
-  const arena=Arena.arenaOf(me.cups), floor=Arena.floorOf(me.cups);
-  $('pName').textContent=me.display_name||playerName();
-  $('pCups').textContent=me.cups+' 🏆';
-  $('pArena').textContent='АРЕНА '+arena+' · '+Arena.ARENAS[arena-1].name.toUpperCase();
-  $('pFloor').textContent='Пол арены: '+floor+' 🏆 — ниже не упадёшь';
-  let pct = arena>=Arena.MAX_ARENA ? 100 : ((me.cups-floor)/Arena.STEP)*100;
-  $('progFill').style.width=Math.max(0,Math.min(100,pct))+'%';
-  $('ruleBox').textContent=Arena.ARENAS[arena-1].rule;
-  document.body.dataset.arena=arena;
-  renderModeRow();
-  if(window.Chests && Chests.render) Chests.render();
-}
 async function startSearch(){
   if(searching||!Net.me) return;
   searching=true;
-  $('playBtn').classList.add('searching');
-  $('playBtn').textContent='ОТМЕНА';
-  $('modeDesc').textContent='Ищем соперника в режиме «'+modeDef(Net.mode).name+'» — другие режимы не подходят.';
+  showWait('Ищем соперника…');
   await Net.findMatch();
 }
-function stopSearch(){
+
+$('waitCancel').onclick=async function(){
   searching=false;
-  $('playBtn').classList.remove('searching');
-  $('playBtn').textContent='В БОЙ';
-  $('modeDesc').textContent=modeDef(Net.mode).desc;
-}
-$('playBtn').onclick=async function(){
-  if(searching){ await Net.cancelQueue(); stopSearch(); $('statusMsg').textContent=''; return; }
-  startSearch();
+  hideWait();
+  try{ await Net.cancelQueue(); }catch(e){}
+  toMenu();
 };
-Net.on('status',function(d){ $('statusMsg').textContent=d.text||''; });
+
+Net.on('status',function(d){
+  if($('wait').classList.contains('hidden')) return;
+  $('waitText').textContent=d.text||'Ищем соперника…';
+});
 Net.on('error',function(d){ toast(d.message); });
 
 Net.on('start',function(info){
-  stopSearch();
-  $('statusMsg').textContent='';
+  searching=false;
+  hideWait();
   curMode=modeDef(info.mode||Net.mode);
   document.body.classList.add('battle-mode');
-  $('lobby').classList.add('hidden');
   $('battle').classList.remove('hidden');
   $('overlay').classList.add('hidden');
-  $('bootErr').classList.add('hidden');
+  $('fatal').classList.add('hidden');
   $('drawPanel').classList.add('hidden');
   $('promoPanel').classList.add('hidden');
   sel=null; promoPending=null; armed=null; checkState=-1; drawState=''; handSig=''; turnSig='';
@@ -690,22 +637,20 @@ Net.on('mode',function(d){
   if(!d||!d.mode) return;
   curMode=modeDef(d.mode);
   applyModeUI();
-  if(!Net.state) $('timeLabel').textContent=fmtClock(curMode.time||300);
   if(Net.state) render(Net.state);
 });
 
 Net.on('resumeFailed',function(){
   toast('Соперник не вернулся. Засчитано поражение.');
   handStop();
-  document.body.classList.remove('battle-mode');
-  $('battle').classList.add('hidden');
-  $('promoPanel').classList.add('hidden');
-  $('lobby').classList.remove('hidden');
-  Net.leaveMatch().then(function(){ return Net.refresh(); }).then(function(){ renderLobby(); }).catch(function(){});
+  Net.leaveMatch().then(function(){
+    setTimeout(toMenu, 900);
+  }).catch(function(){ setTimeout(toMenu, 900); });
 });
 
 Net.on('result',function(r){
-  stopSearch();
+  searching=false;
+  hideWait();
   handStop();
   document.body.classList.remove('battle-mode');
   $('battle').classList.add('hidden');
@@ -729,7 +674,7 @@ Net.on('result',function(r){
   else if(arenaNow<arenaThen){ $('ovNote').textContent='⬇ Ты выпал на арену «'+Arena.ARENAS[arenaNow-1].name+'»'; $('ovNote').style.color='#ef4444'; }
   else if(!draw && r.delta===0){ $('ovNote').textContent='Пол арены: ниже '+r.floor+' не падаешь'; $('ovNote').style.color='#64748b'; }
   else { $('ovNote').textContent=''; }
-  Net.leaveMatch().then(function(){ return Net.refresh(); }).then(function(){ renderLobby(); }).catch(function(){});
+  Net.leaveMatch().then(function(){ return Net.refresh(); }).catch(function(){});
 });
 
 $('ovBtn').onclick=function(){
@@ -738,9 +683,11 @@ $('ovBtn').onclick=function(){
   $('overlay').classList.add('hidden');
   $('battle').classList.add('hidden');
   $('promoPanel').classList.add('hidden');
-  $('lobby').classList.remove('hidden');
-  renderLobby();
+  toMenu();
 };
+
+$('fatalRetry').onclick=function(){ $('fatal').classList.add('hidden'); boot(); };
+$('fatalMenu').onclick=toMenu;
 
 /* ================= ДОСКА ================= */
 
@@ -864,7 +811,7 @@ function render(s){
     checkState=nowState;
     const bar=$('checkBar');
     if(nowState===1){ bar.textContent='ШАХ! УХОДИ ИЗ-ПОД УДАРА'; bar.classList.add('on'); }
-    else if(nowState===2){ bar.textContent='ШАХ У СОПЕРНИКА'; bar.classList.add('on'); }
+    else if(nowState===2){ bar.textContent='ШАХ У СОПЕРТНИКА'; bar.classList.add('on'); }
     else { bar.classList.remove('on'); }
   }
   updateDrawUI(s,my,opp);
@@ -980,46 +927,32 @@ $('resignBtn').onclick=function(){
   if(confirm('Сдаться? Это поражение и минус кубки.')) Net.resign();
 };
 
-function showBootError(e){
-  let msg='неизвестная ошибка', extra='';
-  if(e){
-    if(typeof e==='string') msg=e;
-    else{
-      msg=e.message||e.error_description||e.details||'неизвестная ошибка';
-      if(e.code) extra+='\nкод: '+e.code;
-      if(e.hint) extra+='\nподсказка: '+e.hint;
-    }
-  }
-  $('bootErrText').textContent=msg+extra;
-  $('bootErr').classList.remove('hidden');
-  $('playBtn').disabled=true;
-  $('playBtn').textContent='В БОЙ';
-}
+/* ================= ЗАПУСК ================= */
 
 async function boot(){
-  $('bootErr').classList.add('hidden');
-  $('pName').textContent='Загрузка…';
+  $('fatal').classList.add('hidden');
   try{
     await Net.init({ client: sb, key: playerKey(), name: playerName(), seed: 0 });
-  }catch(e){ showBootError(e); return; }
-  renderLobby();
-  $('playBtn').disabled=false;
+  }catch(e){ showFatal(e); return; }
+
   let resumed=false;
   try{ resumed=await Net.tryResume(); }catch(e){ resumed=false; }
-  if(!resumed && sessionStorage.getItem('arenaAutoQueue')==='1'){
+  if(resumed) return;
+
+  if(sessionStorage.getItem('arenaAutoQueue')==='1'){
     sessionStorage.removeItem('arenaAutoQueue');
     startSearch();
+    return;
   }
+
+  toMenu();
 }
-$('retryBtn').onclick=boot;
+
 document.addEventListener('visibilitychange',function(){
   if(!document.hidden && Net.checkAway) Net.checkAway();
 });
 elixBuildBubbles();
-boot();
-</script>
 
-<script>
 (function(){
   var qs=new URLSearchParams(location.search);
   var chId=qs.get('ch');
@@ -1123,8 +1056,8 @@ boot();
   history.replaceState(null,'',location.pathname);
   waitNet(start);
 })();
-</script>
 
-<script src="chests.js?v=4"></script>
+boot();
+</script>
 </body>
 </html>
