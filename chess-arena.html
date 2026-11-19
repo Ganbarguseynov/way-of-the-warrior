@@ -930,6 +930,9 @@ async function boot(){
     await Net.init({ client: sb, key: playerKey(), name: playerName(), seed: 0 });
   }catch(e){ showFatal(e); return; }
 
+  /* дружеский вход: партию запускает блок ниже, восстановление и меню не нужны */
+  if(window.__friendlyEntry) return;
+
   let resumed=false;
   try{ resumed=await Net.tryResume(); }catch(e){ resumed=false; }
   if(resumed) return;
@@ -939,9 +942,6 @@ async function boot(){
     startSearch();
     return;
   }
-
-  /* дружеский вызов: страницу не покидаем, ждём запуск партии */
-  if(new URLSearchParams(location.search).has('ch')) return;
 
   toMenu();
 }
@@ -955,6 +955,7 @@ elixBuildBubbles();
   var qs=new URLSearchParams(location.search);
   var chId=qs.get('ch');
   if(!chId) return;
+  window.__friendlyEntry=true;
   var role=qs.get('role')==='guest'?'guest':'host';
   var oppKey=qs.get('opp')||'';
   var oppName=qs.get('name')||'Соперник';
@@ -1024,10 +1025,10 @@ elixBuildBubbles();
   }
   function start(){
     try{ Net.leaveMatch(); }catch(e){}
-    var md=(window.Friends && Friends.setMode) ? (Friends.setMode(mode), mode) : mode;
+    if(window.Friends && Friends.setMode) Friends.setMode(mode);
     if(role==='host'){
       overlay('Вызов отправлен','Ждём, пока '+oppName+' примет вызов…');
-      Net.startFriendlyHost({ matchId:chId, oppKey:oppKey, oppName:oppName, oppCups:oppCups, arena:arena, mode:md });
+      Net.startFriendlyHost({ matchId:chId, oppKey:oppKey, oppName:oppName, oppCups:oppCups, arena:arena, mode:mode });
       Friends.startBeat(chId);
       poll=setInterval(async function(){
         if(killed||started) return;
@@ -1035,7 +1036,7 @@ elixBuildBubbles();
         if(!st||st.status==='declined'){ toast('Вызов отменён'); goBack(); }
       },2500);
     } else {
-      Net.joinFriendly({ matchId:chId, oppKey:oppKey, oppName:oppName, oppCups:oppCups, arena:arena, mode:md });
+      Net.joinFriendly({ matchId:chId, oppKey:oppKey, oppName:oppName, oppCups:oppCups, arena:arena, mode:mode });
       overlay('Загружаем партию','Соединяемся с '+oppName+'…');
     }
   }
