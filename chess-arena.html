@@ -149,7 +149,7 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
 </style>
 </head>
 <body data-arena="1">
-<div id="verTag">v48</div>
+<div id="verTag">v49</div>
 
 <div id="wait" class="hidden">
   <div class="wait-box">
@@ -248,7 +248,7 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
 <div id="toast"></div>
 
 <script src="arena.js?v=22"></script>
-<script src="friends.js?v=5"></script>
+<script src="friends.js?v=6"></script>
 <script src="net.js?v=29"></script>
 <script src="chests.js?v=5"></script>
 <script>
@@ -274,7 +274,8 @@ let turnLocal=0, turnLocalAt=0;
 
 let toastTimer=null;
 function toast(text){
-  const t=$('toast'); t.textContent=text; t.classList.add('show');
+  const t=$('toast'); if(!t) return;
+  t.textContent=text; t.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer=setTimeout(function(){ t.classList.remove('show'); },2000);
 }
@@ -939,6 +940,9 @@ async function boot(){
     return;
   }
 
+  /* дружеский вызов: страницу не покидаем, ждём запуск партии */
+  if(new URLSearchParams(location.search).has('ch')) return;
+
   toMenu();
 }
 
@@ -1020,9 +1024,10 @@ elixBuildBubbles();
   }
   function start(){
     try{ Net.leaveMatch(); }catch(e){}
+    var md=(window.Friends && Friends.setMode) ? (Friends.setMode(mode), mode) : mode;
     if(role==='host'){
       overlay('Вызов отправлен','Ждём, пока '+oppName+' примет вызов…');
-      Net.startFriendlyHost({ matchId:chId, oppKey:oppKey, oppName:oppName, oppCups:oppCups, arena:arena, mode:mode });
+      Net.startFriendlyHost({ matchId:chId, oppKey:oppKey, oppName:oppName, oppCups:oppCups, arena:arena, mode:md });
       Friends.startBeat(chId);
       poll=setInterval(async function(){
         if(killed||started) return;
@@ -1030,7 +1035,7 @@ elixBuildBubbles();
         if(!st||st.status==='declined'){ toast('Вызов отменён'); goBack(); }
       },2500);
     } else {
-      Net.joinFriendly({ matchId:chId, oppKey:oppKey, oppName:oppName, oppCups:oppCups, arena:arena, mode:mode });
+      Net.joinFriendly({ matchId:chId, oppKey:oppKey, oppName:oppName, oppCups:oppCups, arena:arena, mode:md });
       overlay('Загружаем партию','Соединяемся с '+oppName+'…');
     }
   }
