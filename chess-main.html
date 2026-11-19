@@ -32,23 +32,23 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
 .burger:active{transform:translateY(3px);box-shadow:0 1px 0 #b45309}
 .burger span{display:block;width:20px;height:3px;border-radius:2px;background:#3b1f00;box-shadow:0 1px 0 rgba(255,255,255,.5)}
 #verTag{position:fixed;left:8px;bottom:74px;z-index:1300;font-size:10px;font-weight:900;color:#3b1f00;letter-spacing:.5px;background:#ffd447;border:2px solid #fff;padding:3px 8px;border-radius:8px;pointer-events:none;box-shadow:0 2px 0 #b45309}
-.arena-container{flex:1;min-height:0;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 14px;position:relative;z-index:5}
-.arena-card{width:90vw;max-width:400px;height:100%;max-height:100%;display:flex;flex-direction:column;background:linear-gradient(180deg,#fff,#eef4ff);border-radius:20px;border:4px solid #ffd447;box-shadow:0 8px 0 #b45309,0 16px 30px rgba(0,0,0,.4),inset 0 3px 0 rgba(255,255,255,.9);padding:0 0 10px;text-align:center;position:relative;overflow:hidden;cursor:pointer;transition:transform .12s}
+.arena-container{flex:1;min-height:0;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px 14px;position:relative;z-index:5}
+.arena-card{width:90vw;max-width:400px;flex:1;min-height:0;display:flex;flex-direction:column;background:linear-gradient(180deg,#fff,#eef4ff);border-radius:20px;border:4px solid #ffd447;box-shadow:0 8px 0 #b45309,0 16px 30px rgba(0,0,0,.4),inset 0 3px 0 rgba(255,255,255,.9);padding:0 0 10px;text-align:center;position:relative;overflow:hidden;cursor:pointer;transition:transform .12s}
 .arena-card:active{transform:translateY(3px) scale(.99)}
 .arena-glow{position:absolute;top:0;left:0;width:100%;height:100%;background:radial-gradient(circle at top,#3b82f6 0%,transparent 70%);opacity:.16;pointer-events:none;z-index:0}
 .card-head{background:linear-gradient(180deg,#3b8ef0,#1c56b8);padding:8px 12px 7px;border-bottom:3px solid #ffd447;position:relative;z-index:2;margin-bottom:8px;flex-shrink:0}
 .arena-title{font-size:17px;font-weight:900;color:#fff;margin:0 0 2px;text-shadow:0 2px 0 rgba(0,0,0,.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .arena-subtitle{font-size:10.5px;color:#fff;margin:0;line-height:1.3;font-weight:600;opacity:.95;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
-.arena-image{width:calc(100% - 22px);margin:0 11px 8px;flex:1;min-height:70px;border-radius:14px;border:3px solid #1c56b8;position:relative;z-index:2;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#334155,#0f172a);transition:background .4s;overflow:hidden;box-shadow:inset 0 0 20px rgba(0,0,0,.5)}
+.arena-image{width:calc(100% - 22px);margin:0 11px 8px;flex:1 1 0;min-height:0;border-radius:14px;border:3px solid #1c56b8;position:relative;z-index:2;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#334155,#0f172a);transition:background .4s;overflow:hidden;box-shadow:inset 0 0 20px rgba(0,0,0,.5)}
 .arena-image span{font-size:52px;filter:drop-shadow(0 8px 16px rgba(0,0,0,.7))}
 #arenaVideo{display:none;width:100%;height:100%;object-fit:cover;border-radius:11px}
 .arena-progress-bg{width:calc(100% - 22px);margin:0 11px;height:16px;background:#0f2a5c;border-radius:12px;overflow:hidden;box-shadow:inset 0 4px 8px rgba(0,0,0,.7);position:relative;z-index:2;border:2px solid #1c56b8;flex-shrink:0}
 .arena-progress-fill{height:100%;width:0%;border-radius:10px;transition:width .5s;background:linear-gradient(90deg,#43e97b,#ffd447);box-shadow:inset 0 2px 0 rgba(255,255,255,.5)}
 .arena-trophies{display:flex;justify-content:space-between;width:calc(100% - 22px);margin:4px 11px 0;font-size:11px;color:#1c3f7d;font-weight:900;position:relative;z-index:2;flex-shrink:0}
-.arena-floor{font-size:10px;color:#5a7398;margin:4px 11px 0;position:relative;z-index:2;font-weight:700;flex-shrink:0}
+.arena-floor{font-size:10px;color:#5a7398;margin:3px 11px 0;position:relative;z-index:2;font-weight:700;flex-shrink:0}
 .arena-hint{display:none}
-#dbWarn{font-size:10px;color:#d32f2f;margin:4px 11px 0;position:relative;z-index:2;line-height:1.3;word-break:break-word;font-weight:700;flex-shrink:0}
-.bottom-actions{width:100%;padding:0 14px 6px;display:flex;flex-direction:column;align-items:center;gap:6px;position:relative;z-index:5;flex-shrink:0}
+#dbWarn{font-size:10px;color:#d32f2f;margin:3px 11px 0;position:relative;z-index:2;line-height:1.3;word-break:break-word;font-weight:700;flex-shrink:0}
+.bottom-actions{width:100%;padding:0 14px 4px;display:flex;flex-direction:column;align-items:center;gap:6px;position:relative;z-index:5;flex-shrink:0}
 #modeBox{width:90vw;max-width:400px}
 #modeBtn{width:100%;display:flex;align-items:center;gap:10px;padding:7px 12px;border-radius:14px;border:3px solid #b9cdea;background:linear-gradient(180deg,#fff,#e6eefc);color:#132a54;cursor:pointer;box-shadow:0 4px 0 #8fa8cc;text-align:left}
 #modeBtn:active{transform:translateY(2px);box-shadow:0 1px 0 #8fa8cc}
@@ -71,15 +71,14 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
 .mopt span{display:flex;flex-direction:column;min-width:0}
 .mopt b{font-size:13.5px;font-weight:900;color:#132a54}
 .mopt small{font-size:10.5px;font-weight:700;color:#5a7398;margin-top:2px;line-height:1.3}
-.btn-battle{width:90vw;max-width:400px;padding:12px;background:linear-gradient(180deg,#ffe082 0%,#ffb300 55%,#ff9500 100%);border:4px solid #fff;border-radius:18px;font-size:22px;font-weight:900;color:#5a2d00;text-transform:uppercase;letter-spacing:1.5px;box-shadow:0 6px 0 #a35f00,0 12px 20px rgba(0,0,0,.45),inset 0 2px 4px rgba(255,255,255,.9);cursor:pointer;transition:transform .1s,box-shadow .1s;text-shadow:0 2px 0 rgba(255,255,255,.6);position:relative;overflow:hidden}
+.btn-battle{width:90vw;max-width:400px;padding:10px;background:linear-gradient(180deg,#ffe082 0%,#ffb300 55%,#ff9500 100%);border:4px solid #fff;border-radius:18px;font-size:19px;font-weight:900;color:#5a2d00;text-transform:uppercase;letter-spacing:1.5px;box-shadow:0 6px 0 #a35f00,0 12px 20px rgba(0,0,0,.45),inset 0 2px 4px rgba(255,255,255,.9);cursor:pointer;transition:transform .1s,box-shadow .1s;text-shadow:0 2px 0 rgba(255,255,255,.6);position:relative;overflow:hidden}
 .btn-battle:active{transform:translateY(5px);box-shadow:0 3px 0 #a35f00,0 6px 10px rgba(0,0,0,.4),inset 0 2px 4px rgba(255,255,255,.9)}
 .btn-battle::after{content:'';position:absolute;top:0;left:-100%;width:50%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.75),transparent);animation:shine 3s infinite;transform:skewX(-20deg)}
 @keyframes shine{0%{left:-100%}18%{left:200%}100%{left:200%}}
-#chWrap{width:90vw;max-width:400px;flex-shrink:0;padding:6px 8px 8px;border-radius:14px;background:rgba(15,42,94,.6);border:2px solid #3b5f9e}
-#chWrap h3{margin:0 0 6px;font-size:12px;font-weight:900;display:flex;justify-content:space-between;align-items:center}
-#chWrap h3 small{font-size:10px;color:#a8c4ea;font-weight:800}
-#chSlots{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-#chSlots>*{height:auto!important;min-height:0!important}
+#chWrap{width:min(95vw,400px);margin:0 auto;padding:5px 6px 6px;border-radius:14px;background:linear-gradient(180deg,#1f4a94,#122c63);border:2px solid #4b78c8;box-shadow:0 4px 0 #061433;flex-shrink:0}
+#chWrap h3{margin:0 0 4px;font-size:11px;font-weight:900;color:#fff;display:flex;justify-content:space-between;align-items:center}
+#chWrap h3 small{font-size:9px;color:#9fc4ff;font-weight:700}
+#chSlots{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
 #arenaModal{position:fixed;inset:0;z-index:1200;display:none;flex-direction:column;background:linear-gradient(180deg,#1f7ae0 0%,#0e2a5e 100%)}
 #arenaModal.open{display:flex}
 #arenaModalHead{display:flex;justify-content:space-between;align-items:center;width:100%;padding:14px 18px 10px;flex-shrink:0;background:linear-gradient(180deg,#16306e,rgba(22,48,110,0));border-bottom:2px solid rgba(255,212,71,.4)}
@@ -165,17 +164,11 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
 #nickLater{width:100%;margin-top:8px;padding:12px;border-radius:11px;border:3px solid #b9cdea;background:#fff;color:#5a7398;font-size:13.5px;font-weight:900;cursor:pointer;box-shadow:0 4px 0 #8fa8cc}
 #nickLater:active{transform:translateY(2px);box-shadow:0 1px 0 #8fa8cc}
 #nickVer{font-size:9.5px;color:#9ab0cc;margin-top:10px;letter-spacing:.5px;font-weight:700}
-@media (max-height:720px){
-  .arena-image{min-height:56px}
-  .arena-image span{font-size:40px}
-  .btn-battle{font-size:19px;padding:10px}
-  .arena-subtitle{display:none}
-}
 </style>
 </head>
 <body>
 
-<div id="verTag">v24</div>
+<div id="verTag">v25</div>
 
 <div class="top-bar">
   <div class="profile-badge" id="profileBadge">
@@ -228,7 +221,7 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
 
 <div id="arenaModal">
   <div id="arenaModalHead">
-    <div id="arenaHeadLeft"><h3>Все арены</h3><span class="verChip">v24</span></div>
+    <div id="arenaHeadLeft"><h3>Все арены</h3><span class="verChip">v25</span></div>
     <button id="arenaClose">✕</button>
   </div>
   <div id="arenaMineBar">Ты на арене <span id="mineBarText">…</span></div>
@@ -260,7 +253,7 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
     <button class="m-item" data-act="rules"><div class="m-ico">📖</div><div class="m-txt"><div class="m-name">Игровой процесс</div><div class="m-sub">Как играть и как считаются звёзды</div></div><div class="m-arrow">›</div></button>
     <button class="m-item" data-act="fair"><div class="m-ico">⚖️</div><div class="m-txt"><div class="m-name">Правила честной игры</div><div class="m-sub">Уважай других игроков</div></div><div class="m-arrow">›</div></button>
   </div>
-  <div class="drawer-foot">Chess Royale · версия 24</div>
+  <div class="drawer-foot">Chess Royale · версия 25</div>
 </div>
 
 <div id="infoModal">
@@ -281,7 +274,7 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
       <div id="nickErr"></div>
       <button id="nickOk">Сохранить</button>
       <button id="nickLater">Не сейчас</button>
-      <div id="nickVer">окно v24</div>
+      <div id="nickVer">окно v25</div>
     </div>
   </div>
 </div>
@@ -790,5 +783,17 @@ for (var i = 0; i < items.length; i++){
 </script>
 
 <script src="chests.js?v=4"></script>
+
+<style>
+#chWrap{margin:0 auto!important;padding:5px 6px 6px!important}
+#chWrap h3{margin:0 0 4px!important;font-size:11px!important}
+#chSlots{gap:5px!important}
+.ch-slot{height:86px!important;padding:4px 2px!important}
+.ch-art{height:40px!important}
+.chest-svg{width:40px!important;height:auto!important}
+.ch-nm{font-size:8.5px!important}
+.ch-st{min-height:10px!important;font-size:8px!important}
+.ch-btn{padding:3px 1px!important;font-size:8px!important}
+</style>
 </body>
 </html>
