@@ -48,6 +48,18 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
 .arena-hint{font-size:10px;color:#8aa3c4;margin-top:10px;position:relative;z-index:2;font-weight:800}
 #dbWarn{font-size:10.5px;color:#d32f2f;margin:8px 13px 0;position:relative;z-index:2;line-height:1.35;word-break:break-word;font-weight:700}
 .bottom-actions{width:100%;padding:12px 20px 20px;display:flex;flex-direction:column;align-items:center;gap:10px;position:relative;z-index:5}
+#modeBox{width:90vw;max-width:400px}
+.mode-head{display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:900;letter-spacing:.6px;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.35);margin:0 4px 6px}
+.mode-head b{color:#ffe27a}
+.mode-row{display:flex;gap:7px;overflow-x:auto;padding:2px 2px 6px;scrollbar-width:none}
+.mode-row::-webkit-scrollbar{display:none}
+.mchip{flex:0 0 auto;min-width:100px;padding:8px 10px;border-radius:12px;border:3px solid #b9cdea;background:linear-gradient(180deg,#fff,#e6eefc);color:#132a54;cursor:pointer;text-align:left;box-shadow:0 4px 0 #8fa8cc}
+.mchip i{display:block;font-style:normal;font-size:16px;line-height:1;margin-bottom:4px}
+.mchip b{display:block;font-size:11.5px;font-weight:900;white-space:nowrap}
+.mchip span{display:block;font-size:9px;font-weight:700;color:#5a7398;margin-top:2px;line-height:1.25}
+.mchip.on{border-color:#ffd447;background:linear-gradient(180deg,#ffe082,#ffb300);box-shadow:0 4px 0 #b45309}
+.mchip.on span{color:#5a2d00}
+#modeDesc{font-size:11.5px;color:#fff;text-align:center;line-height:1.4;min-height:32px;margin:4px 4px 0;font-weight:700;text-shadow:0 1px 0 rgba(0,0,0,.35)}
 .btn-battle{width:90vw;max-width:400px;padding:18px;background:linear-gradient(180deg,#ffe082 0%,#ffb300 55%,#ff9500 100%);border:4px solid #fff;border-radius:18px;font-size:25px;font-weight:900;color:#5a2d00;text-transform:uppercase;letter-spacing:1.5px;box-shadow:0 8px 0 #a35f00,0 16px 24px rgba(0,0,0,.45),inset 0 2px 4px rgba(255,255,255,.9);cursor:pointer;transition:transform .1s,box-shadow .1s;text-shadow:0 2px 0 rgba(255,255,255,.6);position:relative;overflow:hidden}
 .btn-battle:active{transform:translateY(5px);box-shadow:0 3px 0 #a35f00,0 6px 10px rgba(0,0,0,.4),inset 0 2px 4px rgba(255,255,255,.9)}
 .btn-battle::after{content:'';position:absolute;top:0;left:-100%;width:50%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.75),transparent);animation:shine 3s infinite;transform:skewX(-20deg)}
@@ -141,7 +153,7 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
 </head>
 <body>
 
-<div id="verTag">v21</div>
+<div id="verTag">v22</div>
 
 <div class="top-bar">
   <div class="profile-badge" id="profileBadge">
@@ -184,12 +196,19 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
 </div>
 
 <div class="bottom-actions">
+  <div id="modeBox">
+    <div class="mode-head"><span>РЕЖИМ БОЯ</span><b id="modeCur">Классика</b></div>
+    <div class="mode-row" id="modeRow"></div>
+    <div id="modeDesc"></div>
+  </div>
   <button class="btn-battle" id="battleBtn">⚔️ В БОЙ</button>
 </div>
 
+<div id="chWrap"><h3>🎁 Сундуки за победы <small>4 ячейки</small></h3><div id="chSlots"></div></div>
+
 <div id="arenaModal">
   <div id="arenaModalHead">
-    <div id="arenaHeadLeft"><h3>Все арены</h3><span class="verChip">v21</span></div>
+    <div id="arenaHeadLeft"><h3>Все арены</h3><span class="verChip">v22</span></div>
     <button id="arenaClose">✕</button>
   </div>
   <div id="arenaMineBar">Ты на арене <span id="mineBarText">…</span></div>
@@ -214,7 +233,7 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
     <button class="m-item" data-act="rules"><div class="m-ico">📖</div><div class="m-txt"><div class="m-name">Игровой процесс</div><div class="m-sub">Как играть и как считаются звёзды</div></div><div class="m-arrow">›</div></button>
     <button class="m-item" data-act="fair"><div class="m-ico">⚖️</div><div class="m-txt"><div class="m-name">Правила честной игры</div><div class="m-sub">Уважай других игроков</div></div><div class="m-arrow">›</div></button>
   </div>
-  <div class="drawer-foot">Chess Royale · версия 21</div>
+  <div class="drawer-foot">Chess Royale · версия 22</div>
 </div>
 
 <div id="infoModal">
@@ -235,7 +254,7 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
       <div id="nickErr"></div>
       <button id="nickOk">Сохранить</button>
       <button id="nickLater">Не сейчас</button>
-      <div id="nickVer">окно v21</div>
+      <div id="nickVer">окно v22</div>
     </div>
   </div>
 </div>
@@ -248,14 +267,25 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
   <button class="nav-btn" onclick="window.location.href='leaderboard.html'"><div class="icon-wrap"><span class="icon">🏆</span></div><span>Рейтинг</span></button>
 </div>
 
-<script src="arena.js?v=18"></script>
-<script src="friends.js?v=3"></script>
+<script src="arena.js?v=22"></script>
+<script src="friends.js?v=5"></script>
 <script src="profile.js?v=1"></script>
 <script>
 const sb = supabase.createClient('https://qnpriwfxzuoymoumdtrl.supabase.co','sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
 const $ = function (id){ return document.getElementById(id); };
 const STEP = 1000, MAX_ARENA = 10, NICK_PRICE = 250;
-const NICK_KEY = 'userName', GEMS_KEY = 'cr_gems';
+const NICK_KEY = 'userName', GEMS_KEY = 'cr_gems', MODE_KEY = 'arenaMode';
+
+const MODES = [
+  { id:'classic',  name:'Классика',           icon:'🃏',  short:'Карты + эликсир, 5 минут',
+    desc:'Обычные правила: карты, эликсир, общие 5 минут. Ходить можно в любой момент.' },
+  { id:'nocards',  name:'Без карт',           icon:'♟',   short:'Эликсир, карт нет',
+    desc:'Карты отключены. Эликсир и общие 5 минут, ходить можно в любой момент.' },
+  { id:'noelixir', name:'Без эликсира',       icon:'⏱️',  short:'По очереди, по 3 мин',
+    desc:'Карты есть, эликсира нет. Ходы строго по очереди. У каждого свои 3 минуты: у кого кончились — тот проиграл.' },
+  { id:'pure',     name:'Без карт и эликсира', icon:'⚔️', short:'По очереди, по 3 мин',
+    desc:'Только шахматы. Ходы строго по очереди, у каждого свои 3 минуты: у кого кончились — тот проиграл.' }
+];
 
 const ARENA_VIDEO = [
   '43c863bc61a4a659f002988a035cd2f0_00f0af0d-b727-48e6-a8a6-8cdaf6d648dc.mp4',
@@ -308,6 +338,32 @@ function setGems(v){
   try { localStorage.setItem(GEMS_KEY, String(n)); } catch(e){}
   const el = $('gems-count'); if (el) el.textContent = n;
 }
+
+function curMode(){
+  let v = null;
+  try { v = localStorage.getItem(MODE_KEY); } catch(e){}
+  for (let i = 0; i < MODES.length; i++) if (MODES[i].id === v) return v;
+  return 'classic';
+}
+function renderModes(){
+  const cur = curMode();
+  let html = '';
+  for (let i = 0; i < MODES.length; i++){
+    const m = MODES[i];
+    html += '<button class="mchip' + (m.id === cur ? ' on' : '') + '" data-mode="' + m.id + '">' +
+      '<i>' + m.icon + '</i><b>' + m.name + '</b><span>' + m.short + '</span></button>';
+  }
+  $('modeRow').innerHTML = html;
+  const def = MODES.filter(function(m){ return m.id === cur; })[0] || MODES[0];
+  $('modeCur').textContent = def.name;
+  $('modeDesc').textContent = def.desc;
+}
+$('modeRow').onclick = function(e){
+  const b = e.target.closest('[data-mode]');
+  if (!b) return;
+  try { localStorage.setItem(MODE_KEY, b.getAttribute('data-mode')); } catch(err){}
+  renderModes();
+};
 
 const POSTER_KEY = 'cr_arena_poster_';
 function getPoster(n){ try { return localStorage.getItem(POSTER_KEY + n) || ''; } catch(e){ return ''; } }
@@ -576,6 +632,7 @@ $('battleBtn').onclick = function(){
   window.location.href = 'chess-arena.html';
 };
 
+renderModes();
 render(0);
 boot();
 setTimeout(function(){ buildArenaBrowser(); primeAllSlideVideos(); }, 600);
@@ -694,11 +751,13 @@ for (var i = 0; i < items.length; i++){
       close();
       var r = await Friends.answer(c.id,'accepted');
       if (!r || !r.accepted) return;
-      Friends.play(c.id, 'guest', c.from_key, c.from_name, c.from_cups, c.arena);
+      Friends.play(c.id, 'guest', c.from_key, c.from_name, c.from_cups, c.arena, c.mode);
     };
   }
   setTimeout(function(){ Friends.watch(popup); }, 1500);
 })();
 </script>
+
+<script src="chests.js?v=4"></script>
 </body>
 </html>
