@@ -1,32 +1,31 @@
 /* ============================================================
-   chests.js — сундуки за победы (VER 4)
+   chests.js — сундуки за победы (VER 5)
    • Прокачка выдаётся конкретной карте, а не в общий котёл.
    • Награда показывается по одной штуке: карта, карта, монеты.
    • За каждую настоящую победу — серебряный сундук.
    • Редко — более ценный сундук, по одному типу на арену.
    • Изредка сюрприз: сундук на ступень выше.
+   • Сундук нажимается: пустой слот — запуск таймера, готовый — открытие.
    ────────────────────────────────────────────────────────────
    Подключение:
-     главная:    <script src="chests.js?v=4"></script>
-     экран боя:  <script src="chests.js?v=4"></script>
+     главная:    <script src="chests.js?v=5"></script>
+     экран боя:  <script src="chests.js?v=5"></script>
                  (лобби там нет — блок не появится сам, только начисление)
    ============================================================ */
 (function (global) {
 'use strict';
 
-const KEY       = 'chessChests';      /* 4 ячейки */
-const CARD_KEY  = 'chessCardUnits';   /* {тип карты: прокачка} */
+const KEY       = 'chessChests';
+const CARD_KEY  = 'chessCardUnits';
 const COINS_KEY = 'cr_coins';
 const GEMS_KEY  = 'cr_gems';
 const SLOTS     = 4;
 
-/* Настройки */
-const PREMIUM_CHANCE  = 0.12;  // шанс, что помимо серебряного выпадет ценный
-const SURPRISE_CHANCE = 0.04;  // шанс сюрприза: сундук на ступень выше
-const GEMS_PER_HOUR   = 2;     // кристаллов за час ожидания
-const TIME_MULT       = 1;     // 1 = реальное время. Для теста 0.001
+const PREMIUM_CHANCE  = 0.12;
+const SURPRISE_CHANCE = 0.04;
+const GEMS_PER_HOUR   = 2;
+const TIME_MULT       = 1;
 
-/* Карты — ровно те же id, что в chess-deck.html */
 const CARDS = [
   { id:'f', name:'Ярость',       icon:'⚡'  },
   { id:'s', name:'Щит',          icon:'🛡️' },
@@ -40,8 +39,6 @@ const CARDS = [
   { id:'e', name:'Взрыв',        icon:'💣'  }
 ];
 
-/* Порядок = ценность. 0 — серебряный. Арена N открывает индекс N-1.
-   cards — сколько разных карт падает, unit — сколько прокачки каждой. */
 const CHESTS = [
   { name:'Серебряный',  rarity:'Обычный',     hours:3,  coins:[120,260],  cards:[1,1], unit:[15,30],
     pal:{ w:['#9aa4b4','#4b5563'], m:['#f8fafc','#94a3b8'], glow:'#cbd5e1' } },
@@ -70,8 +67,6 @@ function arenaOf(cups){
   if (global.Arena && typeof Arena.arenaOf === 'function') return Arena.arenaOf(cups);
   return Math.min(10, Math.floor(Math.max(0, cups) / 1000) + 1);
 }
-
-/* ---------- SVG сундук ---------- */
 
 let uid = 0;
 function chestSvg(c, w){
@@ -102,8 +97,6 @@ function chestSvg(c, w){
   '</svg>';
 }
 
-/* ---------- хранилище ---------- */
-
 function load(){
   try {
     const a = JSON.parse(localStorage.getItem(KEY) || 'null');
@@ -122,7 +115,6 @@ function num(key){
 function setNum(key, n){ try { localStorage.setItem(key, String(Math.max(0, n))); } catch (e){} }
 function rnd(range){ return range[0] + Math.floor(Math.random() * (range[1] - range[0] + 1)); }
 
-/* прокачка конкретной карты — тот же ключ, что читает chess-deck.html */
 function readCardUnits(){
   try {
     const o = JSON.parse(localStorage.getItem(CARD_KEY) || '{}');
@@ -137,8 +129,6 @@ function addCardUnits(id, n){
 function cardUnitsOf(id){
   return parseInt(readCardUnits()[id] || 0, 10) || 0;
 }
-
-/* ---------- уведомления ---------- */
 
 function note(msg, color){
   if (typeof global.toast === 'function'){ global.toast(msg); return; }
@@ -159,8 +149,6 @@ function note(msg, color){
 function isOpening(){
   return slots.some(function(s){ return s && s.st === 'open'; });
 }
-
-/* ---------- выпадение после победы ---------- */
 
 function rollPremium(arena){
   const maxT = Math.min(arena - 1, TOP);
@@ -202,8 +190,6 @@ function onWin(beforeCups){
   return { silver:true, premium:prem };
 }
 
-/* ---------- открытие и ожидание ---------- */
-
 function startOpen(i){
   const s = slots[i];
   if (!s || s.st !== 'idle') return;
@@ -239,9 +225,6 @@ function skip(i){
   note('Сундук готов к открытию', '#43e97b');
 }
 
-/* ---------- награда ---------- */
-
-/* Список: сначала карты (каждая отдельной строкой), потом монеты */
 function buildReward(tier){
   const c = CHESTS[tier];
   const want = rnd(c.cards);
@@ -280,7 +263,6 @@ function claim(i){
 
   const items = buildReward(tier);
 
-  /* выдаём сразу всё — а показываем по одной штуке */
   items.forEach(function(it){
     if (it.type === 'card') addCardUnits(it.id, it.units);
     else if (it.type === 'coins') setNum(COINS_KEY, num(COINS_KEY) + it.amount);
@@ -297,15 +279,12 @@ function claim(i){
   if (typeof global.updateTopbar === 'function') global.updateTopbar();
 }
 
-/* ---------- окно награды: по одной штуке ---------- */
-
 let rvItems = [];
 let rvIdx = -1;
 
 function showReward(tier, items, surprise){
   const ov = document.getElementById('chReward');
   if (!ov){
-    /* окна нет (экран боя) — просто сообщаем состав */
     const names = items.map(function(it){
       return it.type === 'card' ? (it.name + ' +' + it.units) : ('🪙 +' + it.amount);
     });
@@ -372,8 +351,6 @@ function nextReveal(){
   btn.dataset.done = last ? '1' : '0';
 }
 
-/* ---------- окно результата боя ---------- */
-
 function showResultChest(res){
   const ov = document.getElementById('overlay');
   if (!ov || !res) return;
@@ -394,7 +371,7 @@ function showResultChest(res){
   } else {
     let html = '<div class="chr-res-art">' + chestSvg(CHESTS[0], 84) + '</div>' +
       '<div class="chr-res-t">Получен серебряный сундук</div>' +
-      '<div class="chr-res-s">Открой его, когда таймер закончится (' + CHESTS[0].hours + ' ч)</div>';
+      '<div class="chr-res-s">Открой его в главном меню, когда таймер закончится (' + CHESTS[0].hours + ' ч)</div>';
     if (res.premium > 0){
       const p = CHESTS[res.premium];
       html += '<div class="chr-res-prem" style="--c:' + p.pal.glow + '">' +
@@ -407,8 +384,6 @@ function showResultChest(res){
   }
   box.insertBefore(el, btn);
 }
-
-/* ---------- отрисовка ---------- */
 
 function fmt(ms){
   const t = Math.max(0, Math.ceil(ms / 1000));
@@ -426,23 +401,25 @@ function slotHtml(s, i){
   const c = CHESTS[s.t];
   const rem = s.st === 'open' ? s.end - Date.now() : 0;
   const ready = s.st === 'open' && rem <= 0;
-  let state, btn;
+  let state, btn, act = '';
 
   if (s.st === 'idle'){
     state = '<span class="ch-rar">' + c.rarity + '</span>';
     btn = '<button class="ch-btn" data-act="start" data-i="' + i + '">Открыть · ' + c.hours + 'ч</button>';
+    act = ' data-act="start" data-i="' + i + '"';
   } else if (!ready){
     state = '<span class="ch-time" data-end="' + s.end + '">' + fmt(rem) + '</span>';
     btn = '<button class="ch-btn gem" data-act="skip" data-i="' + i + '">💎 <span class="ch-gem" data-end="' + s.end + '">' + gemCost(rem) + '</span></button>';
   } else {
     state = '<span class="ch-ready-t">Готов!</span>';
-    btn = '<button class="ch-btn ready" data-act="claim" data-i="' + i + '">Забрать</button>';
+    btn = '<button class="ch-btn ready" data-act="claim" data-i="' + i + '">Открыть</button>';
+    act = ' data-act="claim" data-i="' + i + '"';
   }
 
   const artCls = 'ch-art' + (s.st === 'open' && !ready ? ' opening' : '') + (ready ? ' ready' : '');
   return '<div class="ch-slot' + (ready ? ' is-ready' : '') + '" style="--c:' + c.pal.glow + '">' +
     '<div class="ch-glow"></div>' +
-    '<div class="' + artCls + '">' + chestSvg(c, 58) + '</div>' +
+    '<div class="' + artCls + '"' + act + '>' + chestSvg(c, 58) + '</div>' +
     '<div class="ch-nm">' + c.name + '</div>' +
     '<div class="ch-st">' + state + '</div>' +
     btn +
@@ -473,8 +450,6 @@ function tick(){
   });
 }
 
-/* ---------- стили ---------- */
-
 function injectStyle(){
   if (document.getElementById('chStyle')) return;
   const st = document.createElement('style');
@@ -492,6 +467,7 @@ function injectStyle(){
     '.ch-slot.is-ready .ch-glow{opacity:.5;animation:chPulse .8s ease-in-out infinite alternate}',
     '@keyframes chPulse{from{transform:scale(.9)}to{transform:scale(1.1)}}',
     '.ch-art{position:relative;z-index:1;height:62px;display:flex;align-items:flex-end;justify-content:center;filter:drop-shadow(0 4px 4px rgba(0,0,0,.6))}',
+    '.ch-art[data-act]{cursor:pointer}',
     '.ch-art.opening{animation:chBob 2.2s ease-in-out infinite}',
     '.ch-art.ready{animation:chShake .55s ease-in-out infinite}',
     '@keyframes chBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}',
@@ -523,8 +499,6 @@ function injectStyle(){
     '.chr-step{font-size:10px;font-weight:800;color:#9fc4ff;letter-spacing:.5px}',
     '.chr-done{font-size:15px;font-weight:900;color:#86efac;padding:20px 8px}',
 
-    '.chr-row{font-size:14px;font-weight:800;padding:8px;border-radius:10px;background:rgba(2,6,23,.45);border:1px solid #3f67b8}',
-    '.chr-row b{color:#ffe27a}',
     '.chr-ok{width:100%;padding:12px;border:0;border-radius:12px;font-size:15px;font-weight:900;color:#3b1f00;background:linear-gradient(180deg,#ffe27a,#ffb300);box-shadow:0 4px 0 #b45309;cursor:pointer}',
 
     '.chr-res{margin:12px 0 4px;padding:12px 10px;border-radius:14px;background:linear-gradient(180deg,#16336e,#0a1d44);border:2px solid #4b78c8;box-shadow:0 4px 0 #040d22;text-align:center}',
@@ -541,10 +515,6 @@ function injectStyle(){
   document.head.appendChild(st);
 }
 
-/* ---------- встраивание ---------- */
-
-/* Куда ставить блок: в лобби экрана боя, иначе перед кнопкой «В БОЙ»,
-   иначе перед нижним меню, иначе в конец страницы. */
 function findAnchor(){
   const lobby = document.getElementById('lobby');
   if (lobby){
@@ -609,8 +579,6 @@ function build(){
   render();
   setInterval(tick, 1000);
 }
-
-/* ---------- победа в бою ---------- */
 
 function hookResult(){
   if (!global.Net || typeof Net.on !== 'function') return;
