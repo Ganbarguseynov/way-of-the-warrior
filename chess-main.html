@@ -48,37 +48,39 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
 .arena-floor{font-size:10px;color:#5a7398;margin:3px 11px 0;position:relative;z-index:2;font-weight:700;flex-shrink:0}
 .arena-hint{display:none}
 #dbWarn{font-size:10px;color:#d32f2f;margin:3px 11px 0;position:relative;z-index:2;line-height:1.3;word-break:break-word;font-weight:700;flex-shrink:0}
-.bottom-actions{width:100%;padding:0 14px 4px;display:flex;flex-direction:column;align-items:center;gap:6px;position:relative;z-index:5;flex-shrink:0}
-#modeBox{width:90vw;max-width:400px}
-#modeBtn{width:100%;display:flex;align-items:center;gap:10px;padding:7px 12px;border-radius:14px;border:3px solid #b9cdea;background:linear-gradient(180deg,#fff,#e6eefc);color:#132a54;cursor:pointer;box-shadow:0 4px 0 #8fa8cc;text-align:left}
+
+/* ===== нижний блок: режим и турниры в одной строке ===== */
+.bottom-actions{width:100%;padding:0 14px 4px;display:flex;flex-direction:column;align-items:center;gap:8px;position:relative;z-index:5;flex-shrink:0}
+.duo{width:90vw;max-width:400px;display:flex;gap:8px;align-items:stretch}
+#modeBox{flex:1;min-width:0}
+#modeBtn{width:100%;height:100%;min-height:62px;display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:14px;border:3px solid #b9cdea;background:linear-gradient(180deg,#fff,#e6eefc);color:#132a54;cursor:pointer;box-shadow:0 4px 0 #8fa8cc;text-align:left;margin:0}
 #modeBtn:active{transform:translateY(2px);box-shadow:0 1px 0 #8fa8cc}
-#modeIc{font-size:22px;line-height:1}
+#modeIc{font-size:22px;line-height:1;flex-shrink:0}
 .mode-btn-txt{flex:1;min-width:0;display:flex;flex-direction:column}
-.mode-btn-txt small{font-size:9px;font-weight:900;letter-spacing:.6px;color:#5a7398}
-.mode-btn-txt b{font-size:14px;font-weight:900}
-.mode-btn-arr{font-size:16px;font-weight:900;color:#3b8ef0}
+.mode-btn-txt small{font-size:8.5px;font-weight:900;letter-spacing:.6px;color:#5a7398}
+.mode-btn-txt b{font-size:12px;font-weight:900;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-top:1px}
+.mode-btn-arr{font-size:13px;font-weight:900;color:#3b8ef0;flex-shrink:0}
 #modeDesc{display:none}
-#modeSheet{position:fixed;inset:0;background:rgba(4,14,36,.85);z-index:1800;display:none;align-items:center;justify-content:center;padding:18px}
-#modeSheet.open{display:flex}
-#modeSheetBox{width:100%;max-width:380px;background:linear-gradient(180deg,#fff,#eef4ff);border:4px solid #ffd447;border-radius:18px;overflow:hidden;box-shadow:0 10px 0 #b45309,0 20px 40px rgba(0,0,0,.6)}
-#modeSheetHead{display:flex;justify-content:space-between;align-items:center;background:linear-gradient(180deg,#3b8ef0,#1c56b8);padding:12px 14px;border-bottom:3px solid #ffd447}
-#modeSheetHead h3{margin:0;font-size:16px;color:#fff;font-weight:900}
-#modeClose{width:32px;height:32px;border-radius:10px;border:3px solid #fff;cursor:pointer;background:linear-gradient(180deg,#f4665e,#c62828);color:#fff;font-size:13px;line-height:1}
-#modeList{padding:12px}
-.mopt{width:100%;display:flex;align-items:center;gap:12px;text-align:left;background:linear-gradient(180deg,#fff,#e6eefc);border:2px solid #b9cdea;border-radius:14px;padding:10px 12px;margin-bottom:8px;cursor:pointer;box-shadow:0 4px 0 #8fa8cc}
-.mopt.on{border-color:#ffd447;background:linear-gradient(180deg,#ffe082,#ffb300);box-shadow:0 4px 0 #b45309}
-.mopt i{font-size:24px;font-style:normal;width:36px;text-align:center}
-.mopt span{display:flex;flex-direction:column;min-width:0}
-.mopt b{font-size:13.5px;font-weight:900;color:#132a54}
-.mopt small{font-size:10.5px;font-weight:700;color:#5a7398;margin-top:2px;line-height:1.3}
+
+#tCard{flex:1;min-width:0;min-height:62px;display:flex;align-items:center;gap:7px;padding:6px 9px;margin:0;border:3px solid #fff;border-radius:14px;background:linear-gradient(180deg,#a78bfa 0%,#8b5cf6 50%,#6d28d9 100%);box-shadow:0 4px 0 #3b1e78,0 8px 14px rgba(0,0,0,.4),inset 0 2px 4px rgba(255,255,255,.35);cursor:pointer;text-align:left;font-family:inherit;color:#fff;transition:transform .1s,box-shadow .1s;position:relative;overflow:hidden}
+#tCard:active{transform:translateY(3px);box-shadow:0 1px 0 #3b1e78,0 3px 6px rgba(0,0,0,.4),inset 0 2px 4px rgba(255,255,255,.35)}
+#tCard::after{content:'';position:absolute;top:0;left:-100%;width:50%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);animation:shine 4s infinite;transform:skewX(-20deg)}
+.t-ic{font-size:22px;line-height:1;flex-shrink:0;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5))}
+.t-tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.t-h{font-size:12.5px;font-weight:900;letter-spacing:.6px;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.35);line-height:1.2}
+.t-s{font-size:9.5px;font-weight:800;color:#f0e6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
+.t-time{font-size:10px;font-weight:900;color:#ffd447;white-space:nowrap;line-height:1.3;text-shadow:0 1px 0 rgba(0,0,0,.35)}
+
 .btn-battle{width:90vw;max-width:400px;padding:10px;background:linear-gradient(180deg,#ffe082 0%,#ffb300 55%,#ff9500 100%);border:4px solid #fff;border-radius:18px;font-size:19px;font-weight:900;color:#5a2d00;text-transform:uppercase;letter-spacing:1.5px;box-shadow:0 6px 0 #a35f00,0 12px 20px rgba(0,0,0,.45),inset 0 2px 4px rgba(255,255,255,.9);cursor:pointer;transition:transform .1s,box-shadow .1s;text-shadow:0 2px 0 rgba(255,255,255,.6);position:relative;overflow:hidden}
 .btn-battle:active{transform:translateY(5px);box-shadow:0 3px 0 #a35f00,0 6px 10px rgba(0,0,0,.4),inset 0 2px 4px rgba(255,255,255,.9)}
 .btn-battle::after{content:'';position:absolute;top:0;left:-100%;width:50%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.75),transparent);animation:shine 3s infinite;transform:skewX(-20deg)}
 @keyframes shine{0%{left:-100%}18%{left:200%}100%{left:200%}}
+
 #chWrap{width:min(95vw,400px);margin:0 auto;padding:5px 6px 6px;border-radius:14px;background:linear-gradient(180deg,#1f4a94,#122c63);border:2px solid #4b78c8;box-shadow:0 4px 0 #061433;flex-shrink:0}
 #chWrap h3{margin:0 0 4px;font-size:11px;font-weight:900;color:#fff;display:flex;justify-content:space-between;align-items:center}
 #chWrap h3 small{font-size:9px;color:#9fc4ff;font-weight:700}
 #chSlots{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+
 #arenaModal{position:fixed;inset:0;z-index:1200;display:none;flex-direction:column;background:linear-gradient(180deg,#1f7ae0 0%,#0e2a5e 100%)}
 #arenaModal.open{display:flex}
 #arenaModalHead{display:flex;justify-content:space-between;align-items:center;width:100%;padding:14px 18px 10px;flex-shrink:0;background:linear-gradient(180deg,#16306e,rgba(22,48,110,0));border-bottom:2px solid rgba(255,212,71,.4)}
@@ -109,6 +111,21 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
 .arena-dot.mine{background:#43e97b;box-shadow:0 0 6px rgba(67,233,123,.9)}
 .arena-dot.on{background:#ffd447;transform:scale(1.5)}
 .arena-dot.mine.on{background:#ffd447;box-shadow:0 0 0 2px #43e97b}
+
+#modeSheet{position:fixed;inset:0;background:rgba(4,14,36,.85);z-index:1800;display:none;align-items:center;justify-content:center;padding:18px}
+#modeSheet.open{display:flex}
+#modeSheetBox{width:100%;max-width:380px;background:linear-gradient(180deg,#fff,#eef4ff);border:4px solid #ffd447;border-radius:18px;overflow:hidden;box-shadow:0 10px 0 #b45309,0 20px 40px rgba(0,0,0,.6)}
+#modeSheetHead{display:flex;justify-content:space-between;align-items:center;background:linear-gradient(180deg,#3b8ef0,#1c56b8);padding:12px 14px;border-bottom:3px solid #ffd447}
+#modeSheetHead h3{margin:0;font-size:16px;color:#fff;font-weight:900}
+#modeClose{width:32px;height:32px;border-radius:10px;border:3px solid #fff;cursor:pointer;background:linear-gradient(180deg,#f4665e,#c62828);color:#fff;font-size:13px;line-height:1}
+#modeList{padding:12px}
+.mopt{width:100%;display:flex;align-items:center;gap:12px;text-align:left;background:linear-gradient(180deg,#fff,#e6eefc);border:2px solid #b9cdea;border-radius:14px;padding:10px 12px;margin-bottom:8px;cursor:pointer;box-shadow:0 4px 0 #8fa8cc}
+.mopt.on{border-color:#ffd447;background:linear-gradient(180deg,#ffe082,#ffb300);box-shadow:0 4px 0 #b45309}
+.mopt i{font-size:24px;font-style:normal;width:36px;text-align:center}
+.mopt span{display:flex;flex-direction:column;min-width:0}
+.mopt b{font-size:13.5px;font-weight:900;color:#132a54}
+.mopt small{font-size:10.5px;font-weight:700;color:#5a7398;margin-top:2px;line-height:1.3}
+
 .bottom-nav{position:fixed;bottom:0;left:0;width:100%;height:68px;background:linear-gradient(180deg,#2a4a9e 0%,#12285c 100%);border-top:3px solid #ffd447;display:flex;justify-content:space-around;align-items:center;z-index:999;padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -4px 15px rgba(0,0,0,.5)}
 .nav-btn{background:transparent;border:none;color:#a8c4ea;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:9px;font-weight:900;cursor:pointer;flex:1;height:100%;gap:3px;transition:.2s}
 .nav-btn .icon-wrap{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#1c3f8a,#0e2352);box-shadow:inset 0 2px 3px rgba(255,255,255,.12),inset 0 -3px 6px rgba(0,0,0,.5);transition:all .3s}
@@ -121,6 +138,7 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
 .deck-stack .deck-card:nth-child(1){left:0;top:6px;transform:rotate(-18deg);background:linear-gradient(135deg,#f093fb,#f5576c)}
 .deck-stack .deck-card:nth-child(2){left:4px;top:3px;transform:rotate(-8deg);background:linear-gradient(135deg,#4facfe,#00f2fe)}
 .deck-stack .deck-card:nth-child(3){left:8px;top:0;transform:rotate(4deg);background:linear-gradient(135deg,#43e97b,#38f9d7);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:900}
+
 #drawerOverlay{position:fixed;inset:0;background:rgba(4,14,36,.72);z-index:1500;opacity:0;pointer-events:none;transition:opacity .25s}
 #drawerOverlay.open{opacity:1;pointer-events:auto}
 #drawer{position:fixed;top:0;right:0;height:100dvh;width:84%;max-width:360px;z-index:1600;background:linear-gradient(180deg,#16306e,#0a1c40);border-left:4px solid #ffd447;transform:translateX(100%);transition:transform .28s cubic-bezier(.2,.8,.3,1);display:flex;flex-direction:column;box-shadow:-10px 0 40px rgba(0,0,0,.6)}
@@ -168,7 +186,7 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
 </head>
 <body>
 
-<div id="verTag">v25</div>
+<div id="verTag">v27</div>
 
 <div class="top-bar">
   <div class="profile-badge" id="profileBadge">
@@ -211,17 +229,33 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
 </div>
 
 <div class="bottom-actions">
-  <div id="modeBox">
-    <button id="modeBtn"><span id="modeIc">🃏</span><span class="mode-btn-txt"><small>РЕЖИМ БОЯ</small><b id="modeCur">Классика</b></span><span class="mode-btn-arr">▾</span></button>
-    <div id="modeDesc"></div>
+  <div class="duo">
+    <div id="modeBox">
+      <button id="modeBtn" type="button">
+        <span id="modeIc">🃏</span>
+        <span class="mode-btn-txt"><small>РЕЖИМ БОЯ</small><b id="modeCur">Классика</b></span>
+        <span class="mode-btn-arr">▾</span>
+      </button>
+      <div id="modeDesc"></div>
+    </div>
+    <button id="tCard" type="button">
+      <span class="t-ic">🏆</span>
+      <span class="t-tx">
+        <b class="t-h">ТУРНИРЫ</b>
+        <small class="t-s" id="tSub">Загрузка…</small>
+        <span class="t-time" id="tTime"></span>
+      </span>
+    </button>
   </div>
+
   <button class="btn-battle" id="battleBtn">⚔️ В БОЙ</button>
+
   <div id="chWrap"><h3>🎁 Сундуки за победы <small>4 ячейки</small></h3><div id="chSlots"></div></div>
 </div>
 
 <div id="arenaModal">
   <div id="arenaModalHead">
-    <div id="arenaHeadLeft"><h3>Все арены</h3><span class="verChip">v25</span></div>
+    <div id="arenaHeadLeft"><h3>Все арены</h3><span class="verChip">v27</span></div>
     <button id="arenaClose">✕</button>
   </div>
   <div id="arenaMineBar">Ты на арене <span id="mineBarText">…</span></div>
@@ -246,14 +280,16 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
   <div class="drawer-body">
     <button class="m-item" data-act="profile"><div class="m-ico">👑</div><div class="m-txt"><div class="m-name">Учётная запись</div><div class="m-sub">Профиль, ник и аватар</div></div><div class="m-arrow">›</div></button>
     <button class="m-item" data-act="history"><div class="m-ico">📜</div><div class="m-txt"><div class="m-name">История партий</div><div class="m-sub">Все бои, победы и звёзды</div></div><div class="m-arrow">›</div></button>
+    <button class="m-item" data-act="tournaments"><div class="m-ico">🏆</div><div class="m-txt"><div class="m-name">Турниры</div><div class="m-sub">Область, страна, континент, мир</div></div><div class="m-arrow">›</div></button>
+    <button class="m-item" data-act="region"><div class="m-ico">📍</div><div class="m-txt"><div class="m-name">Мой регион</div><div class="m-sub">Где ты играешь в турнирах</div></div><div class="m-arrow">›</div></button>
     <button class="m-item" data-act="shop"><div class="m-ico">🎁</div><div class="m-txt"><div class="m-name">Покупки</div><div class="m-sub">Магазин, монеты и кристаллы</div></div><div class="m-arrow">›</div></button>
     <button class="m-item" data-act="deck"><div class="m-ico">🃏</div><div class="m-txt"><div class="m-name">Колода</div><div class="m-sub">Собери свои фигуры</div></div><div class="m-arrow">›</div></button>
     <button class="m-item" data-act="clan"><div class="m-ico">🛡️</div><div class="m-txt"><div class="m-name">Клан</div><div class="m-sub">Друзья и кланы</div></div><div class="m-arrow">›</div></button>
-    <button class="m-item" data-act="board"><div class="m-ico">🏆</div><div class="m-txt"><div class="m-name">Рейтинг</div><div class="m-sub">Лучшие игроки и кланы</div></div><div class="m-arrow">›</div></button>
+    <button class="m-item" data-act="board"><div class="m-ico">📊</div><div class="m-txt"><div class="m-name">Рейтинг</div><div class="m-sub">Лучшие игроки и кланы</div></div><div class="m-arrow">›</div></button>
     <button class="m-item" data-act="rules"><div class="m-ico">📖</div><div class="m-txt"><div class="m-name">Игровой процесс</div><div class="m-sub">Как играть и как считаются звёзды</div></div><div class="m-arrow">›</div></button>
     <button class="m-item" data-act="fair"><div class="m-ico">⚖️</div><div class="m-txt"><div class="m-name">Правила честной игры</div><div class="m-sub">Уважай других игроков</div></div><div class="m-arrow">›</div></button>
   </div>
-  <div class="drawer-foot">Chess Royale · версия 25</div>
+  <div class="drawer-foot">Chess Royale · версия 27</div>
 </div>
 
 <div id="infoModal">
@@ -274,7 +310,7 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
       <div id="nickErr"></div>
       <button id="nickOk">Сохранить</button>
       <button id="nickLater">Не сейчас</button>
-      <div id="nickVer">окно v25</div>
+      <div id="nickVer">окно v27</div>
     </div>
   </div>
 </div>
@@ -698,8 +734,8 @@ var INFO = {
       '<p>Если партия проиграна или закончилась ничьей, звёзды не начисляются — но партия всё равно попадает в историю.</p>' +
       '<h4>Кубки и арены</h4>' +
       '<p>За победу ты получаешь кубки, за поражение часть кубков снимается, но ниже пола текущей арены упасть нельзя.</p>' +
-      '<h4>История партий</h4>' +
-      '<p>Все бои сохраняются в разделе «История партий» — с результатом, соперником, ареной и заработанными звёздами.</p>'
+      '<h4>Турниры</h4>' +
+      '<p>Турнир идёт 24 часа. Очки дают победы в рейтинговых боях: одно очко за победу. Первые 100 игроков проходят в следующий этап — от области до страны, континента и мира.</p>'
   },
   fair: {
     title: 'Правила честной игры',
@@ -707,9 +743,9 @@ var INFO = {
       '<h4>Уважай других игроков</h4>' +
       '<p>Оскорбления, угрозы и травля в чате клана запрещены. Фильтр нецензурных слов работает автоматически — сообщение просто не отправится.</p>' +
       '<h4>Без обмана</h4>' +
-      '<p>Запрещено использовать программы, которые играют за тебя, подменяют результат партии или накручивают кубки. Такие аккаунты могут быть заблокированы.</p>' +
+      '<p>Запрещено использовать программы, которые играют за тебя, подменяют результат партии или накручивают кубки и турнирные очки. Такие аккаунты могут быть заблокированы.</p>' +
       '<h4>Дружеские партии</h4>' +
-      '<p>Вызовы друзьям — это тренировка. Кубки за них не начисляются и не снимаются, поэтому договорные бои никому не выгодны.</p>'
+      '<p>Вызовы друзьям — это тренировка. Кубки и турнирные очки за них не начисляются, поэтому договорные бои никому не выгодны.</p>'
   }
 };
 
@@ -732,6 +768,8 @@ for (var i = 0; i < items.length; i++){
       closeDrawer();
       if (act === 'profile'){ if (window.Profile) Profile.open(Profile.self()); return; }
       if (act === 'history'){ location.href = 'chess-history.html'; return; }
+      if (act === 'tournaments'){ location.href = 'chess-tournament.html'; return; }
+      if (act === 'region'){ location.href = 'chess-region.html'; return; }
       if (act === 'shop'){ location.href = 'chess-shop.html'; return; }
       if (act === 'deck'){ location.href = 'chess-deck.html'; return; }
       if (act === 'clan'){ location.href = 'chess-social.html'; return; }
@@ -798,35 +836,12 @@ for (var i = 0; i < items.length; i++){
 
 <script>
 (function(){
-  var old = document.getElementById('tBtn'); if (old) old.remove();
   if (!window.supabase) return;
-  var anchor = document.getElementById('battleBtn');
-  if (!anchor) return;
-  var prev = document.getElementById('tCard');
-  if (prev) prev.remove();
 
-  var c = document.createElement('button');
-  c.id = 'tCard';
-  c.type = 'button';
-  c.style.cssText = [
-    'width:90vw','max-width:400px','display:flex','align-items:center','gap:10px',
-    'padding:9px 12px','border:3px solid #fff','border-radius:16px',
-    'background:linear-gradient(180deg,#8b5cf6,#4c1d95)','color:#fff',
-    'box-shadow:0 5px 0 #2e1065,0 10px 18px rgba(0,0,0,.4)',
-    'cursor:pointer','text-align:left','font-family:inherit','overflow:hidden','position:relative'
-  ].join(';');
-  c.innerHTML =
-    '<span style="font-size:26px;line-height:1">🏆</span>' +
-    '<span style="flex:1;min-width:0;display:flex;flex-direction:column">' +
-      '<b style="font-size:14px;font-weight:900;letter-spacing:.6px">ТУРНИРЫ</b>' +
-      '<small id="tSub" style="font-size:10.5px;font-weight:700;opacity:.9;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Загрузка…</small>' +
-    '</span>' +
-    '<span style="font-size:20px;font-weight:900;color:#ffd447">›</span>';
+  var tCard = document.getElementById('tCard');
+  if (tCard) tCard.onclick = function(){ location.href = 'chess-tournament.html'; };
 
-  c.onclick = function(){ location.href = 'chess-tournament.html'; };
-  anchor.insertAdjacentElement('afterend', c);
-
-  var sb2 = supabase.createClient(
+  var sbT = supabase.createClient(
     'https://qnpriwfxzuoymoumdtrl.supabase.co',
     'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF'
   );
@@ -840,26 +855,45 @@ for (var i = 0; i < items.length; i++){
   })();
 
   function fmt(ms){
-    if (ms <= 0) return 'подводим итоги';
+    if (ms <= 0) return 'итоги';
     var s = Math.floor(ms/1000), h = Math.floor(s/3600), m = Math.floor(s%3600/60);
     return h + 'ч ' + String(m).padStart(2,'0') + 'м';
+  }
+  function shortName(t){
+    if (!t) return 'Регион';
+    if (t.level === 'continent') return 'Континент';
+    if (t.level === 'world') return 'Весь мир';
+    return String(t.scope_name || 'Регион').split(',')[0];
+  }
+
+  var last = null;
+  function paint(){
+    var sub = document.getElementById('tSub');
+    var time = document.getElementById('tTime');
+    if (!sub || !time) return;
+    if (!last){ return; }
+    sub.textContent = shortName(last);
+    time.textContent = '⏱ ' + fmt(new Date(last.ends_at) - Date.now());
   }
 
   async function status(){
     try {
-      var r = await sb2.rpc('geo_state', { p_key: key });
+      var r = await sbT.rpc('geo_state', { p_key: key });
       var s = (r && r.data) || {};
       var sub = document.getElementById('tSub');
-      if (!sub) return;
-      if (!s.ok){ sub.textContent = 'Сначала определи регион'; return; }
+      var time = document.getElementById('tTime');
+      if (!sub || !time) return;
+      if (!s.ok){ last = null; sub.textContent = 'Нет региона'; time.textContent = 'определи регион'; return; }
       var list = s.tournaments || [];
-      if (!list.length){ sub.textContent = 'Открой турнир своего региона'; return; }
-      var soon = list.reduce(function(a, b){ return new Date(a.ends_at) < new Date(b.ends_at) ? a : b; });
-      sub.textContent = (soon.scope_name || 'Регион') + ' · до конца ' + fmt(new Date(soon.ends_at) - Date.now());
+      if (!list.length){ last = null; sub.textContent = 'Нет открытых'; time.textContent = ''; return; }
+      last = list.reduce(function(a, b){ return new Date(a.ends_at) < new Date(b.ends_at) ? a : b; });
+      paint();
     } catch(e){}
   }
+
   status();
   setInterval(status, 30000);
+  setInterval(paint, 10000);
 })();
 </script>
 </body>
