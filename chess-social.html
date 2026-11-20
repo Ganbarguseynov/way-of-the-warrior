@@ -149,12 +149,6 @@ body{margin:0;color:#fff;min-height:100dvh;padding-bottom:80px;user-select:none}
 <div class="mbtns"><button class="off" id="cCancel">Отмена</button><button id="cOk">Создать</button></div>
 </div></div>
 
-<div id="chModeModal" class="mod hide"><div class="mbox">
-<div class="mt2" id="chModeTitle">Вызов на бой</div>
-<div id="chModeList"></div>
-<button class="bw" id="chModeCancel" style="background:linear-gradient(145deg,#475569,#1e293b)">Отмена</button>
-</div></div>
-
 <div class="tst" id="tst"></div>
 
 <div class="nav">
@@ -183,14 +177,6 @@ var MEMBERS=[],CLANS=[],FRIENDS=[],TAGS={};
 var MYMEM=null,MYCLAN=null,PREV=null,LOADED=false;
 var TAB='clan',SEARCHQ='',SEARCHM='clans',DESCED=false,JOINING=false;
 var CHATT=null,MSGS=[],TOASTT=null,PICKEM='🛡️';
-
-var CH_MODES=[
-  {id:'classic', name:'Классика',       ic:'🃏', short:'Карты + эликсир, 5 минут'},
-  {id:'nocards', name:'Без карт',       ic:'♟',  short:'Эликсир, 5 минут'},
-  {id:'noelixir',name:'Без эликсира',   ic:'⏱️', short:'Карты, по очереди, по 3 минуты'},
-  {id:'pure',    name:'Чистые шахматы', ic:'⚔️', short:'Без карт и эликсира, по 3 минуты'}
-];
-var CH_TARGET=null;
 
 function toast(t){var e=$('tst');e.textContent=t;e.className='tst show';clearTimeout(TOASTT);TOASTT=setTimeout(function(){e.className='tst';},2400);}
 function showErr(t){var b=$('eb');if(!t){b.className='eb hide';b.textContent='';return;}b.textContent=t;b.className='eb';}
@@ -617,38 +603,15 @@ function bind(s){
   for(var t=0;t<tg.length;t++){(function(el){el.onclick=function(e){e.stopPropagation();shareTag(el);};})(tg[t]);}
 }
 
-function invite(key,name,cups){
+async function invite(key,name,cups){
   if(!window.Friends){toast('friends.js не подключён');return;}
   if(!key)return;
-  CH_TARGET={key:key,name:name||'Игрок',cups:cups||0};
-  var cur=(window.Friends&&Friends.mode)?Friends.mode():'classic';
-  var h='';
-  for(var i=0;i<CH_MODES.length;i++){
-    var m=CH_MODES[i],on=(m.id===cur);
-    h+='<button type="button" data-chmode="'+m.id+'" style="width:100%;display:flex;align-items:center;gap:10px;text-align:left;padding:12px;margin-bottom:8px;border-radius:12px;cursor:pointer;border:2px solid '+(on?'#ffd447':'#334155')+';background:'+(on?'linear-gradient(180deg,#ffe082,#ffb300)':'rgba(15,23,42,.55)')+';color:'+(on?'#132a54':'#fff')+'">'+
-      '<span style="font-size:20px;line-height:1">'+m.ic+'</span>'+
-      '<span style="display:flex;flex-direction:column;min-width:0"><b style="font-size:13.5px;font-weight:900">'+m.name+'</b>'+
-      '<small style="font-size:10.5px;font-weight:700;opacity:.85">'+m.short+'</small></span></button>';
-  }
-  $('chModeList').innerHTML=h;
-  $('chModeTitle').textContent='Вызов: '+CH_TARGET.name;
-  $('chModeModal').classList.remove('hide');
-  var bs=$('chModeList').querySelectorAll('[data-chmode]');
-  for(var j=0;j<bs.length;j++){
-    bs[j].onclick=function(){
-      $('chModeModal').classList.add('hide');
-      sendChallenge(this.getAttribute('data-chmode'));
-    };
-  }
-}
-
-async function sendChallenge(md){
-  var t=CH_TARGET;if(!t)return;
-  var r=await Friends.invite(t.key,t.name,t.cups,md);
+  var md=(window.Friends&&Friends.mode)?Friends.mode():'classic';
+  var r=await Friends.invite(key,name,cups,md);
   if(!r){toast('Не удалось отправить вызов');return;}
-  if(Friends.setMode)Friends.setMode(md);
-  toast('Вызов: '+t.name+' · '+(MODENAME[md]||md));
-  setTimeout(function(){Friends.play(r.id,'host',t.key,t.name,t.cups,r.arena,md);},400);
+  var show=r.mode||md;
+  toast('Вызов отправлен: '+name+' · '+(MODENAME[show]||'Классика'));
+  setTimeout(function(){Friends.play(r.id,'host',key,name,cups,r.arena,show);},400);
 }
 
 async function joinClan(id,btn){
@@ -775,8 +738,6 @@ $('cClose').onclick=closeClan;
 $('sClose').onclick=closeSearch;
 $('clanModal').onclick=function(e){if(e.target===$('clanModal'))closeClan();};
 $('searchModal').onclick=function(e){if(e.target===$('searchModal'))closeSearch();};
-$('chModeModal').onclick=function(e){if(e.target===$('chModeModal'))$('chModeModal').classList.add('hide');};
-$('chModeCancel').onclick=function(){$('chModeModal').classList.add('hide');};
 $('cCancel').onclick=function(){$('createModal').classList.add('hide');};
 $('cOk').onclick=createClan;
 $('mC').onclick=function(){SEARCHM='clans';openSearch('clans',SEARCHQ);};
@@ -790,6 +751,70 @@ $('sInput').addEventListener('input',function(){
 
 buildEmb();
 boot();
+</script>
+
+<script>
+/* выбор режима при вызове: только JS, HTML не трогает */
+(function(){
+  try{
+    var MODES=[
+      {id:'classic',  name:'Классика',       ic:'🃏', short:'Карты + эликсир, 5 минут'},
+      {id:'nocards',  name:'Без карт',       ic:'♟',  short:'Эликсир, 5 минут'},
+      {id:'noelixir', name:'Без эликсира',   ic:'⏱️', short:'Карты, по очереди, по 3 минуты'},
+      {id:'pure',     name:'Чистые шахматы', ic:'⚔️', short:'Без карт и эликсира, по 3 минуты'}
+    ];
+    var target=null, box=null;
+
+    function build(){
+      if(box) return box;
+      box=document.createElement('div');
+      box.style.cssText='position:fixed;inset:0;z-index:3000;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(2,6,23,.88)';
+      box.innerHTML='<div style="width:100%;max-width:380px;background:linear-gradient(145deg,#1e293b,#0f172a);border:2px solid #ffd447;border-radius:16px;padding:16px">'+
+        '<div id="chTtl" style="font-size:16px;font-weight:900;text-align:center;margin-bottom:12px;color:#fff"></div>'+
+        '<div id="chLst"></div>'+
+        '<button id="chNo" style="width:100%;margin-top:4px;padding:12px;border:0;border-radius:10px;background:linear-gradient(145deg,#475569,#1e293b);color:#fff;font-size:13px;font-weight:900;cursor:pointer">Отмена</button>'+
+        '</div>';
+      document.body.appendChild(box);
+      box.querySelector('#chNo').onclick=function(){ box.style.display='none'; };
+      box.onclick=function(e){ if(e.target===box) box.style.display='none'; };
+      return box;
+    }
+
+    function open(key,name,cups){
+      if(!window.Friends){ alert('friends.js не подключён'); return; }
+      if(!key) return;
+      target={key:key,name:name||'Игрок',cups:cups||0};
+      build();
+      var cur=(Friends.mode?Friends.mode():'classic');
+      var lst=box.querySelector('#chLst'), h='';
+      for(var i=0;i<MODES.length;i++){
+        var m=MODES[i], on=(m.id===cur);
+        h+='<button type="button" data-m="'+m.id+'" style="width:100%;display:flex;align-items:center;gap:10px;text-align:left;padding:12px;margin-bottom:8px;border-radius:12px;cursor:pointer;border:2px solid '+(on?'#ffd447':'#334155')+';background:'+(on?'linear-gradient(180deg,#ffe082,#ffb300)':'rgba(15,23,42,.6)')+';color:'+(on?'#132a54':'#e2e8f0')+'">'+
+          '<span style="font-size:20px;line-height:1">'+m.ic+'</span>'+
+          '<span style="display:flex;flex-direction:column;min-width:0"><b style="font-size:13.5px;font-weight:900">'+m.name+'</b>'+
+          '<small style="font-size:10.5px;font-weight:700;opacity:.85">'+m.short+'</small></span></button>';
+      }
+      lst.innerHTML=h;
+      box.querySelector('#chTtl').textContent='Вызов: '+target.name;
+      box.style.display='flex';
+      var bs=lst.querySelectorAll('[data-m]');
+      for(var j=0;j<bs.length;j++){
+        bs[j].onclick=function(){ box.style.display='none'; send(this.getAttribute('data-m')); };
+      }
+    }
+
+    function send(md){
+      var t=target; if(!t) return;
+      Friends.invite(t.key,t.name,t.cups,md).then(function(r){
+        if(!r){ alert('Не удалось отправить вызов'); return; }
+        if(Friends.setMode) Friends.setMode(md);
+        setTimeout(function(){ Friends.play(r.id,'host',t.key,t.name,t.cups,r.arena,md); },400);
+      }).catch(function(){ alert('Не удалось отправить вызов'); });
+    }
+
+    window.invite=open;
+  }catch(e){}
+})();
 </script>
 </body>
 </html>
