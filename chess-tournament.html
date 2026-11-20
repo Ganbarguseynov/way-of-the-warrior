@@ -7,276 +7,207 @@
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-body{margin:0;min-height:100dvh;background:#0f172a;color:#fff;padding:16px 14px 40px;user-select:none}
-h1{font-size:20px;font-weight:900;margin:0 0 4px}
-.reg{font-size:12.5px;color:#5ee0ff;font-weight:800;margin-bottom:14px;min-height:16px}
-.card{background:linear-gradient(145deg,#1e293b,#0f172a);border:2px solid #334155;border-radius:16px;padding:14px;margin-bottom:12px}
-.card h2{font-size:14px;font-weight:900;margin:0 0 8px}
-.muted{font-size:12px;color:#94a3b8;line-height:1.5}
-button{width:100%;padding:14px;border:0;border-radius:11px;font-size:14px;font-weight:900;cursor:pointer;color:#fff;background:linear-gradient(145deg,#22c55e,#15803d);margin-top:8px}
-button:disabled{background:#334155;color:#64748b}
-button.sec{background:linear-gradient(145deg,#475569,#1e293b)}
-.round{font-size:11px;font-weight:900;color:#64748b;letter-spacing:1px;margin:12px 0 6px}
-.mt{display:flex;align-items:center;gap:8px;padding:9px 11px;border-radius:10px;background:rgba(15,23,42,.6);border:1.5px solid #334155;margin-bottom:6px;font-size:12.5px}
-.mt.mine{border-color:#5ee0ff;box-shadow:0 0 10px rgba(94,224,255,.25)}
-.mt.done{opacity:.6}
-.mt .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mt .nm b{color:#5ef08a}
-.tst{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e293b;border:1px solid #475569;padding:10px 16px;border-radius:10px;font-size:12.5px;font-weight:800;display:none;max-width:88vw;text-align:center;z-index:50}
-.ch{display:flex;align-items:center;gap:10px;padding:12px;border-radius:12px;background:linear-gradient(135deg,#7c3aed,#5b21b6);border:2px solid #fff;margin-bottom:10px}
-.ch .b{flex:1;font-size:13px;font-weight:900;line-height:1.3}
-.ch button{width:auto;margin:0;padding:10px 14px;font-size:12px}
+body{margin:0;min-height:100dvh;background:linear-gradient(180deg,#1e1b4b,#0f172a 60%);color:#fff;padding:14px 14px 100px;user-select:none}
+.head{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.back{width:38px;height:38px;border-radius:12px;border:2px solid #fff;background:linear-gradient(180deg,#475569,#1e293b);color:#fff;font-size:20px;font-weight:900;cursor:pointer;flex-shrink:0}
+h1{font-size:22px;font-weight:900;margin:0;text-shadow:0 2px 0 rgba(0,0,0,.4)}
+.reg{font-size:12.5px;color:#5ee0ff;font-weight:800;margin:0 0 12px;min-height:16px}
+.path{display:flex;align-items:center;justify-content:space-between;gap:4px;background:rgba(15,23,42,.7);border:2px solid #334155;border-radius:14px;padding:10px 8px;margin-bottom:10px}
+.path span{flex:1;text-align:center;font-size:10.5px;font-weight:900;color:#64748b;line-height:1.2}
+.path span.on{color:#ffd447}
+.path i{font-style:normal;color:#475569;font-weight:900}
+.rule{font-size:11.5px;color:#94a3b8;line-height:1.5;margin-bottom:12px;font-weight:600}
+.card{background:linear-gradient(145deg,#1e293b,#0f172a);border:2px solid #334155;border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 4px 0 #050b16}
+.card.region{border-color:#22c55e}
+.card.country{border-color:#5ee0ff}
+.card.continent{border-color:#a78bfa}
+.card.world{border-color:#ffd447}
+.ct{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.lvl{font-size:10px;font-weight:900;letter-spacing:.8px;color:#94a3b8;text-transform:uppercase}
+.tm{font-size:12px;font-weight:900;color:#ffd447;font-variant-numeric:tabular-nums;white-space:nowrap}
+.nm{font-size:17px;font-weight:900;margin:6px 0 10px}
+.stat{display:flex;border-radius:11px;overflow:hidden;margin-bottom:10px;border:1px solid #334155}
+.stat div{flex:1;padding:8px 4px;text-align:center;background:rgba(0,0,0,.25)}
+.stat div+div{border-left:1px solid #334155}
+.stat span{display:block;font-size:9px;color:#94a3b8;font-weight:800}
+.stat b{display:block;font-size:16px;font-weight:900;margin-top:2px}
+.btn{width:100%;padding:12px;border:0;border-radius:11px;font-size:13px;font-weight:900;color:#fff;cursor:pointer;background:linear-gradient(145deg,#475569,#1e293b)}
+.play{position:fixed;left:14px;right:14px;bottom:18px;padding:14px;border:3px solid #fff;border-radius:16px;font-size:15px;font-weight:900;color:#5a2d00;background:linear-gradient(180deg,#ffe082,#ffb300);box-shadow:0 5px 0 #a35f00;cursor:pointer}
+.empty{text-align:center;font-size:13px;color:#94a3b8;padding:20px 10px;line-height:1.5}
+.modal{position:fixed;inset:0;background:rgba(2,6,23,.88);display:flex;align-items:flex-end;justify-content:center;z-index:50}
+.modal.hidden{display:none}
+.box{width:100%;max-width:420px;max-height:82vh;display:flex;flex-direction:column;background:#0f172a;border:2px solid #ffd447;border-radius:18px 18px 0 0}
+.bh{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid #334155}
+.bh b{font-size:15px;font-weight:900}
+.bh button{width:32px;height:32px;border-radius:9px;border:2px solid #fff;background:#c62828;color:#fff;font-weight:900;cursor:pointer}
+.bb{overflow-y:auto;padding:10px 14px 20px}
+.me{font-size:12.5px;color:#5ee0ff;font-weight:900;margin-bottom:10px}
+.row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:rgba(15,23,42,.6);border:1px solid #334155;margin-bottom:6px;font-size:13px}
+.row.me{border-color:#5ee0ff}
+.row.cut{border-bottom:3px dashed #f59e0b}
+.row .rk{width:34px;font-weight:900;color:#ffd447}
+.row .nn{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:800}
+.row .pt{font-weight:900}
+.tst{position:fixed;bottom:110px;left:50%;transform:translateX(-50%);background:#1e293b;border:1px solid #475569;padding:9px 14px;border-radius:10px;font-size:12.5px;font-weight:800;display:none;z-index:60;max-width:88vw;text-align:center}
 </style>
 </head>
 <body>
 
-<h1>Турниры</h1>
+<div class="head"><button class="back" onclick="location.href='chess-main.html'">‹</button><h1>Турниры</h1></div>
 <div class="reg" id="reg"></div>
 
-<div id="app"></div>
+<div class="path">
+  <span data-l="region">Регион</span><i>›</i>
+  <span data-l="country">Страна</span><i>›</i>
+  <span data-l="continent">Континент</span><i>›</i>
+  <span data-l="world">Мир</span>
+</div>
+<div class="rule">Турнир идёт 24 часа. Очки — за победы в рейтинговых боях. Первые 100 игроков проходят в следующий этап.</div>
+
+<div id="list"><div class="empty">Загружаем…</div></div>
+
+<button class="play" id="play">⚔️ Играть рейтинговый бой</button>
+
+<div id="modal" class="modal hidden">
+  <div class="box">
+    <div class="bh"><b id="mTitle"></b><button id="mClose">✕</button></div>
+    <div class="bb" id="mBody"></div>
+  </div>
+</div>
 <div class="tst" id="tst"></div>
 
-<script src="friends.js?v=6"></script>
 <script>
-const sb=supabase.createClient(
+const sb = supabase.createClient(
   'https://qnpriwfxzuoymoumdtrl.supabase.co',
   'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF'
 );
-const $=function(i){return document.getElementById(i);};
+const $ = id => document.getElementById(id);
 
 function playerKey(){
-  const t=localStorage.getItem('tgId'); if(t) return 'tg:'+t;
-  const e=localStorage.getItem('currentEmail')||localStorage.getItem('linkedEmail');
-  if(e) return 'email:'+e.toLowerCase();
-  let a=localStorage.getItem('arenaAnonId');
-  if(!a){ a='anon:'+Math.random().toString(36).slice(2,10); localStorage.setItem('arenaAnonId',a); }
+  const t = localStorage.getItem('tgId'); if (t) return 'tg:' + t;
+  const e = localStorage.getItem('currentEmail') || localStorage.getItem('linkedEmail');
+  if (e) return 'email:' + e.toLowerCase();
+  let a = localStorage.getItem('arenaAnonId');
+  if (!a){ a = 'anon:' + Math.random().toString(36).slice(2,10); localStorage.setItem('arenaAnonId', a); }
   return a;
 }
-function playerName(){ return localStorage.getItem('userName')||'Игрок'; }
-function playerCups(){ return parseInt(localStorage.getItem('cr_trophies')||'0',10)||0; }
+const KEY = playerKey();
 
-const KEY=playerKey();
-const NAME=playerName();
-const CUPS=playerCups();
+const LVL = { region:'Регион', country:'Страна', continent:'Континент', world:'Мир' };
+const CONT = { EU:'Европа', AS:'Азия', AF:'Африка', NA:'Северная Америка', SA:'Южная Америка', OC:'Океания', OTHER:'Прочее' };
+const ORDER = { region:1, country:2, continent:3, world:4 };
 
-let TID=null, ST=null, BUSY=false, TICK=null, CHTICK=null;
-
+function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function toast(t){
-  const e=$('tst'); e.textContent=t; e.style.display='block';
-  clearTimeout(window.__tt); window.__tt=setTimeout(function(){ e.style.display='none'; },2400);
+  const e = $('tst'); e.textContent = t; e.style.display = 'block';
+  clearTimeout(window.__tt); window.__tt = setTimeout(function(){ e.style.display = 'none'; }, 2400);
 }
-function esc(s){
-  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function left(ms){
+  if (ms <= 0) return 'подводим итоги';
+  const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+  return h + 'ч ' + String(m).padStart(2,'0') + 'м ' + String(x).padStart(2,'0') + 'с';
 }
-
-function entryOf(key){
-  if(!ST||!ST.entries) return null;
-  for(let i=0;i<ST.entries.length;i++) if(ST.entries[i].player_key===key) return ST.entries[i];
-  return null;
-}
-function nameOf(key){
-  if(key===KEY) return NAME;
-  const e=entryOf(key);
-  return e&&e.name? e.name : 'Игрок';
-}
-function myMatch(){
-  if(!ST||!ST.matches) return null;
-  let best=null;
-  for(let i=0;i<ST.matches.length;i++){
-    const m=ST.matches[i];
-    if(m.winner) continue;
-    if(!m.player_a||!m.player_b) continue;
-    if(m.player_a!==KEY&&m.player_b!==KEY) continue;
-    if(!best||m.round<best.round) best=m;
-  }
-  return best;
+function nameOf(t){
+  if (t.level === 'continent') return CONT[t.scope] || t.scope;
+  if (t.level === 'world') return 'Весь мир';
+  return t.scope_name || t.scope;
 }
 
-/* запоминаем матч турнира для боя с этим соперником, иначе стираем */
-function setTm(oppKey){
-  const m=myMatch();
-  if(m&&(m.player_a===oppKey||m.player_b===oppKey)) sessionStorage.setItem('tmatch',m.id);
-  else sessionStorage.removeItem('tmatch');
-}
+let reloadAt = 0;
 
-function render(){
-  const a=$('app');
-  if(!ST||!ST.tournament){
-    a.innerHTML='<div class="card"><h2>Турнир не найден</h2><div class="muted">Нажми кнопку ниже, чтобы открыть набор.</div>'+
-      '<button id="btnOpen">Открыть турнир</button></div>';
-    $('btnOpen').onclick=openT;
-    return;
-  }
-  const t=ST.tournament;
-  const ents=ST.entries||[];
-  const joined=!!entryOf(KEY);
-  let h='';
-
-  if(t.status==='open'){
-    h+='<div class="card"><h2>Набор идёт</h2>';
-    h+='<div class="muted">Регион: '+esc(t.region_name||t.region_code)+'<br>Участников: '+ents.length+' из '+t.size+'</div>';
-    if(!joined) h+='<button id="btnJoin">Вступить</button>';
-    else h+='<button class="sec" disabled>Ты в турнире, ждём остальных</button>';
-    h+='</div>';
-    h+='<div class="card"><h2>Участники</h2>';
-    if(!ents.length) h+='<div class="muted">Пока никого</div>';
-    for(let i=0;i<ents.length;i++){
-      h+='<div class="mt'+(ents[i].player_key===KEY?' mine':'')+'"><span class="nm">'+esc(ents[i].name||'Игрок')+'</span><span>🏆 '+(ents[i].cups||0)+'</span></div>';
+async function load(){
+  try {
+    const st = await sb.rpc('geo_state', { p_key: KEY });
+    const me = await sb.rpc('geo_me', { p_key: KEY });
+    const m = (me && me.data) || {};
+    $('reg').textContent = m.region_name ? 'Регион: ' + m.region_name : 'Регион не определён';
+    if (st.error){ $('list').innerHTML = '<div class="empty">Ошибка: ' + esc(st.error.message) + '</div>'; return; }
+    const s = st.data || {};
+    if (!s.ok){
+      $('list').innerHTML = '<div class="card"><div class="nm">Сначала определи регион</div><button class="btn" onclick="location.href=\'chess-region.html\'">📍 Определить регион</button></div>';
+      return;
     }
-    h+='</div>';
-    a.innerHTML=h;
-    const bj=$('btnJoin'); if(bj) bj.onclick=joinT;
-    return;
+    render(s.tournaments || []);
+  } catch(e){
+    $('list').innerHTML = '<div class="empty">Нет связи с сервером. Обнови страницу.</div>';
   }
+}
 
-  if(t.status==='running'||t.status==='done'){
-    const mm=myMatch();
-    h+='<div class="card"><h2>'+(t.status==='done'?'Турнир завершён':'Турнир идёт')+'</h2>';
-    h+='<div class="muted">'+esc(t.region_name||t.region_code)+' · сетка на '+t.size+'</div>';
-    if(t.status==='done'){
-      let champ='—';
-      for(let i=0;i<ents.length;i++) if(ents[i].place===1) champ=ents[i].name||'Игрок';
-      h+='<div class="muted" style="margin-top:8px;font-size:14px;color:#ffd447;font-weight:900">🏆 Победитель: '+esc(champ)+'</div>';
-    } else if(mm){
-      const opp=(mm.player_a===KEY)?mm.player_b:mm.player_a;
-      h+='<div class="muted" style="margin-top:8px">Твой соперник: <b style="color:#5ee0ff">'+esc(nameOf(opp))+'</b></div>';
-      h+='<div class="muted" style="margin-top:6px">Выиграл бой — пройдёшь дальше автоматически.</div>';
-      h+='<button id="btnPlay">⚔️ Вызвать на бой</button>';
-    } else if(joined){
-      h+='<div class="muted" style="margin-top:8px">Ждём результат других пар.</div>';
-    } else {
-      h+='<div class="muted" style="margin-top:8px">Ты не участвуешь в этом турнире.</div>';
-    }
-    h+='</div>';
+function render(list){
+  list.sort(function(a, b){ return (ORDER[a.level] || 9) - (ORDER[b.level] || 9); });
+  const have = {};
+  list.forEach(function(t){ have[t.level] = true; });
+  document.querySelectorAll('.path span').forEach(function(el){
+    el.classList.toggle('on', !!have[el.dataset.l]);
+  });
+  if (!list.length){ $('list').innerHTML = '<div class="empty">Открытых турниров нет.</div>'; return; }
 
-    const rounds={};
-    for(let i=0;i<(ST.matches||[]).length;i++){
-      const m=ST.matches[i];
-      if(!rounds[m.round]) rounds[m.round]=[];
-      rounds[m.round].push(m);
-    }
-    const keys=Object.keys(rounds).sort(function(x,y){ return x-y; });
-    for(let r=0;r<keys.length;r++){
-      const rd=keys[r], arr=rounds[rd];
-      const title=(arr.length===1)?'ФИНАЛ':('РАУНД '+rd);
-      h+='<div class="round">'+title+'</div>';
-      for(let q=0;q<arr.length;q++){
-        const m=arr[q];
-        const mine=(m.player_a===KEY||m.player_b===KEY);
-        const cls='mt'+(mine?' mine':'')+(m.winner?' done':'');
-        let left=m.player_a?nameOf(m.player_a):'—';
-        let right=m.player_b?nameOf(m.player_b):'—';
-        left=(m.winner&&m.winner===m.player_a)?'<b>'+esc(left)+'</b>':esc(left);
-        right=(m.winner&&m.winner===m.player_b)?'<b>'+esc(right)+'</b>':esc(right);
-        h+='<div class="'+cls+'"><span class="nm">'+left+'</span><span style="color:#64748b">vs</span><span class="nm">'+right+'</span></div>';
-      }
-    }
-    a.innerHTML=h;
+  let h = '';
+  list.forEach(function(t){
+    h += '<div class="card ' + t.level + '" data-end="' + esc(t.ends_at) + '">' +
+      '<div class="ct"><span class="lvl">' + LVL[t.level] + '</span><span class="tm"></span></div>' +
+      '<div class="nm">' + esc(nameOf(t)) + '</div>' +
+      '<div class="stat">' +
+        '<div><span>ТВОИ ОЧКИ</span><b>' + (t.my_points || 0) + '</b></div>' +
+        '<div><span>УЧАСТНИКОВ</span><b>' + (t.total || 0) + '</b></div>' +
+      '</div>' +
+      '<button class="btn" data-board="' + esc(t.id) + '" data-title="' + esc(LVL[t.level] + ': ' + nameOf(t)) + '">Таблица · топ-100 идут дальше</button>' +
+    '</div>';
+  });
+  $('list').innerHTML = h;
+  tick();
+}
 
-    const bp=$('btnPlay'); if(bp) bp.onclick=function(){ callOpponent(mm); };
-    return;
+function tick(){
+  let expired = false;
+  document.querySelectorAll('[data-end]').forEach(function(el){
+    const ms = new Date(el.dataset.end) - Date.now();
+    el.querySelector('.tm').textContent = ms > 0 ? 'до конца ' + left(ms) : 'подводим итоги…';
+    if (ms <= 0) expired = true;
+  });
+  if (expired && Date.now() - reloadAt > 5000){ reloadAt = Date.now(); load(); }
+}
+
+async function board(id, title){
+  $('mTitle').textContent = title;
+  $('mBody').innerHTML = '<div class="empty">Загружаем…</div>';
+  $('modal').classList.remove('hidden');
+  try {
+    const r = await sb.rpc('geo_board', { p_tid: id, p_key: KEY });
+    if (r.error){ $('mBody').innerHTML = '<div class="empty">Ошибка загрузки</div>'; return; }
+    const d = r.data || {}, me = d.me;
+    let h = '<div class="me">' +
+      (me ? ('Ты: ' + me.rank + ' место · ' + me.points + ' очк.') : 'Ты пока без очков') +
+      ' · участников: ' + (d.total || 0) + '</div>';
+    const top = d.top || [];
+    if (!top.length) h += '<div class="empty">Пока никто не набрал очков.<br>Выиграй рейтинговый бой — и ты в таблице.</div>';
+    top.forEach(function(p){
+      h += '<div class="row' + (p.me ? ' me' : '') + (p.rk === 100 ? ' cut' : '') + '">' +
+        '<span class="rk">' + p.rk + '</span>' +
+        '<span class="nn">' + esc(p.name || 'Игрок') + '</span>' +
+        '<span class="pt">' + p.points + '</span></div>';
+    });
+    $('mBody').innerHTML = h;
+  } catch(e){
+    $('mBody').innerHTML = '<div class="empty">Нет связи с сервером</div>';
   }
-
-  a.innerHTML='<div class="card"><div class="muted">Состояние: '+esc(t.status)+'</div></div>';
 }
 
-async function openT(){
-  if(BUSY) return; BUSY=true;
-  try{
-    const r=await sb.rpc('t_open',{p_key:KEY,p_size:8});
-    if(r.error){ toast('Ошибка: '+r.error.message); BUSY=false; return; }
-    const d=r.data||{};
-    if(d.ok===false){ toast(d.error||'Не удалось'); BUSY=false; return; }
-    TID=d.id;
-    await refresh();
-  }catch(e){ toast('Сеть: '+(e.message||'')); }
-  BUSY=false;
-}
+$('list').onclick = function(e){
+  const b = e.target.closest('[data-board]');
+  if (b) board(b.getAttribute('data-board'), b.getAttribute('data-title'));
+};
+$('mClose').onclick = function(){ $('modal').classList.add('hidden'); };
+$('modal').onclick = function(e){ if (e.target === $('modal')) $('modal').classList.add('hidden'); };
 
-async function joinT(){
-  if(BUSY||!TID) return; BUSY=true;
-  try{
-    const r=await sb.rpc('t_join',{p_key:KEY,p_name:NAME,p_cups:CUPS,p_tid:TID});
-    if(r.error){ toast('Ошибка: '+r.error.message); BUSY=false; return; }
-    const d=r.data||{};
-    if(d.ok===false){ toast(d.error||'Не удалось вступить'); BUSY=false; return; }
-    toast(d.already?'Ты уже в турнире':'Ты в турнире!');
-    await refresh();
-  }catch(e){ toast('Сеть: '+(e.message||'')); }
-  BUSY=false;
-}
+$('play').onclick = function(){
+  try { sessionStorage.setItem('arenaAutoQueue', '1'); } catch(e){}
+  location.href = 'chess-arena.html';
+};
 
-async function refresh(){
-  if(!TID) return;
-  try{
-    const r=await sb.rpc('t_state',{p_tid:TID});
-    if(!r.error && r.data){
-      ST=r.data;
-      render();
-    }
-  }catch(e){}
-}
-
-async function callOpponent(m){
-  if(!window.Friends){ toast('friends.js не подключён'); return; }
-  const opp=(m.player_a===KEY)?m.player_b:m.player_a;
-  if(!opp){ toast('Соперник ещё не определён'); return; }
-  const e=entryOf(opp);
-  const nm=(e&&e.name)||'Игрок';
-  const cp=(e&&e.cups)||0;
-  toast('Отправляем вызов…');
-  const r=await Friends.invite(opp,nm,cp,'classic');
-  if(!r){ toast('Не удалось отправить вызов'); return; }
-  setTm(opp);
-  setTimeout(function(){
-    Friends.play(r.id,'host',opp,nm,cp,r.arena,'classic');
-  },400);
-}
-
-function challengeBanner(c){
-  const old=document.getElementById('chBar');
-  if(old) old.remove();
-  const d=document.createElement('div');
-  d.id='chBar';
-  d.className='ch';
-  d.innerHTML='<div class="b">'+esc(c.from_name||'Игрок')+' вызывает тебя на бой</div>'+
-    '<button id="chGo">Принять</button>';
-  document.body.insertBefore(d,document.body.firstChild);
-  $('chGo').onclick=function(){
-    d.remove();
-    setTm(c.from_key);
-    Friends.play(c.id,'guest',c.from_key,c.from_name,c.from_cups||0,c.arena||1,c.mode||'classic');
-  };
-}
-
-async function checkIncoming(){
-  if(!window.Friends||!Friends.incoming) return;
-  try{
-    const list=await Friends.incoming();
-    if(list&&list.length) challengeBanner(list[0]);
-  }catch(e){}
-}
-
-async function boot(){
-  const r=await sb.rpc('my_region',{p_key:KEY});
-  const d=r.data||{};
-  if(!d.region_name){
-    $('reg').textContent='Регион не определён';
-    $('app').innerHTML='<div class="card"><h2>Сначала регион</h2><div class="muted">Без региона турниры недоступны.</div>'+
-      '<button id="goReg">Определить регион</button></div>';
-    $('goReg').onclick=function(){ location.href='chess-region.html'; };
-    return;
-  }
-  $('reg').textContent='Регион: '+d.region_name;
-  await openT();
-  if(TICK) clearInterval(TICK);
-  TICK=setInterval(refresh,3000);
-  if(CHTICK) clearInterval(CHTICK);
-  CHTICK=setInterval(checkIncoming,3000);
-  checkIncoming();
-}
-
-boot();
+load();
+setInterval(tick, 1000);
+setInterval(load, 30000);
 </script>
 </body>
 </html>
