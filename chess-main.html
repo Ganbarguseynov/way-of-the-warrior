@@ -795,5 +795,69 @@ for (var i = 0; i < items.length; i++){
 .ch-st{min-height:10px!important;font-size:8px!important}
 .ch-btn{padding:3px 1px!important;font-size:8px!important}
 </style>
+
+<script>
+(function(){
+  if (document.getElementById('tBtn')) return;
+
+  var b = document.createElement('button');
+  b.id = 'tBtn';
+  b.type = 'button';
+  b.innerHTML = '🏆 Турниры';
+  b.style.cssText = [
+    'position:fixed','bottom:78px','right:12px','z-index:1200',
+    'padding:9px 13px','border:2px solid #ffd447','border-radius:12px',
+    'background:linear-gradient(145deg,#f59e0b,#b45309)','color:#fff',
+    'font-size:12px','font-weight:900','font-family:inherit',
+    'box-shadow:0 4px 12px rgba(0,0,0,.45)','cursor:pointer',
+    'letter-spacing:.2px'
+  ].join(';');
+
+  b.onclick = function(){
+    b.disabled = true;
+    var old = b.innerHTML;
+    b.innerHTML = '…';
+    var done = function(){ b.disabled = false; b.innerHTML = old; };
+
+    if (!window.supabase){
+      if (confirm('Открыть турниры? Если регион не определён, турнир не создастся.')){
+        location.href = 'chess-tournament.html';
+      } else done();
+      return;
+    }
+
+    var sb2 = supabase.createClient(
+      'https://qnpriwfxzuoymoumdtrl.supabase.co',
+      'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF'
+    );
+    var key = (function(){
+      var t = localStorage.getItem('tgId'); if (t) return 'tg:' + t;
+      var e = localStorage.getItem('currentEmail') || localStorage.getItem('linkedEmail');
+      if (e) return 'email:' + e.toLowerCase();
+      var a = localStorage.getItem('arenaAnonId');
+      if (!a){ a = 'anon:' + Math.random().toString(36).slice(2,10); localStorage.setItem('arenaAnonId', a); }
+      return a;
+    })();
+
+    sb2.rpc('my_region', { p_key: key }).then(function(r){
+      var d = (r && r.data) || {};
+      done();
+      if (d.region_name) location.href = 'chess-tournament.html';
+      else if (confirm('Регион ещё не определён. Определить сейчас?')) location.href = 'chess-region.html';
+    }).catch(function(){
+      done();
+      location.href = 'chess-tournament.html';
+    });
+  };
+
+  document.body.appendChild(b);
+
+  /* не перекрывать кнопки в бою */
+  setInterval(function(){
+    var inBattle = document.body.classList.contains('battle-mode');
+    b.style.display = inBattle ? 'none' : 'block';
+  }, 600);
+})();
+</script>
 </body>
 </html>
