@@ -116,7 +116,6 @@ body{margin:0;color:#fff;min-height:100dvh;padding-bottom:80px;user-select:none}
 .sp b:nth-child(1){left:0;top:6px;transform:rotate(-18deg);background:linear-gradient(135deg,#f093fb,#f5576c)}
 .sp b:nth-child(2){left:4px;top:3px;transform:rotate(-8deg);background:linear-gradient(135deg,#4facfe,#00f2fe)}
 .sp b:nth-child(3){left:8px;top:0;transform:rotate(4deg);background:linear-gradient(135deg,#43e97b,#38f9d7)}
-#chModeList button{font-family:inherit}
 </style>
 </head>
 <body>
@@ -166,7 +165,7 @@ body{margin:0;color:#fff;min-height:100dvh;padding-bottom:80px;user-select:none}
 <button class="nb" onclick="location.href='leaderboard.html'"><i>🏆</i><span>Рейтинг</span></button>
 </div>
 
-<script src="friends.js?v=6"></script>
+<script src="friends.js?v=5"></script>
 <script src="profile.js?v=3"></script>
 <script>
 var SB=supabase.createClient('https://qnpriwfxzuoymoumdtrl.supabase.co','sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
@@ -179,7 +178,12 @@ var MODENAME={classic:'Классика',nocards:'Без карт',noelixir:'Б�
 function norm(t){t=String(t||'').toLowerCase();var m={'0':'o','1':'i','3':'e','4':'a','5':'s','7':'t','@':'a','$':'s'};var o='';for(var i=0;i<t.length;i++){var c=t.charAt(i);o+=(m[c]!==undefined)?m[c]:c;}return o.replace(/ё/g,'е').replace(/[^a-zа-я]/g,'');}
 function badw(t){var s=norm(t);if(!s)return false;for(var i=0;i<BAD.length;i++){if(s.indexOf(BAD[i])>=0)return true;}return false;}
 
-/* ===== выбор режима при вызове ===== */
+var MEK='',MEN='Игрок',MEC=0;
+var MEMBERS=[],CLANS=[],FRIENDS=[],TAGS={};
+var MYMEM=null,MYCLAN=null,PREV=null,LOADED=false;
+var TAB='clan',SEARCHQ='',SEARCHM='clans',DESCED=false,JOINING=false;
+var CHATT=null,MSGS=[],TOASTT=null,PICKEM='🛡️';
+
 var CH_MODES=[
   {id:'classic', name:'Классика',       ic:'🃏', short:'Карты + эликсир, 5 минут'},
   {id:'nocards', name:'Без карт',       ic:'♟',  short:'Эликсир, 5 минут'},
@@ -187,12 +191,6 @@ var CH_MODES=[
   {id:'pure',    name:'Чистые шахматы', ic:'⚔️', short:'Без карт и эликсира, по 3 минуты'}
 ];
 var CH_TARGET=null;
-
-var MEK='',MEN='Игрок',MEC=0;
-var MEMBERS=[],CLANS=[],FRIENDS=[],TAGS={};
-var MYMEM=null,MYCLAN=null,PREV=null,LOADED=false;
-var TAB='clan',SEARCHQ='',SEARCHM='clans',DESCED=false,JOINING=false;
-var CHATT=null,MSGS=[],TOASTT=null,PICKEM='🛡️';
 
 function toast(t){var e=$('tst');e.textContent=t;e.className='tst show';clearTimeout(TOASTT);TOASTT=setTimeout(function(){e.className='tst';},2400);}
 function showErr(t){var b=$('eb');if(!t){b.className='eb hide';b.textContent='';return;}b.textContent=t;b.className='eb';}
@@ -619,31 +617,29 @@ function bind(s){
   for(var t=0;t<tg.length;t++){(function(el){el.onclick=function(e){e.stopPropagation();shareTag(el);};})(tg[t]);}
 }
 
-/* ===== вызов: сначала режим, потом отправка ===== */
-
 function invite(key,name,cups){
   if(!window.Friends){toast('friends.js не подключён');return;}
   if(!key)return;
   CH_TARGET={key:key,name:name||'Игрок',cups:cups||0};
-  var cur=(Friends.mode?Friends.mode():'classic');
+  var cur=(window.Friends&&Friends.mode)?Friends.mode():'classic';
   var h='';
   for(var i=0;i<CH_MODES.length;i++){
     var m=CH_MODES[i],on=(m.id===cur);
     h+='<button type="button" data-chmode="'+m.id+'" style="width:100%;display:flex;align-items:center;gap:10px;text-align:left;padding:12px;margin-bottom:8px;border-radius:12px;cursor:pointer;border:2px solid '+(on?'#ffd447':'#334155')+';background:'+(on?'linear-gradient(180deg,#ffe082,#ffb300)':'rgba(15,23,42,.55)')+';color:'+(on?'#132a54':'#fff')+'">'+
       '<span style="font-size:20px;line-height:1">'+m.ic+'</span>'+
-      '<span style="display:flex;flex-direction:column;min-width:0">'+
-      '<b style="font-size:13.5px;font-weight:900">'+m.name+'</b>'+
-      '<small style="font-size:10.5px;font-weight:700;opacity:.85">'+m.short+'</small>'+
-      '</span></button>';
+      '<span style="display:flex;flex-direction:column;min-width:0"><b style="font-size:13.5px;font-weight:900">'+m.name+'</b>'+
+      '<small style="font-size:10.5px;font-weight:700;opacity:.85">'+m.short+'</small></span></button>';
   }
   $('chModeList').innerHTML=h;
-  $('chModeTitle').textContent='Вызов: '+esc(CH_TARGET.name);
+  $('chModeTitle').textContent='Вызов: '+CH_TARGET.name;
   $('chModeModal').classList.remove('hide');
   var bs=$('chModeList').querySelectorAll('[data-chmode]');
-  for(var j=0;j<bs.length;j++){(function(b){b.onclick=function(){
-    $('chModeModal').classList.add('hide');
-    sendChallenge(b.getAttribute('data-chmode'));
-  };})(bs[j]);}
+  for(var j=0;j<bs.length;j++){
+    bs[j].onclick=function(){
+      $('chModeModal').classList.add('hide');
+      sendChallenge(this.getAttribute('data-chmode'));
+    };
+  }
 }
 
 async function sendChallenge(md){
