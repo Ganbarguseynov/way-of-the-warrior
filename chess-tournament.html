@@ -16,7 +16,6 @@ h1{font-size:20px;font-weight:900;margin:0 0 4px}
 button{width:100%;padding:14px;border:0;border-radius:11px;font-size:14px;font-weight:900;cursor:pointer;color:#fff;background:linear-gradient(145deg,#22c55e,#15803d);margin-top:8px}
 button:disabled{background:#334155;color:#64748b}
 button.sec{background:linear-gradient(145deg,#475569,#1e293b)}
-button.warn{background:linear-gradient(145deg,#f59e0b,#b45309)}
 .round{font-size:11px;font-weight:900;color:#64748b;letter-spacing:1px;margin:12px 0 6px}
 .mt{display:flex;align-items:center;gap:8px;padding:9px 11px;border-radius:10px;background:rgba(15,23,42,.6);border:1.5px solid #334155;margin-bottom:6px;font-size:12.5px}
 .mt.mine{border-color:#5ee0ff;box-shadow:0 0 10px rgba(94,224,255,.25)}
@@ -93,6 +92,13 @@ function myMatch(){
   return best;
 }
 
+/* запоминаем матч турнира для боя с этим соперником, иначе стираем */
+function setTm(oppKey){
+  const m=myMatch();
+  if(m&&(m.player_a===oppKey||m.player_b===oppKey)) sessionStorage.setItem('tmatch',m.id);
+  else sessionStorage.removeItem('tmatch');
+}
+
 function render(){
   const a=$('app');
   if(!ST||!ST.tournament){
@@ -134,8 +140,8 @@ function render(){
     } else if(mm){
       const opp=(mm.player_a===KEY)?mm.player_b:mm.player_a;
       h+='<div class="muted" style="margin-top:8px">Твой соперник: <b style="color:#5ee0ff">'+esc(nameOf(opp))+'</b></div>';
+      h+='<div class="muted" style="margin-top:6px">Выиграл бой — пройдёшь дальше автоматически.</div>';
       h+='<button id="btnPlay">⚔️ Вызвать на бой</button>';
-      h+='<button id="btnWin" class="warn">Я выиграл этот матч</button>';
     } else if(joined){
       h+='<div class="muted" style="margin-top:8px">Ждём результат других пар.</div>';
     } else {
@@ -157,20 +163,17 @@ function render(){
       for(let q=0;q<arr.length;q++){
         const m=arr[q];
         const mine=(m.player_a===KEY||m.player_b===KEY);
-        let cls='mt'+(mine?' mine':'')+(m.winner?' done':'');
+        const cls='mt'+(mine?' mine':'')+(m.winner?' done':'');
         let left=m.player_a?nameOf(m.player_a):'—';
         let right=m.player_b?nameOf(m.player_b):'—';
-        if(m.winner) left=(m.winner===m.player_a?'<b>'+esc(left)+'</b>':esc(left));
-        else left=esc(left);
-        if(m.winner) right=(m.winner===m.player_b?'<b>'+esc(right)+'</b>':esc(right));
-        else right=esc(right);
+        left=(m.winner&&m.winner===m.player_a)?'<b>'+esc(left)+'</b>':esc(left);
+        right=(m.winner&&m.winner===m.player_b)?'<b>'+esc(right)+'</b>':esc(right);
         h+='<div class="'+cls+'"><span class="nm">'+left+'</span><span style="color:#64748b">vs</span><span class="nm">'+right+'</span></div>';
       }
     }
     a.innerHTML=h;
 
     const bp=$('btnPlay'); if(bp) bp.onclick=function(){ callOpponent(mm); };
-    const bw=$('btnWin'); if(bw) bw.onclick=function(){ reportWin(mm.id); };
     return;
   }
 
@@ -214,17 +217,6 @@ async function refresh(){
   }catch(e){}
 }
 
-async function reportWin(mid){
-  if(!mid) return;
-  if(!confirm('Подтверди: ты выиграл этот матч?')) return;
-  try{
-    const r=await sb.rpc('t_win',{p_key:KEY,p_mid:mid});
-    if(r.error){ toast('Ошибка: '+r.error.message); return; }
-    toast('Результат записан');
-    await refresh();
-  }catch(e){ toast('Сеть: '+(e.message||'')); }
-}
-
 async function callOpponent(m){
   if(!window.Friends){ toast('friends.js не подключён'); return; }
   const opp=(m.player_a===KEY)?m.player_b:m.player_a;
@@ -235,6 +227,7 @@ async function callOpponent(m){
   toast('Отправляем вызов…');
   const r=await Friends.invite(opp,nm,cp,'classic');
   if(!r){ toast('Не удалось отправить вызов'); return; }
+  setTm(opp);
   setTimeout(function(){
     Friends.play(r.id,'host',opp,nm,cp,r.arena,'classic');
   },400);
@@ -251,6 +244,7 @@ function challengeBanner(c){
   document.body.insertBefore(d,document.body.firstChild);
   $('chGo').onclick=function(){
     d.remove();
+    setTm(c.from_key);
     Friends.play(c.id,'guest',c.from_key,c.from_name,c.from_cups||0,c.arena||1,c.mode||'classic');
   };
 }
