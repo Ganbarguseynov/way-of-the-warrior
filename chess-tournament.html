@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Турниры — Chess Royale</title>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+body{margin:0;min-height:100dvh;background:#0f172a;color:#fff;padding:16px 14px 40px;user-select:none}
+h1{font-size:20px;font-weight:900;margin:0 0 4px}
+.reg{font-size:12.5px;color:#5ee0ff;font-weight:800;margin-bottom:14px;min-height:16px}
+.card{background:linear-gradient(145deg,#1e293b,#0f172a);border:2px solid #334155;border-radius:16px;padding:14px;margin-bottom:12px}
+.card h2{font-size:14px;font-weight:900;margin:0 0 8px}
+.muted{font-size:12px;color:#94a3b8;line-height:1.5}
+button{width:100%;padding:14px;border:0;border-radius:11px;font-size:14px;font-weight:900;cursor:pointer;color:#fff;background:linear-gradient(145deg,#22c55e,#15803d);margin-top:8px}
+button:disabled{background:#334155;color:#64748b}
+button.sec{background:linear-gradient(145deg,#475569,#1e293b)}
+button.warn{background:linear-gradient(145deg,#f59e0b,#b45309)}
+.round{font-size:11px;font-weight:900;color:#64748b;letter-spacing:1px;margin:12px 0 6px}
+.mt{display:flex;align-items:center;gap:8px;padding:9px 11px;border-radius:10px;background:rgba(15,23,42,.6);border:1.5px solid #334155;margin-bottom:6px;font-size:12.5px}
+.mt.mine{border-color:#5ee0ff;box-shadow:0 0 10px rgba(94,224,255,.25)}
+.mt.done{opacity:.6}
+.mt .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mt .nm b{color:#5ef08a}
+.tst{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e293b;border:1px solid #475569;padding:10px 16px;border-radius:10px;font-size:12.5px;font-weight:800;display:none;max-width:88vw;text-align:center;z-index:50}
+.ch{display:flex;align-items:center;gap:10px;padding:12px;border-radius:12px;background:linear-gradient(135deg,#7c3aed,#5b21b6);border:2px solid #fff;margin-bottom:10px}
+.ch .b{flex:1;font-size:13px;font-weight:900;line-height:1.3}
+.ch button{width:auto;margin:0;padding:10px 14px;font-size:12px}
+</style>
+</head>
+<body>
+
+<h1>Турниры</h1>
+<div class="reg" id="reg"></div>
+
+<div id="app"></div>
+<div class="tst" id="tst"></div>
+
+<script src="friends.js?v=6"></script>
+<script>
+const sb=supabase.createClient(
+  'https://qnpriwfxzuoymoumdtrl.supabase.co',
+  'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF'
+);
+const $=function(i){return document.getElementById(i);};
+
+function playerKey(){
+  const t=localStorage.getItem('tgId'); if(t) return 'tg:'+t;
+  const e=localStorage.getItem('currentEmail')||localStorage.getItem('linkedEmail');
+  if(e) return 'email:'+e.toLowerCase();
+  let a=localStorage.getItem('arenaAnonId');
+  if(!a){ a='anon:'+Math.random().toString(36).slice(2,10); localStorage.setItem('arenaAnonId',a); }
+  return a;
+}
+function playerName(){ return localStorage.getItem('userName')||'Игрок'; }
+function playerCups(){ return parseInt(localStorage.getItem('cr_trophies')||'0',10)||0; }
+
+const KEY=playerKey();
+const NAME=playerName();
+const CUPS=playerCups();
+
+let TID=null, ST=null, BUSY=false, TICK=null, CHTICK=null;
+
+function toast(t){
+  const e=$('tst'); e.textContent=t; e.style.display='block';
+  clearTimeout(window.__tt); window.__tt=setTimeout(function(){ e.style.display='none'; },2400);
+}
+function esc(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function entryOf(key){
+  if(!ST||!ST.entries) return null;
+  for(let i=0;i<ST.entries.length;i++) if(ST.entries[i].player_key===key) return ST.entries[i];
+  return null;
+}
+function nameOf(key){
+  if(key===KEY) return NAME;
+  const e=entryOf(key);
+  return e&&e.name? e.name : 'Игрок';
+}
+function myMatch(){
+  if(!ST||!ST.matches) return null;
+  let best=null;
+  for(let i=0;i<ST.matches.length;i++){
+    const m=ST.matches[i];
+    if(m.winner) continue;
+    if(!m.player_a||!m.player_b) continue;
+    if(m.player_a!==KEY&&m.player_b!==KEY) continue;
+    if(!best||m.round<best.round) best=m;
+  }
+  return best;
+}
+
+function render(){
+  const a=$('app');
+  if(!ST||!ST.tournament){
+    a.innerHTML='<div class="card"><h2>Турнир не найден</h2><div class="muted">Нажми кнопку ниже, чтобы открыть набор.</div>'+
+      '<button id="btnOpen">Открыть турнир</button></div>';
+    $('btnOpen').onclick=openT;
+    return;
+  }
+  const t=ST.tournament;
+  const ents=ST.entries||[];
+  const joined=!!entryOf(KEY);
+  let h='';
+
+  if(t.status==='open'){
+    h+='<div class="card"><h2>Набор идёт</h2>';
+    h+='<div class="muted">Регион: '+esc(t.region_name||t.region_code)+'<br>Участников: '+ents.length+' из '+t.size+'</div>';
+    if(!joined) h+='<button id="btnJoin">Вступить</button>';
+    else h+='<button class="sec" disabled>Ты в турнире, ждём остальных</button>';
+    h+='</div>';
+    h+='<div class="card"><h2>Участники</h2>';
+    if(!ents.length) h+='<div class="muted">Пока никого</div>';
+    for(let i=0;i<ents.length;i++){
+      h+='<div class="mt'+(ents[i].player_key===KEY?' mine':'')+'"><span class="nm">'+esc(ents[i].name||'Игрок')+'</span><span>🏆 '+(ents[i].cups||0)+'</span></div>';
+    }
+    h+='</div>';
+    a.innerHTML=h;
+    const bj=$('btnJoin'); if(bj) bj.onclick=joinT;
+    return;
+  }
+
+  if(t.status==='running'||t.status==='done'){
+    const mm=myMatch();
+    h+='<div class="card"><h2>'+(t.status==='done'?'Турнир завершён':'Турнир идёт')+'</h2>';
+    h+='<div class="muted">'+esc(t.region_name||t.region_code)+' · сетка на '+t.size+'</div>';
+    if(t.status==='done'){
+      let champ='—';
+      for(let i=0;i<ents.length;i++) if(ents[i].place===1) champ=ents[i].name||'Игрок';
+      h+='<div class="muted" style="margin-top:8px;font-size:14px;color:#ffd447;font-weight:900">🏆 Победитель: '+esc(champ)+'</div>';
+    } else if(mm){
+      const opp=(mm.player_a===KEY)?mm.player_b:mm.player_a;
+      h+='<div class="muted" style="margin-top:8px">Твой соперник: <b style="color:#5ee0ff">'+esc(nameOf(opp))+'</b></div>';
+      h+='<button id="btnPlay">⚔️ Вызвать на бой</button>';
+      h+='<button id="btnWin" class="warn">Я выиграл этот матч</button>';
+    } else if(joined){
+      h+='<div class="muted" style="margin-top:8px">Ждём результат других пар.</div>';
+    } else {
+      h+='<div class="muted" style="margin-top:8px">Ты не участвуешь в этом турнире.</div>';
+    }
+    h+='</div>';
+
+    const rounds={};
+    for(let i=0;i<(ST.matches||[]).length;i++){
+      const m=ST.matches[i];
+      if(!rounds[m.round]) rounds[m.round]=[];
+      rounds[m.round].push(m);
+    }
+    const keys=Object.keys(rounds).sort(function(x,y){ return x-y; });
+    for(let r=0;r<keys.length;r++){
+      const rd=keys[r], arr=rounds[rd];
+      const title=(arr.length===1)?'ФИНАЛ':('РАУНД '+rd);
+      h+='<div class="round">'+title+'</div>';
+      for(let q=0;q<arr.length;q++){
+        const m=arr[q];
+        const mine=(m.player_a===KEY||m.player_b===KEY);
+        let cls='mt'+(mine?' mine':'')+(m.winner?' done':'');
+        let left=m.player_a?nameOf(m.player_a):'—';
+        let right=m.player_b?nameOf(m.player_b):'—';
+        if(m.winner) left=(m.winner===m.player_a?'<b>'+esc(left)+'</b>':esc(left));
+        else left=esc(left);
+        if(m.winner) right=(m.winner===m.player_b?'<b>'+esc(right)+'</b>':esc(right));
+        else right=esc(right);
+        h+='<div class="'+cls+'"><span class="nm">'+left+'</span><span style="color:#64748b">vs</span><span class="nm">'+right+'</span></div>';
+      }
+    }
+    a.innerHTML=h;
+
+    const bp=$('btnPlay'); if(bp) bp.onclick=function(){ callOpponent(mm); };
+    const bw=$('btnWin'); if(bw) bw.onclick=function(){ reportWin(mm.id); };
+    return;
+  }
+
+  a.innerHTML='<div class="card"><div class="muted">Состояние: '+esc(t.status)+'</div></div>';
+}
+
+async function openT(){
+  if(BUSY) return; BUSY=true;
+  try{
+    const r=await sb.rpc('t_open',{p_key:KEY,p_size:8});
+    if(r.error){ toast('Ошибка: '+r.error.message); BUSY=false; return; }
+    const d=r.data||{};
+    if(d.ok===false){ toast(d.error||'Не удалось'); BUSY=false; return; }
+    TID=d.id;
+    await refresh();
+  }catch(e){ toast('Сеть: '+(e.message||'')); }
+  BUSY=false;
+}
+
+async function joinT(){
+  if(BUSY||!TID) return; BUSY=true;
+  try{
+    const r=await sb.rpc('t_join',{p_key:KEY,p_name:NAME,p_cups:CUPS,p_tid:TID});
+    if(r.error){ toast('Ошибка: '+r.error.message); BUSY=false; return; }
+    const d=r.data||{};
+    if(d.ok===false){ toast(d.error||'Не удалось вступить'); BUSY=false; return; }
+    toast(d.already?'Ты уже в турнире':'Ты в турнире!');
+    await refresh();
+  }catch(e){ toast('Сеть: '+(e.message||'')); }
+  BUSY=false;
+}
+
+async function refresh(){
+  if(!TID) return;
+  try{
+    const r=await sb.rpc('t_state',{p_tid:TID});
+    if(!r.error && r.data){
+      ST=r.data;
+      render();
+    }
+  }catch(e){}
+}
+
+async function reportWin(mid){
+  if(!mid) return;
+  if(!confirm('Подтверди: ты выиграл этот матч?')) return;
+  try{
+    const r=await sb.rpc('t_win',{p_key:KEY,p_mid:mid});
+    if(r.error){ toast('Ошибка: '+r.error.message); return; }
+    toast('Результат записан');
+    await refresh();
+  }catch(e){ toast('Сеть: '+(e.message||'')); }
+}
+
+async function callOpponent(m){
+  if(!window.Friends){ toast('friends.js не подключён'); return; }
+  const opp=(m.player_a===KEY)?m.player_b:m.player_a;
+  if(!opp){ toast('Соперник ещё не определён'); return; }
+  const e=entryOf(opp);
+  const nm=(e&&e.name)||'Игрок';
+  const cp=(e&&e.cups)||0;
+  toast('Отправляем вызов…');
+  const r=await Friends.invite(opp,nm,cp,'classic');
+  if(!r){ toast('Не удалось отправить вызов'); return; }
+  setTimeout(function(){
+    Friends.play(r.id,'host',opp,nm,cp,r.arena,'classic');
+  },400);
+}
+
+function challengeBanner(c){
+  const old=document.getElementById('chBar');
+  if(old) old.remove();
+  const d=document.createElement('div');
+  d.id='chBar';
+  d.className='ch';
+  d.innerHTML='<div class="b">'+esc(c.from_name||'Игрок')+' вызывает тебя на бой</div>'+
+    '<button id="chGo">Принять</button>';
+  document.body.insertBefore(d,document.body.firstChild);
+  $('chGo').onclick=function(){
+    d.remove();
+    Friends.play(c.id,'guest',c.from_key,c.from_name,c.from_cups||0,c.arena||1,c.mode||'classic');
+  };
+}
+
+async function checkIncoming(){
+  if(!window.Friends||!Friends.incoming) return;
+  try{
+    const list=await Friends.incoming();
+    if(list&&list.length) challengeBanner(list[0]);
+  }catch(e){}
+}
+
+async function boot(){
+  const r=await sb.rpc('my_region',{p_key:KEY});
+  const d=r.data||{};
+  if(!d.region_name){
+    $('reg').textContent='Регион не определён';
+    $('app').innerHTML='<div class="card"><h2>Сначала регион</h2><div class="muted">Без региона турниры недоступны.</div>'+
+      '<button id="goReg">Определить регион</button></div>';
+    $('goReg').onclick=function(){ location.href='chess-region.html'; };
+    return;
+  }
+  $('reg').textContent='Регион: '+d.region_name;
+  await openT();
+  if(TICK) clearInterval(TICK);
+  TICK=setInterval(refresh,3000);
+  if(CHTICK) clearInterval(CHTICK);
+  CHTICK=setInterval(checkIncoming,3000);
+  checkIncoming();
+}
+
+boot();
+</script>
+</body>
+</html>
