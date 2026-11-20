@@ -1057,6 +1057,28 @@ elixBuildBubbles();
   waitNet(start);
 })();
 
+/* ================= ОТЧЁТ О ПОБЕДЕ В ТУРНИРЕ ================= */
+
+(function(){
+  function key(){
+    var t=localStorage.getItem('tgId'); if(t) return 'tg:'+t;
+    var e=localStorage.getItem('currentEmail')||localStorage.getItem('linkedEmail');
+    if(e) return 'email:'+e.toLowerCase();
+    var a=localStorage.getItem('arenaAnonId');
+    if(!a){ a='anon:'+Math.random().toString(36).slice(2,10); localStorage.setItem('arenaAnonId',a); }
+    return a;
+  }
+  Net.on('result',function(r){
+    var mid=null;
+    try{ mid=sessionStorage.getItem('tmatch'); }catch(e){}
+    if(!mid||!r) return;
+    try{ sessionStorage.removeItem('tmatch'); }catch(e){}
+    if(!r.winner||r.winner==='draw') return;
+    if(r.winner!==r.mySide) return;
+    sb.rpc('t_win',{ p_key:key(), p_mid:mid }).then(function(){}).catch(function(){});
+  });
+})();
+
 boot();
 </script>
 </body>
