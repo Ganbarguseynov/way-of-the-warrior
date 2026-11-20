@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Регион — Chess Royale</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
@@ -12,8 +11,7 @@ body{margin:0;min-height:100dvh;background:#0f172a;color:#fff;padding:18px 16px 
 h1{font-size:20px;font-weight:900;margin:0 0 6px}
 .sub{font-size:12.5px;color:#94a3b8;line-height:1.5;margin-bottom:16px}
 .card{background:linear-gradient(145deg,#1e293b,#0f172a);border:2px solid #334155;border-radius:16px;padding:16px;margin-bottom:14px}
-.card h2{font-size:14px;font-weight:900;margin:0 0 6px}
-.card p{font-size:12px;color:#94a3b8;margin:0 0 12px;line-height:1.45}
+.card h2{font-size:14px;font-weight:900;margin:0 0 8px}
 .state{font-size:13px;font-weight:800;min-height:18px;line-height:1.4}
 .ok{color:#5ef08a}.bad{color:#fca5a5}.wait{color:#5ee0ff}
 button{width:100%;margin-top:10px;padding:13px;border:0;border-radius:11px;font-size:14px;font-weight:900;cursor:pointer;color:#fff;background:linear-gradient(145deg,#22c55e,#15803d)}
@@ -22,6 +20,7 @@ button.sec{background:linear-gradient(145deg,#475569,#1e293b)}
 .badge{display:inline-block;font-size:11px;font-weight:900;padding:3px 8px;border-radius:7px;margin-left:6px}
 .badge.on{background:#14532d;color:#86efac}
 .badge.off{background:#451a03;color:#fcd34d}
+#nav{display:none}
 </style>
 </head>
 <body>
@@ -35,11 +34,10 @@ button.sec{background:linear-gradient(145deg,#475569,#1e293b)}
   <button id="retry" style="display:none">📍 Попробовать снова</button>
 </div>
 
-<div class="card" id="phoneCard" style="display:none">
-  <h2>Номер телефона <span id="phoneBadge" class="badge off">нет</span></h2>
-  <p>Подтверди номер — это защищает турниры от подмены региона.</p>
-  <div class="state" id="phoneState"></div>
-  <button id="phoneBtn" class="sec">📱 Поделиться номером</button>
+<div class="card" id="nav">
+  <div class="state ok" style="margin-bottom:4px">Всё готово. Куда дальше?</div>
+  <button id="goT">🏆 К турнирам</button>
+  <button id="goM" class="sec">⚔️ Назад в игру</button>
 </div>
 
 <script>
@@ -47,8 +45,6 @@ const sb=supabase.createClient(
   'https://qnpriwfxzuoymoumdtrl.supabase.co',
   'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF'
 );
-const tg=window.Telegram&&window.Telegram.WebApp;
-try{ tg&&tg.ready(); tg&&tg.expand(); }catch(e){}
 const $=id=>document.getElementById(id);
 
 function playerKey(){
@@ -63,6 +59,7 @@ const KEY=playerKey();
 
 function setState(cls,txt){ const e=$('regionState'); e.className='state '+cls; e.textContent=txt; }
 function showRetry(show){ $('retry').style.display=show?'block':'none'; }
+function showNav(show){ $('nav').style.display=show?'block':'none'; }
 
 function getPos(){
   return new Promise((ok,err)=>{
@@ -113,70 +110,45 @@ async function saveRegion(rc){
   if(res.error||d.ok===false) throw new Error(d.error||res.error.message||'Ошибка сохранения');
 }
 
+function markDone(name){
+  $('gpsBadge').className='badge on'; $('gpsBadge').textContent='готово';
+  setState('ok','Регион: '+name);
+  showRetry(false);
+  showNav(true);
+}
+
 async function loadStatus(){
   try{
     const r=await sb.rpc('my_region',{p_key:KEY});
     const d=r.data||{};
-    if(d.region_name){
-      $('gpsBadge').className='badge on'; $('gpsBadge').textContent='готово';
-      setState('ok','Регион: '+d.region_name);
-      showRetry(false);
-      showPhone(d);
-      return true;
-    }
+    if(d.region_name){ markDone(d.region_name); return true; }
   }catch(e){}
   return false;
 }
 
-function showPhone(d){
-  $('phoneCard').style.display='block';
-  if(d&&d.phone_verified){
-    $('phoneBadge').className='badge on'; $('phoneBadge').textContent='да';
-    $('phoneState').className='state ok'; $('phoneState').textContent='Номер подтверждён';
-    $('phoneBtn').style.display='none';
-  }
-}
-
 async function detect(){
   $('gpsBadge').className='badge off'; $('gpsBadge').textContent='проверяем';
-  setState('wait','Определяем регион…'); showRetry(false);
+  setState('wait','Определяем регион…'); showRetry(false); showNav(false);
   try{
     const c=await getPos();
     const rc=await regionFrom(c.latitude,c.longitude);
     if(!rc) throw new Error('Не удалось определить область по координатам');
     await saveRegion(rc);
-    $('gpsBadge').className='badge on'; $('gpsBadge').textContent='готово';
-    setState('ok','Регион: '+rc.name);
-    const r=await sb.rpc('my_region',{p_key:KEY});
-    showPhone(r.data||{});
+    markDone(rc.name);
   }catch(e){
     $('gpsBadge').className='badge off'; $('gpsBadge').textContent='ошибка';
     setState('bad', e.message||'Ошибка');
     showRetry(true);
-    showPhone(null);
   }
 }
 
 $('retry').onclick=detect;
-
-$('phoneBtn').onclick=function(){
-  if(!tg||!tg.requestContact){
-    $('phoneState').className='state bad';
-    $('phoneState').textContent='Открой игру из бота — в браузере номер передать нельзя.';
-    return;
-  }
-  $('phoneState').className='state wait';
-  $('phoneState').textContent='Ждём подтверждения…';
-  tg.requestContact(function(sent){
-    if(sent){ setTimeout(loadStatus,4000); }
-    else{ $('phoneState').className='state bad'; $('phoneState').textContent='Номер не передан'; }
-  });
-};
+$('goT').onclick=function(){ location.href='chess-tournament.html'; };
+$('goM').onclick=function(){ location.href='chess-main.html'; };
 
 (async function(){
   const had=await loadStatus();
   if(!had) detect();
-  else { const r=await sb.rpc('my_region',{p_key:KEY}); showPhone(r.data||{}); }
 })();
 </script>
 </body>
