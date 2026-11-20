@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Webhook</title>
+<style>
+body{margin:0;padding:18px;background:#0f172a;color:#fff;font-family:-apple-system,sans-serif}
+h1{font-size:18px;margin:0 0 14px}
+label{display:block;font-size:12px;color:#94a3b8;margin:12px 0 5px;font-weight:800}
+input{width:100%;padding:12px;border-radius:10px;border:2px solid #334155;background:#1e293b;color:#fff;font-size:14px;box-sizing:border-box}
+button{width:100%;margin-top:12px;padding:14px;border:0;border-radius:11px;font-size:14px;font-weight:900;color:#fff;background:linear-gradient(145deg,#22c55e,#15803d);cursor:pointer}
+button.sec{background:linear-gradient(145deg,#475569,#1e293b)}
+#out{margin-top:14px;padding:12px;border-radius:10px;background:#1e293b;border:1px solid #475569;font-size:12px;word-break:break-all;line-height:1.5;display:none}
+</style>
+</head>
+<body>
+
+<h1>Настройка webhook</h1>
+
+<label>Токен бота (от BotFather)</label>
+<input id="tok" placeholder="8123456789:AAH...">
+
+<label>Секрет (та же строка, что в Supabase Secrets)</label>
+<input id="sec" placeholder="mySuperSecret123abc">
+
+<button id="check">1. Проверить токен</button>
+<button id="set">2. Подключить webhook</button>
+<button id="info" class="sec">3. Показать текущий webhook</button>
+
+<div id="out"></div>
+
+<script>
+var BOT='';
+function out(t){var o=document.getElementById('out');o.style.display='block';o.textContent=t;}
+
+function build(method){
+  var tok=document.getElementById('tok').value.trim();
+  var sec=document.getElementById('sec').value.trim();
+  if(!tok){out('Вставь токен');return null;}
+  if(/[ТОКЕН_ОТ_BOTFATHERхx]{4}/i.test(tok) && tok.indexOf(':')<0){out('Это заглушка, нужен настоящий токен');return null;}
+  if(tok.indexOf(':')<0){out('В токене должно быть двоеточие');return null;}
+
+  var url='https://api.telegram.org/bot'+tok+'/'+method;
+  if(method==='setWebhook'){
+    if(!sec){out('Вставь секрет');return null;}
+    url+='?url='+encodeURIComponent('https://qnpriwfxzuoymoumdtrl.supabase.co/functions/v1/tg-phone');
+    url+='&secret_token='+encodeURIComponent(sec);
+  }
+  return url;
+}
+
+document.getElementById('check').onclick=function(){
+  var u=build('getMe'); if(u) window.open(u,'_blank');
+};
+document.getElementById('set').onclick=function(){
+  var u=build('setWebhook'); if(u) window.open(u,'_blank');
+};
+document.getElementById('info').onclick=function(){
+  var u=build('getWebhookInfo'); if(u) window.open(u,'_blank');
+};
+</script>
+</body>
+</html>
