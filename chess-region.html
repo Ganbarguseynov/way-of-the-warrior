@@ -14,152 +14,170 @@ h1{font-size:20px;font-weight:900;margin:0 0 6px}
 .card{background:linear-gradient(145deg,#1e293b,#0f172a);border:2px solid #334155;border-radius:16px;padding:16px;margin-bottom:14px}
 .card h2{font-size:14px;font-weight:900;margin:0 0 6px}
 .card p{font-size:12px;color:#94a3b8;margin:0 0 12px;line-height:1.45}
-.state{font-size:13px;font-weight:800;margin-bottom:10px;min-height:18px}
+.state{font-size:13px;font-weight:800;min-height:18px;line-height:1.4}
 .ok{color:#5ef08a}.bad{color:#fca5a5}.wait{color:#5ee0ff}
-button{width:100%;padding:13px;border:0;border-radius:11px;font-size:14px;font-weight:900;cursor:pointer;color:#fff;background:linear-gradient(145deg,#22c55e,#15803d)}
+button{width:100%;margin-top:10px;padding:13px;border:0;border-radius:11px;font-size:14px;font-weight:900;cursor:pointer;color:#fff;background:linear-gradient(145deg,#22c55e,#15803d)}
 button:disabled{background:#334155;color:#64748b}
 button.sec{background:linear-gradient(145deg,#475569,#1e293b)}
 .badge{display:inline-block;font-size:11px;font-weight:900;padding:3px 8px;border-radius:7px;margin-left:6px}
 .badge.on{background:#14532d;color:#86efac}
 .badge.off{background:#451a03;color:#fcd34d}
-#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1e293b;border:1px solid #475569;padding:9px 14px;border-radius:9px;font-size:12.5px;display:none;max-width:90vw;text-align:center}
 </style>
 </head>
 <body>
 
 <h1>Твой регион</h1>
-<div class="sub">Регион нужен для турниров: областные, национальные и международные. Он определяется по GPS вашего телефона и номеру Telegram. Менять регион можно раз в 30 дней.</div>
+<div class="sub">Регион определяется по GPS автоматически. Он нужен для турниров своей области и страны. Менять регион можно раз в 30 дней.</div>
 
 <div class="card">
-  <h2>1. Местоположение (GPS) <span id="gpsBadge" class="badge off">нет</span></h2>
-  <p>Разреши доступ к геолокации. Координаты переводятся в область и страну и сохраняются в базе.</p>
-  <div class="state" id="regionState">Регион ещё не определён</div>
-  <button id="gpsBtn">📍 Определить по GPS</button>
+  <h2>Местоположение <span id="gpsBadge" class="badge off">проверяем</span></h2>
+  <div class="state wait" id="regionState">Определяем регион…</div>
+  <button id="retry" style="display:none">📍 Попробовать снова</button>
 </div>
 
-<div class="card">
-  <h2>2. Номер телефона <span id="phoneBadge" class="badge off">нет</span></h2>
-  <p>Нажми кнопку и поделись контактом в Telegram. Номер проверяет бот, а не эта страница.</p>
+<div class="card" id="phoneCard" style="display:none">
+  <h2>Номер телефона <span id="phoneBadge" class="badge off">нет</span></h2>
+  <p>Подтверди номер — это защищает турниры от подмены региона.</p>
   <div class="state" id="phoneState"></div>
   <button id="phoneBtn" class="sec">📱 Поделиться номером</button>
 </div>
 
-<div id="toast"></div>
-
 <script>
-const SB_URL='https://qnpriwfxzuoymoumdtrl.supabase.co';
-const SB_KEY='sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF';
-const sb=supabase.createClient(SB_URL,SB_KEY);
+const sb=supabase.createClient(
+  'https://qnpriwfxzuoymoumdtrl.supabase.co',
+  'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF'
+);
 const tg=window.Telegram&&window.Telegram.WebApp;
 try{ tg&&tg.ready(); tg&&tg.expand(); }catch(e){}
-
 const $=id=>document.getElementById(id);
 
 function playerKey(){
-  const tgId=localStorage.getItem('tgId'); if(tgId) return 'tg:'+tgId;
-  const em=localStorage.getItem('currentEmail')||localStorage.getItem('linkedEmail');
-  if(em) return 'email:'+em.toLowerCase();
+  const t=localStorage.getItem('tgId'); if(t) return 'tg:'+t;
+  const e=localStorage.getItem('currentEmail')||localStorage.getItem('linkedEmail');
+  if(e) return 'email:'+e.toLowerCase();
   let a=localStorage.getItem('arenaAnonId');
   if(!a){ a='anon:'+Math.random().toString(36).slice(2,10); localStorage.setItem('arenaAnonId',a); }
   return a;
 }
 const KEY=playerKey();
 
-function toast(t){
-  const el=$('toast'); el.textContent=t; el.style.display='block';
-  clearTimeout(window.__t); window.__t=setTimeout(()=>el.style.display='none',2600);
-}
+function setState(cls,txt){ const e=$('regionState'); e.className='state '+cls; e.textContent=txt; }
+function showRetry(show){ $('retry').style.display=show?'block':'none'; }
 
-/* код региона: страна + область, например RU:Московская область */
-function regionCode(addr){
-  const cc=(addr.country_code||'').toUpperCase();
-  const st=addr.state||addr.region||addr.county||'';
-  if(!cc||!st) return null;
-  return { code: cc+':'+st, name: st+', '+(addr.country||cc), country: cc };
-}
-
-function getPosition(){
-  return new Promise((resolve,reject)=>{
-    if(!navigator.geolocation){ reject(new Error('Геолокация недоступна в этом приложении. Открой страницу в обычном браузере.')); return; }
+function getPos(){
+  return new Promise((ok,err)=>{
+    if(!navigator.geolocation){ err(new Error('Геолокация недоступна в этом приложении')); return; }
     navigator.geolocation.getCurrentPosition(
-      p=>resolve(p.coords),
-      e=>reject(new Error(e.code===1?'Доступ к геолокации запрещён':'Не удалось определить местоположение')),
-      { enableHighAccuracy:true, timeout:15000, maximumAge:60000 }
+      p=>ok(p.coords),
+      e=>{
+        if(e.code===1) err(new Error('Доступ к геолокации запрещён. Разреши его в настройках браузера для этого сайта.'));
+        else if(e.code===2) err(new Error('Местоположение недоступно. Включи GPS в настройках телефона.'));
+        else err(new Error('Не удалось определить местоположение. Попробуй у окна или на улице.'));
+      },
+      { enableHighAccuracy:false, timeout:25000, maximumAge:600000 }
     );
   });
 }
 
-async function reverse(lat,lon){
-  const url='https://nominatim.openstreetmap.org/reverse?format=json&zoom=5&accept-language=ru&lat='+lat+'&lon='+lon;
-  const r=await fetch(url,{headers:{'Accept':'application/json'}});
-  if(!r.ok) throw new Error('Сервис карт недоступен');
-  const j=await r.json();
-  const rc=regionCode(j.address||{});
-  if(!rc) throw new Error('Не удалось определить область по координатам');
-  return rc;
+function makeRegion(cc,st,countryName){
+  if(!cc||!st) return null;
+  return { code: cc+':'+st, name: st+', '+(countryName||cc) };
 }
 
-function showRegion(name,setAt){
-  $('regionState').className='state ok';
-  $('regionState').textContent='Регион: '+name;
-  $('gpsBadge').className='badge on'; $('gpsBadge').textContent='да';
+async function viaNominatim(lat,lon){
+  const u='https://nominatim.openstreetmap.org/reverse?format=json&zoom=5&accept-language=ru&lat='+lat+'&lon='+lon;
+  const r=await fetch(u,{headers:{'Accept':'application/json'}});
+  if(!r.ok) return null;
+  const j=await r.json(); const a=j.address||{};
+  return makeRegion((a.country_code||'').toUpperCase(), a.state||a.region||a.county, a.country);
+}
+
+async function viaBigData(lat,lon){
+  const u='https://api.bigdatacloud.net/data/reverse-geocode-client?latitude='+lat+'&longitude='+lon+'&localityLanguage=ru';
+  const r=await fetch(u);
+  if(!r.ok) return null;
+  const j=await r.json();
+  return makeRegion((j.countryCode||'').toUpperCase(), j.principalSubdivision, j.countryName);
+}
+
+async function regionFrom(lat,lon){
+  let r=null;
+  try{ r=await viaNominatim(lat,lon); }catch(e){}
+  if(!r){ try{ r=await viaBigData(lat,lon); }catch(e){} }
+  return r;
+}
+
+async function saveRegion(rc){
+  const res=await sb.rpc('set_region',{p_key:KEY,p_code:rc.code,p_name:rc.name,p_lat:0,p_lon:0});
+  const d=res.data||{};
+  if(res.error||d.ok===false) throw new Error(d.error||res.error.message||'Ошибка сохранения');
 }
 
 async function loadStatus(){
-  const r=await sb.rpc('my_region',{p_key:KEY});
-  const d=(r.data)||{};
-  if(d.region_name) showRegion(d.region_name,d.region_set_at);
-  if(d.phone_verified){
+  try{
+    const r=await sb.rpc('my_region',{p_key:KEY});
+    const d=r.data||{};
+    if(d.region_name){
+      $('gpsBadge').className='badge on'; $('gpsBadge').textContent='готово';
+      setState('ok','Регион: '+d.region_name);
+      showRetry(false);
+      showPhone(d);
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
+
+function showPhone(d){
+  $('phoneCard').style.display='block';
+  if(d&&d.phone_verified){
     $('phoneBadge').className='badge on'; $('phoneBadge').textContent='да';
     $('phoneState').className='state ok'; $('phoneState').textContent='Номер подтверждён';
-    $('phoneBtn').disabled=true;
+    $('phoneBtn').style.display='none';
   }
 }
 
-$('gpsBtn').onclick=async function(){
-  const btn=$('gpsBtn'); btn.disabled=true; btn.textContent='Определяем…';
-  $('regionState').className='state wait'; $('regionState').textContent='Ищем координаты…';
+async function detect(){
+  $('gpsBadge').className='badge off'; $('gpsBadge').textContent='проверяем';
+  setState('wait','Определяем регион…'); showRetry(false);
   try{
-    const c=await getPosition();
-    $('regionState').textContent='Определяем область…';
-    const rc=await reverse(c.latitude,c.longitude);
-    const res=await sb.rpc('set_region',{p_key:KEY,p_code:rc.code,p_name:rc.name,p_lat:c.latitude,p_lon:c.longitude});
-    const d=res.data||{};
-    if(res.error||d.ok===false){
-      $('regionState').className='state bad';
-      $('regionState').textContent=(d.error)||res.error.message||'Ошибка сохранения';
-    } else {
-      showRegion(rc.name);
-      toast('Регион сохранён');
-    }
+    const c=await getPos();
+    const rc=await regionFrom(c.latitude,c.longitude);
+    if(!rc) throw new Error('Не удалось определить область по координатам');
+    await saveRegion(rc);
+    $('gpsBadge').className='badge on'; $('gpsBadge').textContent='готово';
+    setState('ok','Регион: '+rc.name);
+    const r=await sb.rpc('my_region',{p_key:KEY});
+    showPhone(r.data||{});
   }catch(e){
-    $('regionState').className='state bad';
-    $('regionState').textContent=e.message||'Ошибка';
-  }finally{
-    btn.disabled=false; btn.textContent='📍 Определить по GPS';
+    $('gpsBadge').className='badge off'; $('gpsBadge').textContent='ошибка';
+    setState('bad', e.message||'Ошибка');
+    showRetry(true);
+    showPhone(null);
   }
-};
+}
+
+$('retry').onclick=detect;
 
 $('phoneBtn').onclick=function(){
   if(!tg||!tg.requestContact){
     $('phoneState').className='state bad';
-    $('phoneState').textContent='Эта версия Telegram не поддерживает передачу номера.';
+    $('phoneState').textContent='Открой игру из бота — в браузере номер передать нельзя.';
     return;
   }
   $('phoneState').className='state wait';
-  $('phoneState').textContent='Ждём подтверждения в Telegram…';
-  tg.requestContact(function(shared){
-    if(shared){
-      $('phoneState').textContent='Контакт отправлен боту. Проверка номера занимает несколько секунд.';
-      setTimeout(loadStatus,4000);
-    } else {
-      $('phoneState').className='state bad';
-      $('phoneState').textContent='Номер не передан. Попробуй ещё раз.';
-    }
+  $('phoneState').textContent='Ждём подтверждения…';
+  tg.requestContact(function(sent){
+    if(sent){ setTimeout(loadStatus,4000); }
+    else{ $('phoneState').className='state bad'; $('phoneState').textContent='Номер не передан'; }
   });
 };
 
-loadStatus();
+(async function(){
+  const had=await loadStatus();
+  if(!had) detect();
+  else { const r=await sb.rpc('my_region',{p_key:KEY}); showPhone(r.data||{}); }
+})();
 </script>
 </body>
 </html>
