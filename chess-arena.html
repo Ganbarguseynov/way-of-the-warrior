@@ -1057,7 +1057,7 @@ elixBuildBubbles();
   waitNet(start);
 })();
 
-/* ================= ОТЧЁТ О ПОБЕДЕ В ТУРНИРЕ ================= */
+/* ================= ОЧКИ ТУРНИРА: рейтинговая победа ================= */
 
 (function(){
   function key(){
@@ -1069,13 +1069,11 @@ elixBuildBubbles();
     return a;
   }
   Net.on('result',function(r){
-    var mid=null;
-    try{ mid=sessionStorage.getItem('tmatch'); }catch(e){}
-    if(!mid||!r) return;
-    try{ sessionStorage.removeItem('tmatch'); }catch(e){}
-    if(!r.winner||r.winner==='draw') return;
+    if(!r || r.friendly) return;
+    if(!r.winner || r.winner==='draw') return;
     if(r.winner!==r.mySide) return;
-    sb.rpc('t_win',{ p_key:key(), p_mid:mid }).then(function(){}).catch(function(){});
+    sb.rpc('geo_win',{ p_key:key(), p_name:localStorage.getItem('userName')||'Игрок' })
+      .then(function(){}).catch(function(){});
   });
 })();
 
