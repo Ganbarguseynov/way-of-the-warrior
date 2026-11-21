@@ -1,8 +1,7 @@
 /* ============================================================
-   friends.js — друзья и вызовы на дружескую партию (VER 5)
-   Вызов живёт, пока отправитель на связи.
-   Нет пульса 12 секунд — вызов исчезает у всех.
-   Режим боя передаётся в вызове и в ссылке.
+   friends.js — друзья и вызовы на дружескую партию (VER 6)
+   Входящий вызов приходит через Realtime, опрос — запасной вариант.
+   Вызов живёт, пока отправитель шлёт пульс; пульс не старше 90 секунд.
    ============================================================ */
 (function (global) {
 'use strict';
@@ -10,11 +9,9 @@
 const SB_URL = 'https://qnpriwfxzuoymoumdtrl.supabase.co';
 const SB_KEY = 'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF';
 
-/* сколько секунд вызов считается живым без пульса */
-const ALIVE_MS = 12000;
-
-/* как часто отправитель отмечается */
+const ALIVE_MS = 90000;
 const BEAT_MS = 3000;
+const POLL_MS = 5000;
 
 const MODE_KEY = 'arenaMode';
 const MODE_IDS = ['classic','nocards','noelixir','pure'];
@@ -24,7 +21,8 @@ const Friends = {
   _seen: {},
   _timer: null,
   _beatTimer: null,
-  _beatId: null
+  _beatId: null,
+  _rt: null
 };
 
 Friends.client = function (){
@@ -59,7 +57,6 @@ Friends.arenaOf = function (c){
   return Math.min(10, Math.floor(Math.max(0, c) / 1000) + 1);
 };
 
-/* режим, выбранный в лобби боя */
 Friends.mode = function (){
   let v = null;
   try { v = localStorage.getItem(MODE_KEY); } catch (e){}
@@ -85,6 +82,11 @@ function uuid(){
 function heartAge(row){
   if (!row || !row.heartbeat) return Infinity;
   return Date.now() - new Date(row.heartbeat).getTime();
+}
+
+function normalizeMode(row){
+  if (!row.mode || MODE_IDS.indexOf(row.mode) < 0) row.mode = 'classic';
+  return row;
 }
 
 /* ---------------- друзья ---------------- */
@@ -144,8 +146,7 @@ Friends.startBeat = function (id){
 
   function beat(){
     if (!Friends._beatId) return;
-    const sb = Friends.client();
-    sb.rpc('challenge_heartbeat', {
+    Friends.client().rpc('challenge_heartbeat', {
       p_id:   Friends._beatId,
       p_from: Friends.key()
     }).then(function(){}).catch(function(){});
@@ -165,7 +166,6 @@ Friends.stopBeat = function (){
 
 /* ---------------- вызовы ---------------- */
 
-/* входящие: только живые, с пульсом не старше 12 секунд */
 Friends.incoming = async function (){
   const sb = Friends.client();
   const res = await sb
@@ -178,14 +178,11 @@ Friends.incoming = async function (){
 
   if (res.error) return [];
 
-  return (res.data || []).filter(function (c){
-    return heartAge(c) < ALIVE_MS;
-  });
+  return (res.data || [])
+    .filter(function (c){ return heartAge(c) < ALIVE_MS; })
+    .map(normalizeMode);
 };
 
-/* состояние вызова.
-   null — вызова нет: отменён, принят, или отправитель ушёл.
-   Режим: строка mode, если колонка есть; иначе classic. */
 Friends.status = async function (id){
   const sb = Friends.client();
   const res = await sb
@@ -196,12 +193,9 @@ Friends.status = async function (id){
 
   if (res.error || !res.data) return null;
 
-  const row = res.data;
-
-  if (!row.mode || MODE_IDS.indexOf(row.mode) < 0) row.mode = 'classic';
+  const row = normalizeMode(res.data);
 
   if (row.status !== 'pending') return row;
-
   if (heartAge(row) >= ALIVE_MS) return null;
 
   return row;
@@ -232,7 +226,6 @@ Friends.cancel = async function (id){
   return !res.error;
 };
 
-/* отмена при уходе со страницы — вдогонку к пульсу */
 Friends.cancelBeacon = function (id){
   try {
     fetch(SB_URL + '/rest/v1/rpc/challenge_cancel', {
@@ -250,9 +243,6 @@ Friends.cancelBeacon = function (id){
 
 /* ---------------- отправка вызова ---------------- */
 
-/* Режим едет вместе с вызовом. Если серверная функция ещё не знает
-   про p_mode, она ответит ошибкой — тогда отправляем без него,
-   и режим доедет только через ссылку у отправителя. */
 Friends.invite = async function (toKey, toName, toCups, mode){
   const sb = Friends.client();
   const id = uuid();
@@ -301,25 +291,53 @@ Friends.play = function (id, role, oppKey, oppName, oppCups, arena, mode){
   global.location.href = 'chess-arena.html' + q;
 };
 
-Friends.watch = function (cb){
-  if (Friends._timer) clearInterval(Friends._timer);
+/* ---------------- получение входящих ---------------- */
 
-  async function tick(){
-    const list = await Friends.incoming();
-    for (let i = 0; i < list.length; i++){
-      const c = list[i];
-      if (Friends._seen[c.id]) continue;
-      Friends._seen[c.id] = true;
-      try { cb(c); } catch (e){}
-    }
+function deliver(list, cb){
+  for (let i = 0; i < list.length; i++){
+    const c = list[i];
+    if (Friends._seen[c.id]) continue;
+    Friends._seen[c.id] = true;
+    try { cb(c); } catch (e){}
+  }
+}
+
+Friends.stopWatch = function (){
+  if (Friends._timer){ clearInterval(Friends._timer); Friends._timer = null; }
+  if (Friends._rt){
+    try { Friends.client().removeChannel(Friends._rt).catch(function(){}); } catch (e){}
+    Friends._rt = null;
+  }
+};
+
+Friends.watch = function (cb){
+  Friends.stopWatch();
+
+  const key = Friends.key();
+
+  try {
+    const ch = Friends.client().channel('friends_' + key);
+    ch.on('postgres_changes', {
+      event: '*', schema: 'public', table: 'arena_challenges',
+      filter: 'to_key=eq.' + key
+    }, function (payload){
+      const row = payload && (payload.new || payload.record);
+      if (!row || row.status !== 'pending') return;
+      if (heartAge(row) >= ALIVE_MS) return;
+      deliver([normalizeMode(row)], cb);
+    });
+    ch.subscribe();
+    Friends._rt = ch;
+  } catch (e){}
+
+  function pull(){
+    Friends.incoming().then(function (list){ deliver(list, cb); }).catch(function(){});
   }
 
-  tick();
-  Friends._timer = setInterval(tick, 2000);
+  pull();
+  Friends._timer = setInterval(pull, POLL_MS);
 
-  return function stop(){
-    if (Friends._timer){ clearInterval(Friends._timer); Friends._timer = null; }
-  };
+  return Friends.stopWatch;
 };
 
 Friends.forget = function (id){
