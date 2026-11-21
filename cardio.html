@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Дистанция</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,6 +13,7 @@
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Дистанция</h1>
 <p style="color: var(--hint-color); margin-bottom: 15px;">Введи дистанцию и время, приложение посчитает темп и калории</p>
+<p id="status" style="color: #8e8e93; font-size: 13px;">Загрузка...</p>
 
 <div style="background: #1c1c1e; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #2c2c2e;">
 <div class="form-group"><label>Активность</label>
@@ -25,7 +27,7 @@
 <div class="form-group"><label>Дистанция (км)</label><input type="number" id="km" step="0.01" min="0" placeholder="5" oninput="updateHint()"></div>
 <div class="form-group"><label>Время (мин)</label><input type="number" id="minutes" step="1" min="0" placeholder="30" oninput="updateHint()"></div>
 <p id="result" style="color: #5ac8fa; font-size: 14px; margin: 10px 0;"></p>
-<button class="btn" onclick="saveRecord()">Сохранить</button>
+<button id="save-btn" class="btn" onclick="saveRecord()" disabled>Сохранить</button>
 </div>
 
 <h3>Сегодня</h3>
@@ -35,6 +37,7 @@
 <script>
 const tg = window.Telegram.WebApp;
 tg.ready(); tg.expand();
+const sb = supabase.createClient('https://qnpriwfxzuoymoumdtrl.supabase.co', 'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
 
 const ACTIVITIES = {
   run:          { name: 'Бег',          met: 9.8, unit: 'pace' },
@@ -44,6 +47,8 @@ const ACTIVITIES = {
   swim:         { name: 'Плавание',     met: 7.0, unit: 'pace' }
 };
 
+let record = null;
+
 function pad(n){ return String(n).padStart(2, '0'); }
 
 function todayStr(){
@@ -52,15 +57,26 @@ function todayStr(){
 }
 
 function getWeight(){
-  try {
-    const w = parseFloat(JSON.parse(localStorage.getItem('cachedProfile') || '{}').weight);
-    return w > 0 ? w : 70;
-  } catch (e) { return 70; }
+  const w = parseFloat(record && record.profile && record.profile.weight);
+  return w > 0 ? w : 70;
 }
 
-function loadHistory(){
-  try { return JSON.parse(localStorage.getItem('cardioHistory') || '[]'); }
-  catch (e) { return []; }
+async function findRecord(){
+  const tgId = localStorage.getItem('tgId') || (tg.initDataUnsafe && tg.initDataUnsafe.user ? String(tg.initDataUnsafe.user.id) : null);
+  const email = localStorage.getItem('currentEmail') || localStorage.getItem('linkedEmail');
+  if (tgId) {
+    const { data } = await sb.from('user_links').select('*').eq('telegram_id', tgId);
+    if (data && data.length) return data[0];
+  }
+  if (email) {
+    const { data } = await sb.from('user_links').select('*').eq('email', email);
+    if (data && data.length) return data[0];
+  }
+  return null;
+}
+
+function cloudList(){
+  return record && Array.isArray(record.cardio) ? record.cardio : [];
 }
 
 function calc(){
@@ -90,34 +106,47 @@ function updateHint(){
     : '';
 }
 
-function saveRecord(){
+async function saveRecord(){
   const r = calc();
   if (!r) { tg.showAlert('Введи дистанцию и время'); return; }
 
-  const list = loadHistory();
-  list.push({
-    date: todayStr(),
-    activity: document.getElementById('activity').value,
-    km: r.km,
-    minutes: r.min,
-    kcal: r.kcal
-  });
-  localStorage.setItem('cardioHistory', JSON.stringify(list));
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true;
+  try {
+    const fresh = await findRecord();
+    if (!fresh) { tg.showAlert('Аккаунт не найден. Войдите на главной.'); return; }
 
-  const burned = parseInt(localStorage.getItem('cachedBurned') || '0', 10) || 0;
-  localStorage.setItem('cachedBurned', String(burned + r.kcal));
+    const list = Array.isArray(fresh.cardio) ? fresh.cardio.slice() : [];
+    list.push({
+      date: todayStr(),
+      activity: document.getElementById('activity').value,
+      km: r.km,
+      minutes: r.min,
+      kcal: r.kcal
+    });
+    const burned = (fresh.burned || 0) + r.kcal;
 
-  document.getElementById('km').value = '';
-  document.getElementById('minutes').value = '';
-  updateHint();
-  renderToday();
-  tg.showAlert('Записано: ' + r.km + ' км, ' + r.kcal + ' ккал');
+    const { error } = await sb.from('user_links').update({ cardio: list, burned: burned }).eq('id', fresh.id);
+    if (error) { tg.showAlert('Не сохранилось: ' + error.message); return; }
+
+    record = { ...fresh, cardio: list, burned: burned };
+    localStorage.setItem('cachedBurned', String(burned));
+    document.getElementById('km').value = '';
+    document.getElementById('minutes').value = '';
+    updateHint();
+    renderToday();
+    tg.showAlert('Записано: ' + r.km + ' км, ' + r.kcal + ' ккал');
+  } catch (e) {
+    tg.showAlert('Ошибка сети. Запись не сохранена.');
+  } finally {
+    btn.disabled = !record;
+  }
 }
 
 function renderToday(){
   const box = document.getElementById('today-list');
   const today = todayStr();
-  const items = loadHistory().filter(x => x.date === today);
+  const items = cloudList().filter(x => x.date === today);
   if (!items.length) {
     box.innerHTML = '<p style="color: #8e8e93; font-size: 13px;">Пока нет записей</p>';
     return;
@@ -131,7 +160,19 @@ function renderToday(){
   }).join('');
 }
 
-renderToday();
+async function init(){
+  try { record = await findRecord(); } catch (e) { record = null; }
+  const status = document.getElementById('status');
+  if (!record) {
+    status.textContent = 'Нет входа в аккаунт. Откройте приложение с главной и войдите.';
+    return;
+  }
+  status.textContent = '';
+  document.getElementById('save-btn').disabled = false;
+  renderToday();
+}
+
+init();
 </script>
 </body>
 </html>
