@@ -8,473 +8,735 @@
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="style.css">
 <style>
-body { background: #0a0e27; }
+/* ============ НАСТРОЙКА ============ */
+.wk-sec {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 16px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.wk-sec-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #8e8e93;
+  margin-bottom: 10px;
+}
+.wk-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  -webkit-overflow-scrolling: touch;
+}
+.wk-chips::-webkit-scrollbar { display: none; }
+.wk-chip {
+  flex: 0 0 auto;
+  padding: 9px 14px;
+  border-radius: 11px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: 0.18s;
+}
+.wk-chip.on {
+  background: linear-gradient(135deg, #ffcc00, #ffd700);
+  color: #000;
+  border-color: #ffcc00;
+}
+.wk-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.wk-row:last-child { margin-bottom: 0; }
+.wk-row.col {
+  display: block;
+  margin-bottom: 12px;
+}
+.wk-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #d1d1d6;
+  display: block;
+  margin-bottom: 8px;
+}
+.wk-row .wk-label { margin-bottom: 0; }
+.wk-stepper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0,0,0,0.35);
+  border-radius: 12px;
+  padding: 3px;
+}
+.wk-stepper button {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: none;
+  background: rgba(255,255,255,0.09);
+  color: #fff;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+.wk-stepper span {
+  min-width: 40px;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 700;
+  color: #ffcc00;
+}
+.wk-custom {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.35fr 44px;
+  gap: 6px;
+  margin-top: 4px;
+}
+.wk-custom input, .wk-custom select {
+  padding: 10px 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(0,0,0,0.3);
+  color: #fff;
+  font-size: 13px;
+  text-align: center;
+  outline: none;
+  box-sizing: border-box;
+}
+.wk-custom select { text-align: left; padding-left: 8px; font-size: 12px; }
+.wk-custom button {
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, #ffcc00, #ffd700);
+  color: #000;
+  font-weight: 800;
+  font-size: 15px;
+  cursor: pointer;
+}
+.wk-summary {
+  font-size: 12px;
+  color: #8e8e93;
+  text-align: center;
+  margin-top: 12px;
+  line-height: 1.5;
+}
+.wk-start {
+  width: 100%;
+  padding: 16px;
+  border-radius: 14px;
+  border: none;
+  background: linear-gradient(135deg, #ffcc00, #ffd700);
+  color: #000;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(255,204,0,0.25);
+  margin-top: 4px;
+}
+.wk-start:active { transform: scale(0.98); }
 
-#finish-view {
+/* ============ ЭКРАН ТРЕНИРОВКИ ============ */
+.wk-run {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: none;
+  flex-direction: column;
+  padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  color: #fff;
+  transition: background 0.45s ease;
+  overflow: hidden;
+}
+.wk-run.show { display: flex; }
+.wk-run.work { background: linear-gradient(165deg, #6d0b0b 0%, #c92a2a 52%, #7d0f0f 100%); }
+.wk-run.rest { background: linear-gradient(165deg, #07401f 0%, #1f9d55 52%, #0a4d27 100%); }
+
+.wk-bar {
+  height: 4px;
+  border-radius: 4px;
+  background: rgba(0,0,0,0.3);
+  overflow: hidden;
+  margin-bottom: 14px;
+  flex: 0 0 auto;
+}
+.wk-bar > div {
+  height: 100%;
+  width: 100%;
+  background: rgba(255,255,255,0.85);
+  transition: width 0.25s linear;
+}
+.wk-top {
+  text-align: center;
+  flex: 0 0 auto;
+}
+.wk-round {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  opacity: 0.75;
+  text-transform: uppercase;
+}
+.wk-phase {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-top: 3px;
+}
+.wk-run.work .wk-phase { animation: wkPulse 1.6s ease-in-out infinite; }
+@keyframes wkPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.wk-clock {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(46px, 14vw, 68px);
+  font-weight: 300;
+  letter-spacing: 2px;
+  font-variant-numeric: tabular-nums;
+  font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+  text-shadow: 0 4px 24px rgba(0,0,0,0.4);
+  min-height: 0;
+}
+
+.wk-ex {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(0,0,0,0.28);
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 16px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+.wk-ex-img {
+  width: 62px;
+  height: 62px;
+  flex: 0 0 62px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  overflow: hidden;
+}
+.wk-ex-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.wk-ex-name {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.wk-ex-reps {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-top: 3px;
+}
+
+.wk-hint {
+  flex: 0 0 auto;
+  text-align: center;
+  font-size: 12px;
+  opacity: 0.75;
+  margin-bottom: 10px;
+  min-height: 16px;
+}
+
+.wk-actions {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr 0.85fr;
+  gap: 8px;
+}
+.wk-actions button {
+  padding: 13px 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(0,0,0,0.25);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.wk-actions button:active { background: rgba(0,0,0,0.4); }
+.wk-actions .stop { border-color: rgba(255,255,255,0.4); }
+
+/* ============ ФИНИШ ============ */
+.wk-finish {
+  position: fixed;
+  inset: 0;
+  z-index: 950;
   display: none;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  min-height: 100vh;
   padding: 24px;
   box-sizing: border-box;
+  background: linear-gradient(165deg, #0a0a12 0%, #1a1206 55%, #0a0a12 100%);
+  color: #fff;
+  overflow-y: auto;
 }
-
-.timer-section {
-  background: linear-gradient(135deg, rgba(255, 204, 0, 0.08) 0%, rgba(90, 200, 250, 0.08) 100%);
-  border: 1px solid rgba(255, 204, 0, 0.2);
+.wk-finish.show { display: flex; }
+.wk-trophy { font-size: 72px; margin-bottom: 8px; }
+.wk-finish h2 { font-size: 22px; margin: 0 0 10px; }
+.wk-fin-stats {
+  font-size: 13px;
+  color: #8e8e93;
+  line-height: 1.7;
+  margin-bottom: 22px;
+}
+.wk-fin-xp {
+  font-size: 26px;
+  font-weight: 800;
+  color: #ffcc00;
+  margin-bottom: 22px;
+}
+.wk-quote {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
   border-radius: 16px;
-  padding: 24px;
-  margin: 20px 0;
+  padding: 18px;
+  max-width: 360px;
   box-sizing: border-box;
-}
-
-.timer-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #ffffff;
-  margin-bottom: 20px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.timer-mode-switch {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
   margin-bottom: 24px;
 }
-
-.mode-btn {
-  padding: 12px 16px;
-  border-radius: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.05);
-  color: #8e8e93;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+.wk-quote p:first-child {
+  font-style: italic;
+  font-size: 16px;
+  line-height: 1.45;
+  margin: 0 0 10px;
 }
-
-.mode-btn.active {
-  background: linear-gradient(135deg, #ffcc00 0%, #ffd700 100%);
-  color: #000;
-  border-color: #ffcc00;
-  box-shadow: 0 4px 12px rgba(255, 204, 0, 0.3);
-}
-
-.presets-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.preset-btn {
-  padding: 10px 8px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.preset-btn:active {
-  background: rgba(255, 204, 0, 0.2);
-  border-color: #ffcc00;
-}
-
-.custom-time {
-  display: grid;
-  grid-template-columns: 1fr 1fr auto;
-  gap: 8px;
-  margin-bottom: 20px;
-}
-
-.custom-time input {
-  padding: 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  text-align: center;
-  outline: none;
-}
-
-.custom-time input::placeholder { color: rgba(255, 255, 255, 0.4); }
-
-.custom-time input:focus {
-  border-color: #ffcc00;
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 0 8px rgba(255, 204, 0, 0.2);
-}
-
-.apply-btn {
-  padding: 12px 16px;
-  border-radius: 10px;
-  border: none;
-  background: linear-gradient(135deg, #ffcc00 0%, #ffd700 100%);
-  color: #000;
-  font-size: 13px;
+.wk-quote p:last-child {
+  text-align: right;
   font-weight: 700;
-  cursor: pointer;
-}
-
-.apply-btn:active { transform: scale(0.95); }
-
-.clock-display {
-  font-size: 72px;
-  font-weight: 300;
-  text-align: center;
-  color: #ffcc00;
-  font-variant-numeric: tabular-nums;
-  margin: 30px 0;
-  letter-spacing: 4px;
-  font-family: 'SF Mono', Monaco, 'Courier New', monospace;
-}
-
-.status-message {
-  text-align: center;
   font-size: 12px;
   color: #8e8e93;
-  margin-bottom: 20px;
-  height: 18px;
+  margin: 0;
 }
-
-.timer-buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.timer-btn {
-  padding: 14px;
-  border-radius: 12px;
-  border: none;
-  font-size: 15px;
-  font-weight: 700;
-  cursor: pointer;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.timer-btn.start {
-  background: linear-gradient(135deg, #ffcc00 0%, #ffd700 100%);
-  color: #000;
-  box-shadow: 0 4px 12px rgba(255, 204, 0, 0.3);
-}
-
-.timer-btn.start:active { transform: scale(0.95); }
-
-.timer-btn.reset {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.action-btn {
-  padding: 14px;
-  border-radius: 12px;
-  border: none;
-  font-size: 15px;
-  font-weight: 700;
-  cursor: pointer;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  width: 100%;
-}
-
-.set-complete {
-  background: linear-gradient(135deg, #34c759 0%, #30b84f 100%);
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
-}
-
-.set-complete:active { transform: scale(0.98); }
-
-.session-info {
-  text-align: center;
-  font-size: 12px;
-  color: #8e8e93;
-  margin: 10px 0 0 0;
-}
-
-.exercises { margin-bottom: 20px; }
-
-.exercise-item {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 14px;
-  margin-bottom: 8px;
-}
-
-.exercise-item h4 {
-  margin: 0 0 4px 0;
-  font-size: 15px;
-  color: #fff;
-  font-weight: 600;
-}
-
-.exercise-item p { margin: 0; font-size: 12px; color: #8e8e93; }
-
-.finish-trophy { font-size: 80px; margin-bottom: 10px; }
-.finish-title { font-size: 24px; color: #fff; margin: 0 0 8px 0; }
-.finish-stats { color: #8e8e93; font-size: 14px; margin-bottom: 28px; line-height: 1.5; }
-
-.quote-box {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  padding: 20px;
-  margin-bottom: 28px;
-  max-width: 380px;
-  box-sizing: border-box;
-}
-
-.finish-quote { font-style: italic; font-size: 17px; color: #fff; margin: 0 0 10px 0; line-height: 1.4; }
-.finish-author { text-align: right; font-weight: 700; font-size: 13px; color: #8e8e93; margin: 0; }
 </style>
 </head>
 <body>
 
-<div id="workout-view" class="inner-screen">
+<!-- ================= НАСТРОЙКА ================= -->
+<div id="setup" class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Тренировка</h1>
 
-<div class="exercises">
-<div class="exercise-item"><h4>Приседания</h4><p>3 подхода • 15 повторений</p></div>
-<div class="exercise-item"><h4>Отжимания</h4><p>3 подхода • 10 повторений</p></div>
+<div class="wk-sec">
+  <div class="wk-sec-title">Упражнение</div>
+  <div class="wk-chips" id="exChips"></div>
 </div>
 
-<div class="timer-section">
-<div class="timer-title">Настройка таймера</div>
+<div class="wk-sec">
+  <div class="wk-row">
+    <span class="wk-label">Раунды</span>
+    <div class="wk-stepper">
+      <button onclick="bumpRounds(-1)">−</button>
+      <span id="roundsVal">3</span>
+      <button onclick="bumpRounds(1)">+</button>
+    </div>
+  </div>
 
-<div class="timer-mode-switch">
-<button class="mode-btn active" id="mode-work" onclick="setMode('work')">Тренировка</button>
-<button class="mode-btn" id="mode-rest" onclick="setMode('rest')">Отдых</button>
+  <div class="wk-row col">
+    <span class="wk-label">Тренировка</span>
+    <div class="wk-chips" id="workChips"></div>
+  </div>
+
+  <div class="wk-row col">
+    <span class="wk-label">Отдых</span>
+    <div class="wk-chips" id="restChips"></div>
+  </div>
+
+  <div class="wk-custom">
+    <input id="c-min" type="number" min="0" placeholder="мин">
+    <input id="c-sec" type="number" min="0" max="59" placeholder="сек">
+    <select id="c-target">
+      <option value="work">Тренировка</option>
+      <option value="rest">Отдых</option>
+    </select>
+    <button onclick="applyCustom()">✓</button>
+  </div>
+
+  <div class="wk-summary" id="summary"></div>
 </div>
 
-<div class="presets-row" id="presets"></div>
-
-<div class="custom-time">
-<input type="number" id="custom-min" min="0" placeholder="мин">
-<input type="number" id="custom-sec" min="0" max="59" placeholder="сек">
-<button class="apply-btn" onclick="applyCustom()">Задать</button>
+<button class="wk-start" onclick="startSession()">Начать тренировку</button>
 </div>
 
-<div class="clock-display" id="clock">10:00</div>
+<!-- ================= ТРЕНИРОВКА ================= -->
+<div id="run" class="wk-run work">
+  <div class="wk-bar"><div id="bar"></div></div>
 
-<div class="status-message" id="status"></div>
+  <div class="wk-top">
+    <div class="wk-round" id="roundLabel">Раунд 1 / 3</div>
+    <div class="wk-phase" id="phaseLabel">Тренировка</div>
+  </div>
 
-<div class="timer-buttons">
-<button class="timer-btn start" id="start-btn" onclick="toggle()">Старт</button>
-<button class="timer-btn reset" onclick="reset()">Сброс</button>
-</div>
+  <div class="wk-clock" id="clock">05:00</div>
+
+  <div class="wk-ex" id="exCard">
+    <div class="wk-ex-img" id="exImg">💪</div>
+    <div>
+      <div class="wk-ex-name" id="exName"></div>
+      <div class="wk-ex-reps" id="exReps"></div>
+    </div>
+  </div>
+
+  <div class="wk-hint" id="hint"></div>
+
+  <div class="wk-actions">
+    <button id="pauseBtn" onclick="togglePause()">Пауза</button>
+    <button onclick="skipPhase()">Дальше</button>
+    <button class="stop" onclick="stopSession()">Стоп</button>
+  </div>
 </div>
 
-<button class="action-btn set-complete" onclick="completeSet()">Подход выполнен (+15 XP)</button>
-<p class="session-info" id="session-info"></p>
-</div>
-
-<div id="finish-view">
-<div class="finish-trophy">🏆</div>
-<h2 class="finish-title">Тренировка завершена!</h2>
-<p class="finish-stats" id="finish-stats"></p>
-<div class="quote-box">
-<p class="finish-quote" id="finish-quote"></p>
-<p class="finish-author" id="finish-author"></p>
-</div>
-<button class="action-btn start" onclick="goBackToMain()">Принять</button>
+<!-- ================= ФИНИШ ================= -->
+<div id="finish" class="wk-finish">
+  <div class="wk-trophy">🏆</div>
+  <h2>Тренировка завершена!</h2>
+  <div class="wk-fin-stats" id="finStats"></div>
+  <div class="wk-fin-xp" id="finXp"></div>
+  <div class="wk-quote">
+    <p id="qText"></p>
+    <p id="qAuthor"></p>
+  </div>
+  <button class="wk-start" style="max-width: 320px;" onclick="goBackToMain()">Принять</button>
 </div>
 
 <script src="quotes.js"></script>
 <script>
 const tg = window.Telegram.WebApp;
 tg.ready(); tg.expand();
-const sb = supabase.createClient('https://qnpriwfxzuoymoumdtrl.supabase.co', 'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
+const sb = supabase.createClient('https://qnpriwfxzuoymoudtrl.supabase.co', 'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
 
-const BONUS_XP = 20;
-const PRESETS = { work: [300, 600, 900, 1800, 2700], rest: [30, 45, 60, 90, 120] };
-const saved = {
-  work: parseInt(localStorage.getItem('wkWork')) || 600,
-  rest: parseInt(localStorage.getItem('wkRest')) || 45
+const XP_PER_ROUND = 15;
+const XP_BONUS = 20;
+
+/* Упражнения. В photo укажите путь к картинке, например 'ex-squat.png'.
+   Если photo пустое — показывается emoji. */
+const EXERCISES = [
+  { id: 'none',   name: 'Без упражнения', reps: 'Просто таймер',  emoji: '⏱️', photo: '' },
+  { id: 'squat',  name: 'Приседания',     reps: '15 повторений',  emoji: '🏋️', photo: '' },
+  { id: 'pushup', name: 'Отжимания',      reps: '10 повторений',  emoji: '💪', photo: '' },
+  { id: 'plank',  name: 'Планка',         reps: '60 секунд',      emoji: '🧘', photo: '' },
+  { id: 'burpee', name: 'Бёрпи',          reps: '12 повторений',  emoji: '🔥', photo: '' }
+];
+
+const WORK_OPTIONS = [60, 120, 180, 300, 600, 900];
+const REST_OPTIONS = [15, 30, 45, 60, 90, 120];
+
+let cfg = {
+  rounds: parseInt(localStorage.getItem('wkRounds')) || 3,
+  work: parseInt(localStorage.getItem('wkWork')) || 300,
+  rest: parseInt(localStorage.getItem('wkRest')) || 60,
+  exercise: null
 };
 
-let mode = 'work';
-let total = saved.work * 1000;
-let remaining = total;
+let phase = 'work';
+let round = 1;
+let totalMs = 0;
+let remainingMs = 0;
 let endAt = 0;
 let running = false;
 let iv = null;
-let sets = 0;
+let xpEarned = 0;
 let finished = false;
 
 const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, '0');
 
-function pad(n){ return String(n).padStart(2, '0'); }
+/* ---------- вспомогательное ---------- */
+function fmtSec(sec) {
+  if (sec >= 60) {
+    const m = Math.round(sec / 60);
+    return m + ' мин';
+  }
+  return sec + ' сек';
+}
 
-function show(ms){
+function fmtClock(ms) {
   const s = Math.ceil(Math.max(0, ms) / 1000);
-  $('clock').textContent = pad(Math.floor(s / 60)) + ':' + pad(s % 60);
+  return pad(Math.floor(s / 60)) + ':' + pad(s % 60);
 }
 
-function setBtn(txt){ $('start-btn').textContent = txt; }
-
-function stopTimer(){
-  clearInterval(iv);
-  running = false;
-  setBtn('Старт');
-}
-
-function renderPresets(){
-  $('presets').innerHTML = PRESETS[mode].map(sec =>
-    '<button class="preset-btn" onclick="setPreset(' + sec + ')">' +
-    (sec >= 60 ? Math.round(sec / 60) + ' мин' : sec + ' сек') +
-    '</button>'
+/* ---------- настройка ---------- */
+function renderExerciseChips() {
+  $('exChips').innerHTML = EXERCISES.map(e =>
+    '<button class="wk-chip' + (cfg.exercise === (e.id === 'none' ? null : e.id) ? ' on' : '') +
+    '" onclick="pickExercise(\'' + e.id + '\')">' +
+    (e.id === 'none' ? '⏱️' : e.emoji) + ' ' + e.name + '</button>'
   ).join('');
 }
 
-function setMode(m){
-  if (running || finished) return;
-  mode = m;
-  $('mode-work').classList.toggle('active', m === 'work');
-  $('mode-rest').classList.toggle('active', m === 'rest');
-  total = saved[m] * 1000;
-  remaining = total;
-  $('status').textContent = '';
-  renderPresets();
-  show(remaining);
+function pickExercise(id) {
+  cfg.exercise = id === 'none' ? null : id;
+  renderExerciseChips();
+  updateSummary();
 }
 
-function setPreset(sec){
-  if (running || finished) return;
-  saved[mode] = sec;
-  localStorage.setItem(mode === 'rest' ? 'wkRest' : 'wkWork', sec);
-  total = sec * 1000;
-  remaining = total;
-  $('status').textContent = '';
-  show(remaining);
+function renderTimeChips() {
+  $('workChips').innerHTML = WORK_OPTIONS.map(sec =>
+    '<button class="wk-chip' + (cfg.work === sec ? ' on' : '') +
+    '" onclick="pickTime(\'work\',' + sec + ')">' + fmtSec(sec) + '</button>'
+  ).join('');
+  $('restChips').innerHTML = REST_OPTIONS.map(sec =>
+    '<button class="wk-chip' + (cfg.rest === sec ? ' on' : '') +
+    '" onclick="pickTime(\'rest\',' + sec + ')">' + fmtSec(sec) + '</button>'
+  ).join('');
 }
 
-function applyCustom(){
-  if (running || finished) return;
-  const m = parseInt($('custom-min').value) || 0;
-  const s = parseInt($('custom-sec').value) || 0;
+function pickTime(kind, sec) {
+  cfg[kind] = sec;
+  localStorage.setItem(kind === 'work' ? 'wkWork' : 'wkRest', sec);
+  renderTimeChips();
+  updateSummary();
+}
+
+function bumpRounds(delta) {
+  cfg.rounds = Math.min(30, Math.max(1, cfg.rounds + delta));
+  localStorage.setItem('wkRounds', cfg.rounds);
+  $('roundsVal').textContent = cfg.rounds;
+  updateSummary();
+}
+
+function applyCustom() {
+  const m = parseInt($('c-min').value) || 0;
+  const s = parseInt($('c-sec').value) || 0;
   const sec = m * 60 + s;
-  if (sec <= 0) { $('status').textContent = 'Укажите время больше нуля'; return; }
-  setPreset(sec);
+  if (sec <= 0) { tg.showAlert('Укажите время больше нуля'); return; }
+  pickTime($('c-target').value, sec);
+  $('c-min').value = '';
+  $('c-sec').value = '';
 }
 
-function toggle(){
-  if (finished) return;
-  if (running) {
-    remaining = Math.max(0, endAt - Date.now());
-    stopTimer();
-    show(remaining);
-    return;
-  }
-  if (remaining <= 0) remaining = total;
-  endAt = Date.now() + remaining;
-  running = true;
-  setBtn('Пауза');
-  $('status').textContent = '';
-  iv = setInterval(tick, 250);
+function updateSummary() {
+  const totalSec = cfg.rounds * cfg.work + (cfg.rounds - 1) * cfg.rest;
+  const mins = Math.round(totalSec / 60);
+  const ex = cfg.exercise ? EXERCISES.find(e => e.id === cfg.exercise) : null;
+  $('summary').innerHTML =
+    cfg.rounds + ' ' + (cfg.rounds === 1 ? 'раунд' : (cfg.rounds < 5 ? 'раунда' : 'раундов')) +
+    ' · тренировка ' + fmtSec(cfg.work) +
+    ' · отдых ' + fmtSec(cfg.rest) +
+    '<br>Всего ≈ ' + mins + ' мин' +
+    (ex ? ' · ' + ex.name : '');
 }
 
-function tick(){
-  const left = endAt - Date.now();
-  if (left <= 0) {
-    stopTimer();
-    remaining = 0;
-    show(0);
-    if (navigator.vibrate) navigator.vibrate([400, 200, 400]);
-    if (mode === 'work') autoFinish();
-    else tg.showAlert('Отдых окончен!');
-    return;
-  }
-  remaining = left;
-  show(left);
-}
-
-function reset(){
-  if (finished) return;
-  stopTimer();
-  remaining = total;
-  $('status').textContent = '';
-  show(remaining);
-}
-
-async function addXP(delta){
+/* ---------- XP ---------- */
+async function addXP(delta) {
   const tgId = localStorage.getItem('tgId');
   const email = localStorage.getItem('currentEmail') || localStorage.getItem('linkedEmail');
   if (!tgId && !email) return false;
-  let q = sb.from('user_links').select('id,xp');
-  q = tgId ? q.eq('telegram_id', tgId) : q.eq('email', email);
-  const { data, error } = await q.limit(1);
-  if (error || !data || !data.length) return false;
-  const { error: upErr } = await sb.from('user_links')
-    .update({ xp: (data[0].xp || 0) + delta }).eq('id', data[0].id);
-  return !upErr;
-}
-
-async function completeSet(){
-  if (finished) return;
-  sets++;
-  localStorage.setItem('cachedXP', parseInt(localStorage.getItem('cachedXP') || '0') + 15);
-  $('session-info').textContent = 'Подходов за сессию: ' + sets;
   try {
-    const ok = await addXP(15);
-    tg.showAlert(ok ? '+15 XP добавлено!' : '+15 XP на телефоне. В аккаунт не записалось, проверьте вход.');
+    let q = sb.from('user_links').select('id,xp');
+    q = tgId ? q.eq('telegram_id', tgId) : q.eq('email', email);
+    const { data, error } = await q.limit(1);
+    if (error || !data || !data.length) return false;
+    const { error: upErr } = await sb
+      .from('user_links')
+      .update({ xp: (data[0].xp || 0) + delta })
+      .eq('id', data[0].id);
+    return !upErr;
   } catch (e) {
-    tg.showAlert('+15 XP на телефоне. Ошибка сети.');
+    return false;
   }
 }
 
-async function autoFinish(){
+function awardXP(delta) {
+  localStorage.setItem('cachedXP', parseInt(localStorage.getItem('cachedXP') || '0') + delta);
+  addXP(delta);
+}
+
+/* ---------- запуск ---------- */
+function startSession() {
+  finished = false;
+  xpEarned = 0;
+  round = 1;
+  $('setup').style.display = 'none';
+  $('finish').classList.remove('show');
+  $('run').classList.add('show');
+  fillExerciseCard();
+  enterPhase('work');
+}
+
+function fillExerciseCard() {
+  const ex = cfg.exercise ? EXERCISES.find(e => e.id === cfg.exercise) : null;
+  if (!ex) {
+    $('exCard').style.display = 'none';
+    return;
+  }
+  $('exCard').style.display = 'flex';
+  $('exName').textContent = ex.name;
+  $('exReps').textContent = ex.reps;
+  $('exImg').innerHTML = ex.photo
+    ? '<img src="' + ex.photo + '" alt="" onerror="this.remove()">'
+    : ex.emoji;
+}
+
+function enterPhase(p) {
+  phase = p;
+  totalMs = (p === 'work' ? cfg.work : cfg.rest) * 1000;
+  remainingMs = totalMs;
+  endAt = Date.now() + remainingMs;
+  running = true;
+  $('pauseBtn').textContent = 'Пауза';
+
+  $('run').classList.toggle('work', p === 'work');
+  $('run').classList.toggle('rest', p === 'rest');
+  $('phaseLabel').textContent = p === 'work' ? 'Тренировка' : 'Отдых';
+  $('roundLabel').textContent = 'Раунд ' + round + ' / ' + cfg.rounds;
+  fillExerciseCard();
+
+  if (p === 'work') {
+    $('hint').textContent = round < cfg.rounds
+      ? 'Дальше отдых ' + fmtSec(cfg.rest)
+      : 'Последний раунд';
+  } else {
+    $('hint').textContent = 'Дальше раунд ' + (round + 1);
+  }
+
+  renderClock();
+  clearInterval(iv);
+  iv = setInterval(tick, 200);
+}
+
+function tick() {
+  if (!running) return;
+  const left = endAt - Date.now();
+  if (left <= 0) {
+    remainingMs = 0;
+    renderClock();
+    phaseDone();
+    return;
+  }
+  remainingMs = left;
+  renderClock();
+}
+
+function renderClock() {
+  $('clock').textContent = fmtClock(remainingMs);
+  const pct = totalMs > 0 ? (remainingMs / totalMs) * 100 : 0;
+  $('bar').style.width = Math.max(0, Math.min(100, pct)) + '%';
+}
+
+async function phaseDone() {
+  clearInterval(iv);
+  if (phase === 'work') {
+    xpEarned += XP_PER_ROUND;
+    awardXP(XP_PER_ROUND);
+    if (navigator.vibrate) navigator.vibrate([320, 140, 320]);
+    if (round >= cfg.rounds) { finishSession(); return; }
+    round++;
+    enterPhase('rest');
+  } else {
+    if (navigator.vibrate) navigator.vibrate(180);
+    enterPhase('work');
+  }
+}
+
+function togglePause() {
+  if (!running) {
+    endAt = Date.now() + remainingMs;
+    running = true;
+    $('pauseBtn').textContent = 'Пауза';
+    clearInterval(iv);
+    iv = setInterval(tick, 200);
+    return;
+  }
+  remainingMs = Math.max(0, endAt - Date.now());
+  running = false;
+  clearInterval(iv);
+  $('pauseBtn').textContent = 'Продолжить';
+  renderClock();
+}
+
+function skipPhase() {
+  if (finished) return;
+  clearInterval(iv);
+  if (phase === 'work') {
+    if (round >= cfg.rounds) { finishSession(); return; }
+    round++;
+    enterPhase('rest');
+  } else {
+    enterPhase('work');
+  }
+}
+
+function stopSession() {
+  if (!confirm('Остановить тренировку? XP за завершённые раунды останется.')) return;
+  clearInterval(iv);
+  running = false;
+  exitToSetup();
+  if (xpEarned > 0) tg.showAlert('Тренировка остановлена. Получено ' + xpEarned + ' XP.');
+}
+
+function finishSession() {
+  if (finished) return;
   finished = true;
-  setBtn('Старт');
+  clearInterval(iv);
+  running = false;
 
-  const winAudio = new Audio('12. Scroll Win 02.mp3');
-  winAudio.play().catch(() => {});
+  xpEarned += XP_BONUS;
+  awardXP(XP_BONUS);
 
-  let ok = false;
-  try { ok = await addXP(BONUS_XP); } catch (e) { ok = false; }
-  if (ok) localStorage.setItem('cachedXP', parseInt(localStorage.getItem('cachedXP') || '0') + BONUS_XP);
+  const audio = new Audio('12. Scroll Win 02.mp3');
+  audio.play().catch(() => {});
 
-  const kcal = sets * 15;
-  $('finish-stats').textContent =
-    'Подходов: ' + sets + ' · Сожжено: ' + kcal + ' ккал' +
-    (ok ? ' · +' + BONUS_XP + ' XP за завершение' : ' · XP не записался в аккаунт');
+  const mins = Math.round((cfg.rounds * cfg.work + (cfg.rounds - 1) * cfg.rest) / 60);
+  $('finStats').innerHTML =
+    cfg.rounds + ' ' + (cfg.rounds === 1 ? 'раунд' : (cfg.rounds < 5 ? 'раунда' : 'раундов')) +
+    ' · ≈ ' + mins + ' мин' +
+    (cfg.exercise ? '<br>' + EXERCISES.find(e => e.id === cfg.exercise).name : '');
+  $('finXp').textContent = '+' + xpEarned + ' XP';
 
   let q = { text: 'Ты не проиграл, пока не остановился.', author: 'Майк Тайсон' };
   if (typeof allQuotes !== 'undefined' && allQuotes.length) {
     q = allQuotes[Math.floor(Math.random() * allQuotes.length)];
   }
-  $('finish-quote').textContent = '«' + q.text + '»';
-  $('finish-author').textContent = '— ' + q.author;
+  $('qText').textContent = '«' + q.text + '»';
+  $('qAuthor').textContent = '— ' + q.author;
 
-  $('workout-view').style.display = 'none';
-  $('finish-view').style.display = 'flex';
+  $('run').classList.remove('show');
+  $('finish').classList.add('show');
 }
 
-function goBackToMain(){
+function exitToSetup() {
+  $('run').classList.remove('show');
+  $('setup').style.display = '';
+}
+
+function goBackToMain() {
   setTimeout(() => { window.location.href = 'index.html'; }, 100);
 }
 
-setMode('work');
+/* ---------- инициализация ---------- */
+$('roundsVal').textContent = cfg.rounds;
+renderExerciseChips();
+renderTimeChips();
+updateSummary();
 </script>
 </body>
 </html>
