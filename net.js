@@ -1,6 +1,5 @@
 /* ============================================================
-   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 36)
-   VER 37: эликсир показывает значение сразу, ошибки испытаний выводятся на экран результата.
+   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 38)
    ============================================================ */
 (function (global) {
 'use strict';
@@ -22,7 +21,9 @@ const UNIT_CHANCE  = 0.03;
 const CUPS_CAP = 140;
 const CAP_KEY  = 'arenaCupsCap';
 
-const PUSH_MS = 200;
+const PUSH_MS = 400;
+const STATE_SAVE_MS = 5000;
+const STALL_MS = 8000;
 const TICK_MS = 100;
 
 const SEARCH_LIMIT_MS = 3000;
@@ -31,7 +32,7 @@ const FRIENDLY_WAIT_MS = 90000;
 
 const TOUR_BOT_MS = 5000;
 
-const AWAY_GRACE_MS = 15000;
+const AWAY_GRACE_MS = 60000;
 
 const CATCHUP_STEP = 1.2;
 const CATCHUP_MAX  = 600;
@@ -126,7 +127,9 @@ const Net = {
   tour: false, tourTrial: false, trialType: null, tourBotTimer: null,
 
   lastSeen: 0,
-  replayLog: [], logMark: 0
+  replayLog: [], logMark: 0,
+
+  _lastStateAt: 0, _stallTimer: null, _reattachTimer: null
 };
 
 Net.on = function (evt, fn){
@@ -531,26 +534,7 @@ Net.refresh = async function (){
 /* ---------------- потолок кубков ---------------- */
 
 Net._enforceCap = async function (){
-  const me = Net.me;
-  if (!me) return;
-
-  let flag = null;
-  try { flag = localStorage.getItem(CAP_KEY); } catch (e){}
-
-  if (typeof me.cups === 'number' && me.cups >= CUPS_CAP){
-    try { localStorage.setItem(CAP_KEY, '1'); } catch (e){}
-  } else if (flag !== '1'){
-    return;
-  }
-
-  if (me.cups === CUPS_CAP) return;
-
-  try {
-    const res = await Net.sb.from('arena_players')
-      .update({ cups: CUPS_CAP })
-      .eq('player_key', Net.key);
-    if (!res.error) me.cups = CUPS_CAP;
-  } catch (e){}
+  try { localStorage.removeItem(CAP_KEY); } catch (e){}
 };
 
 Net.cupsCap = CUPS_CAP;
@@ -602,7 +586,7 @@ Net._saveState = function (force){
   if (!Net.host || !Net.state) return;
 
   const now = Date.now();
-  if (!force && now - Net.saveMark < 1000) return;
+  if (!force && now - Net.saveMark < STATE_SAVE_MS) return;
   Net.saveMark = now;
 
   try {
@@ -803,6 +787,7 @@ Net._attach = async function (){
   });
 
   ch.on('broadcast', { event: 'state' }, function (msg){
+    Net._lastStateAt = Date.now();
     if (Net.host) return;
 
     const incoming = ensureSpellFields(payloadOf(msg));
@@ -857,16 +842,45 @@ Net._attach = async function (){
   });
 
   await ch.subscribe(async function (status){
+    if (Net.matchCh !== ch) return;
     if (status === 'SUBSCRIBED'){
+      Net._lastStateAt = Date.now();
       await ch.track({
         key: Net.key, name: Net.name,
         cups: Net.me ? Net.me.cups : 0,
         setup: Net.mySetup(), deck: Net.myDeck(), levels: Net.myLevels()
       });
+      Net._watchStall();
+      if (!Net.host){
+        ch.send({ type:'broadcast', event:'hello', payload:{ from: Net.key, resync: true } });
+      }
+    } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED'){
+      Net.emit('netDown', { status: status });
+      Net._reattachSoon(ch);
     }
   });
 
   return ch;
+};
+
+Net._reattachSoon = function (ch){
+  if (Net._reattachTimer) return;
+  Net._reattachTimer = setTimeout(async function (){
+    Net._reattachTimer = null;
+    if (Net.finished || !Net.matchId || Net.matchCh !== ch) return;
+    Net.matchCh = null;
+    try { await Net.sb.removeChannel(ch); } catch (e){}
+    try { await Net._attach(); } catch (e){}
+  }, 1500);
+};
+
+Net._watchStall = function (){
+  if (Net._stallTimer) return;
+  Net._stallTimer = setInterval(function (){
+    if (!Net.matchId || Net.finished || Net.host) return;
+    const dt = Date.now() - (Net._lastStateAt || 0);
+    if (dt > STALL_MS) Net.emit('stall', { ms: dt });
+  }, 2000);
 };
 
 /* ---------------- бой с живым игроком ---------------- */
@@ -1772,20 +1786,13 @@ Net._estimateCups = function (winner){
     return { a_before:oppCups, a_after:oppCups, b_before:myCups, b_after:myCups };
   }
 
-  let after;
+  let delta = 0;
+  if (winner === Net.mySide) delta = Arena.deltaFor(myCups, oppCups);
+  else if (winner === 'draw') delta = 0;
+  else delta = -Arena.lossFor(myCups, Arena.deltaFor(oppCups, myCups));
 
-  if (myCups >= CUPS_CAP){
-    after = CUPS_CAP;
-  } else {
-    let delta = 0;
-
-    if (winner === Net.mySide) delta = Arena.deltaFor(myCups, oppCups);
-    else if (winner === 'draw') delta = 0;
-    else delta = -Arena.lossFor(myCups, Arena.deltaFor(oppCups, myCups));
-
-    after = Math.max(Arena.floorOf(myCups), myCups + delta);
-    if (after > CUPS_CAP) after = CUPS_CAP;
-  }
+  let after = Math.max(Arena.floorOf(myCups), myCups + delta);
+  if (after < 0) after = 0;
 
   if (Net.mySide === 'a') return { a_before:myCups, a_after:after, b_before:oppCups, b_after:oppCups };
   return { a_before:oppCups, a_after:oppCups, b_before:myCups, b_after:after };
@@ -2053,9 +2060,6 @@ Net._finish = function (payload){
   if (typeof before !== 'number') before = Net.me ? Net.me.cups : 0;
   if (typeof after !== 'number') after = before;
 
-  if (before >= CUPS_CAP) after = before;
-  if (after > CUPS_CAP) after = CUPS_CAP;
-
   const opp = Net.players
     ? (Net.mySide === 'a' ? Net.players.b : Net.players.a)
     : { name: 'Враг' };
@@ -2089,6 +2093,7 @@ Net.leaveMatch = async function (){
   Net._clearFallback();
 
   if (Net.retry){ clearInterval(Net.retry); Net.retry = null; }
+  if (Net._stallTimer){ clearInterval(Net._stallTimer); Net._stallTimer = null; }
 
   if (Net.matchCh){
     try { await Net.matchCh.untrack(); } catch (e){}
