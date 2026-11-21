@@ -59,7 +59,7 @@ h1{font-size:20px;font-weight:900;margin:0;text-shadow:0 2px 0 rgba(0,0,0,.35)}
 </style>
 </head>
 <body>
-<div style="position:fixed;left:8px;bottom:8px;font-size:10px;font-weight:900;color:#facc15;background:#0f172a;border:1px solid #facc15;padding:3px 8px;border-radius:6px;z-index:999">tour-v7</div>
+<div style="position:fixed;left:8px;bottom:8px;font-size:10px;font-weight:900;color:#facc15;background:#0f172a;border:1px solid #facc15;padding:3px 8px;border-radius:6px;z-index:999">tour-v8</div>
 
 <div class="head"><button class="back" onclick="location.href='chess-main.html'">‹</button><h1>Турниры</h1></div>
 
@@ -302,6 +302,7 @@ function scheduleTrialBot(srch){
 
 function launchTrialBot(t){
   try {
+    localStorage.setItem('tourType', t);
     sessionStorage.setItem('tourStart', JSON.stringify({
       bot: true,
       matchId: 'bot-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
@@ -407,6 +408,7 @@ $('dockAccept').onclick = async function(){
 $('dockPlay').onclick = function(){
   if (!dockMatch) return;
   try {
+    localStorage.setItem('tourType', dockMatch.kind === 'trial' ? type : 'champ');
     sessionStorage.setItem('tourStart', JSON.stringify({
       matchId: dockMatch.id, side: dockMatch.side, oppKey: dockMatch.opp_key,
       oppName: dockMatch.opp_name, oppCups: dockMatch.opp_cups,
