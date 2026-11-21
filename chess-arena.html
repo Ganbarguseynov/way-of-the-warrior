@@ -149,7 +149,7 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
 </style>
 </head>
 <body data-arena="1">
-<div id="verTag">v56</div>
+<div id="verTag">v57</div>
 
 <div id="wait" class="hidden">
   <div class="wait-box">
@@ -249,7 +249,7 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
 
 <script src="arena.js?v=22"></script>
 <script src="friends.js?v=8"></script>
-<script src="net.js?v=41"></script>
+<script src="net.js?v=42"></script>
 <script src="chests.js?v=5"></script>
 <script>
 const sb = supabase.createClient('https://qnpriwfxzuoymoumdtrl.supabase.co','sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
@@ -661,6 +661,26 @@ Net.on('resumeFailed',function(){
   }).catch(function(){ setTimeout(toMenu, 900); });
 });
 
+/* Турнирная партия закрыта по времени, пока приложение было закрыто. */
+Net.on('tourLost',function(){
+  handStop();
+  document.body.classList.remove('battle-mode');
+  $('battle').classList.add('hidden');
+  $('checkBar').classList.remove('on');
+  $('drawPanel').classList.add('hidden');
+  $('promoPanel').classList.add('hidden');
+  $('overlay').classList.remove('hidden');
+  $('ovTitle').textContent='ПОРАЖЕНИЕ';
+  $('ovTitle').style.color='#ef4444';
+  $('ovArena').textContent='Турнир · партия закрыта по времени';
+  $('ovDelta').textContent='';
+  $('ovCups').textContent='Кубки не изменились';
+  $('ovCups').style.color='#64748b';
+  $('ovNote').textContent='Время партии истекло, пока приложение было закрыто';
+  $('ovNote').style.color='#f59e0b';
+  Net.leaveMatch().catch(function(){});
+});
+
 Net.on('result',function(r){
   searching=false;
   hideWait();
@@ -679,9 +699,10 @@ Net.on('result',function(r){
   $('ovArena').textContent=(r.tour?'Турнир':(r.friendly?'Дружеская партия':'Арена «'+Arena.ARENAS[Net.arena-1].name+'»'))+' · '+modeDef(r.mode).name;
   if(r.tour){
     $('ovDelta').textContent='';
-    $('ovCups').textContent=r.trial?'Считаем победы и поражения…':'';
-    $('ovNote').textContent=r.trial?'':'Турнирная партия засчитана';
-    $('ovNote').style.color='#5ee0ff';
+    $('ovCups').textContent=r.trial?'Считаем победы и поражения…':'Результат записан в историю турниров';
+    $('ovCups').style.color='#5ee0ff';
+    $('ovNote').textContent=r.trial?'':'Кубки не изменились';
+    $('ovNote').style.color='#64748b';
   } else if(r.friendly){
     $('ovDelta').textContent='';
     $('ovCups').textContent='';
