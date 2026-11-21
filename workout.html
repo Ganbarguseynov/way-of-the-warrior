@@ -5,16 +5,209 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Тренировка</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="style.css">
+<style>
+.card { background: #1c1c1e; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #2c2c2e; }
+.muted { color: #8e8e93; font-size: 13px; }
+.tabs { display: flex; gap: 8px; margin: 10px 0; }
+.tab { flex: 1; padding: 10px; border-radius: 10px; border: 1px solid #3a3a3c; background: #2c2c2e; color: #fff; font-weight: 700; cursor: pointer; }
+.tab.on { background: #5ac8fa; color: #000; border-color: #5ac8fa; }
+.presets { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-bottom: 10px; }
+.preset { padding: 8px 10px; border-radius: 10px; border: 1px solid #3a3a3c; background: #2c2c2e; color: #fff; font-size: 13px; cursor: pointer; }
+.custom { display: flex; gap: 8px; margin-bottom: 12px; }
+.custom input { flex: 1; text-align: center; }
+.clock { font-size: 56px; font-weight: bold; text-align: center; font-variant-numeric: tabular-nums; margin: 10px 0; }
+.row { display: flex; gap: 10px; }
+.row .btn { flex: 1; }
+.ghost { background: #2c2c2e !important; color: #fff !important; }
+.ex { background: #1c1c1e; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #2c2c2e; }
+</style>
 </head>
 <body>
 <div class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Тренировка</h1>
-<p style="color: var(--hint-color); margin-bottom: 20px;">Комплекс на сегодня</p>
-<div style="background: #1c1c1e; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #2c2c2e;"><h4>Приседания</h4><p style="color: #8e8e93; font-size: 13px;">3 подхода • 15 повторений</p></div>
-<div style="background: #1c1c1e; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #2c2c2e;"><h4>Отжимания</h4><p style="color: #8e8e93; font-size: 13px;">3 подхода • 10 повторений</p></div>
-<button class="btn" style="margin-top: auto;" onclick="window.location.href='timer.html'">Начать тренировку</button>
+<p style="color: var(--hint-color); margin-bottom: 15px;">Комплекс на сегодня</p>
+
+<div class="ex"><h4>Приседания</h4><p class="muted">3 подхода • 15 повторений</p></div>
+<div class="ex"><h4>Отжимания</h4><p class="muted">3 подхода • 10 повторений</p></div>
+
+<h3 style="margin-top: 20px;">Таймер</h3>
+<div class="card">
+<div class="tabs">
+<button id="tab-rest" class="tab on" onclick="setMode('rest')">Отдых</button>
+<button id="tab-work" class="tab" onclick="setMode('work')">Тренировка</button>
 </div>
+
+<div class="presets" id="presets"></div>
+<div class="custom">
+<input type="number" id="t-min" min="0" placeholder="мин">
+<input type="number" id="t-sec" min="0" max="59" placeholder="сек">
+<button class="btn" style="flex: 0.6; margin: 0;" onclick="applyCustom()">Задать</button>
+</div>
+
+<div id="clock" class="clock">00:45</div>
+<p id="msg" class="muted" style="text-align: center; min-height: 18px;"></p>
+
+<div class="row">
+<button id="start-btn" class="btn" onclick="toggle()">Старт</button>
+<button class="btn ghost" onclick="reset()">Сброс</button>
+</div>
+</div>
+
+<button class="btn" style="background-color: #34c759; color: #fff; margin-top: 10px;" onclick="completeSet()">Подход выполнен (+15 XP)</button>
+<p id="session-info" class="muted" style="text-align: center; margin-top: 8px;"></p>
+<button class="btn" style="background-color: transparent; color: #ff3b30; margin-top: 10px;" onclick="finishWorkout()">Завершить тренировку 🏁</button>
+</div>
+
+<script src="quotes.js"></script>
+<script>
+const tg = window.Telegram.WebApp;
+tg.ready(); tg.expand();
+const sb = supabase.createClient('https://qnpriwfxzuoymoumdtrl.supabase.co', 'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
+
+const $ = id => document.getElementById(id);
+const PRESETS = {
+  rest: [30, 45, 60, 90, 120],
+  work: [300, 600, 900, 1800, 2700]
+};
+const saved = {
+  rest: parseInt(localStorage.getItem('wkRest')) || 45,
+  work: parseInt(localStorage.getItem('wkWork')) || 600
+};
+let mode = 'rest';
+let total = saved.rest * 1000;
+let remaining = total;
+let endAt = 0;
+let running = false;
+let iv = null;
+let sets = 0;
+
+function p(n){ return String(n).padStart(2, '0'); }
+
+function show(ms){
+  const s = Math.ceil(Math.max(0, ms) / 1000);
+  $('clock').textContent = p(Math.floor(s / 60)) + ':' + p(s % 60);
+}
+
+function setBtn(text){ $('start-btn').textContent = text; }
+
+function stopTimer(){
+  clearInterval(iv);
+  running = false;
+  setBtn('Старт');
+}
+
+function renderPresets(){
+  $('presets').innerHTML = PRESETS[mode].map(sec =>
+    '<button class="preset" onclick="setPreset(' + sec + ')">' +
+    (sec >= 60 ? Math.round(sec / 60) + ' мин' : sec + ' сек') + '</button>'
+  ).join('');
+}
+
+function setMode(m){
+  if (running) return;
+  mode = m;
+  $('tab-rest').classList.toggle('on', m === 'rest');
+  $('tab-work').classList.toggle('on', m === 'work');
+  total = saved[m] * 1000;
+  remaining = total;
+  $('msg').textContent = '';
+  renderPresets();
+  show(remaining);
+}
+
+function setPreset(sec){
+  if (running) return;
+  saved[mode] = sec;
+  localStorage.setItem(mode === 'rest' ? 'wkRest' : 'wkWork', sec);
+  total = sec * 1000;
+  remaining = total;
+  $('msg').textContent = '';
+  show(remaining);
+}
+
+function applyCustom(){
+  if (running) return;
+  const m = parseInt($('t-min').value) || 0;
+  const s = parseInt($('t-sec').value) || 0;
+  const sec = m * 60 + s;
+  if (sec <= 0) { $('msg').textContent = 'Укажите время больше нуля'; return; }
+  setPreset(sec);
+}
+
+function toggle(){
+  if (running) {
+    remaining = Math.max(0, endAt - Date.now());
+    stopTimer();
+    show(remaining);
+    return;
+  }
+  if (remaining <= 0) remaining = total;
+  endAt = Date.now() + remaining;
+  running = true;
+  setBtn('Пауза');
+  $('msg').textContent = '';
+  iv = setInterval(tick, 250);
+}
+
+function tick(){
+  const left = endAt - Date.now();
+  if (left <= 0) {
+    stopTimer();
+    remaining = 0;
+    show(0);
+    if (navigator.vibrate) navigator.vibrate([400, 200, 400]);
+    tg.showAlert(mode === 'rest' ? 'Отдых окончен!' : 'Время тренировки вышло!');
+    return;
+  }
+  remaining = left;
+  show(left);
+}
+
+function reset(){
+  stopTimer();
+  remaining = total;
+  $('msg').textContent = '';
+  show(remaining);
+}
+
+async function addXP(delta){
+  const tgId = localStorage.getItem('tgId');
+  const email = localStorage.getItem('currentEmail') || localStorage.getItem('linkedEmail');
+  if (!tgId && !email) return false;
+  let q = sb.from('user_links').select('id,xp');
+  q = tgId ? q.eq('telegram_id', tgId) : q.eq('email', email);
+  const { data, error } = await q.limit(1);
+  if (error || !data || !data.length) return false;
+  const { error: upErr } = await sb.from('user_links').update({ xp: (data[0].xp || 0) + delta }).eq('id', data[0].id);
+  return !upErr;
+}
+
+async function completeSet(){
+  sets++;
+  localStorage.setItem('cachedXP', parseInt(localStorage.getItem('cachedXP') || '0') + 15);
+  $('session-info').textContent = 'Подходов за сессию: ' + sets;
+  try {
+    const ok = await addXP(15);
+    tg.showAlert(ok ? '+15 XP добавлено!' : '+15 XP на телефоне. В аккаунт не записалось, проверьте вход.');
+  } catch (e) {
+    tg.showAlert('+15 XP на телефоне. В аккаунт не записалось: ошибка сети.');
+  }
+}
+
+function finishWorkout(){
+  const winAudio = new Audio('12. Scroll Win 02.mp3');
+  winAudio.play().catch(() => {});
+  let q = { text: 'Ты не проиграл, пока не остановился.', author: 'Майк Тайсон' };
+  if (typeof allQuotes !== 'undefined' && allQuotes.length) {
+    q = allQuotes[Math.floor(Math.random() * allQuotes.length)];
+  }
+  tg.showAlert('Тренировка завершена! Подходов: ' + sets + '\n«' + q.text + '» — ' + q.author);
+}
+
+setMode('rest');
+</script>
 </body>
 </html>
