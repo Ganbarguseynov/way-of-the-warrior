@@ -1,7 +1,8 @@
 /* ============================================================
-   friends.js — друзья и вызовы на дружескую партию (VER 6)
-   Входящий вызов приходит через Realtime, опрос — запасной вариант.
-   Вызов живёт, пока отправитель шлёт пульс; пульс не старше 90 секунд.
+   friends.js — друзья и вызовы на дружескую партию (VER 7)
+   Входящий вызов: Realtime + опрос 5 с как запасной путь.
+   Отправитель ждёт ответ через watchChallenge (Realtime + опрос 2 с).
+   Вызов живёт без пульса 90 секунд.
    ============================================================ */
 (function (global) {
 'use strict';
@@ -10,8 +11,9 @@ const SB_URL = 'https://qnpriwfxzuoymoumdtrl.supabase.co';
 const SB_KEY = 'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF';
 
 const ALIVE_MS = 90000;
-const BEAT_MS = 3000;
-const POLL_MS = 5000;
+const BEAT_MS  = 3000;
+const POLL_MS  = 5000;
+const POLL_ONE_MS = 2000;
 
 const MODE_KEY = 'arenaMode';
 const MODE_IDS = ['classic','nocards','noelixir','pure'];
@@ -24,6 +26,8 @@ const Friends = {
   _beatId: null,
   _rt: null
 };
+
+Friends.VER = 7;
 
 Friends.client = function (){
   if (!Friends.sb) Friends.sb = global.supabase.createClient(SB_URL, SB_KEY);
@@ -87,6 +91,10 @@ function heartAge(row){
 function normalizeMode(row){
   if (!row.mode || MODE_IDS.indexOf(row.mode) < 0) row.mode = 'classic';
   return row;
+}
+
+function rand(n){
+  return Math.random().toString(36).slice(2, 2 + n);
 }
 
 /* ---------------- друзья ---------------- */
@@ -291,7 +299,7 @@ Friends.play = function (id, role, oppKey, oppName, oppCups, arena, mode){
   global.location.href = 'chess-arena.html' + q;
 };
 
-/* ---------------- получение входящих ---------------- */
+/* ---------------- общая доставка ---------------- */
 
 function deliver(list, cb){
   for (let i = 0; i < list.length; i++){
@@ -302,36 +310,53 @@ function deliver(list, cb){
   }
 }
 
+/* Подписка на все изменения arena_challenges без серверного фильтра:
+   в ключах есть двоеточия (tg:123, email:a@b), а фильтр Realtime
+   по такому значению ненадёжен. Фильтруем на клиенте. */
+function openChannels(onRow){
+  try {
+    const ch = Friends.client().channel('friends_ch_' + rand(8));
+    ch.on('postgres_changes',
+      { event: '*', schema: 'public', table: 'arena_challenges' },
+      function (payload){
+        const row = payload && (payload.new || payload.record);
+        if (row) onRow(row);
+      });
+    ch.subscribe();
+    return ch;
+  } catch (e){
+    return null;
+  }
+}
+
+function closeChannel(ch){
+  if (!ch) return;
+  try { Friends.client().removeChannel(ch); } catch (e){}
+}
+
+/* ---------------- входящие ---------------- */
+
 Friends.stopWatch = function (){
   if (Friends._timer){ clearInterval(Friends._timer); Friends._timer = null; }
-  if (Friends._rt){
-    try { Friends.client().removeChannel(Friends._rt).catch(function(){}); } catch (e){}
-    Friends._rt = null;
-  }
+  if (Friends._rt){ closeChannel(Friends._rt); Friends._rt = null; }
 };
 
 Friends.watch = function (cb){
   Friends.stopWatch();
 
-  const key = Friends.key();
+  const myKey = Friends.key();
 
-  try {
-    const ch = Friends.client().channel('friends_' + key);
-    ch.on('postgres_changes', {
-      event: '*', schema: 'public', table: 'arena_challenges',
-      filter: 'to_key=eq.' + key
-    }, function (payload){
-      const row = payload && (payload.new || payload.record);
-      if (!row || row.status !== 'pending') return;
-      if (heartAge(row) >= ALIVE_MS) return;
-      deliver([normalizeMode(row)], cb);
-    });
-    ch.subscribe();
-    Friends._rt = ch;
-  } catch (e){}
+  Friends._rt = openChannels(function (row){
+    if (row.to_key !== myKey) return;
+    if (row.status !== 'pending') return;
+    if (heartAge(row) >= ALIVE_MS) return;
+    deliver([normalizeMode(row)], cb);
+  });
 
   function pull(){
-    Friends.incoming().then(function (list){ deliver(list, cb); }).catch(function(){});
+    Friends.incoming()
+      .then(function (list){ deliver(list, cb); })
+      .catch(function(){});
   }
 
   pull();
@@ -342,6 +367,47 @@ Friends.watch = function (cb){
 
 Friends.forget = function (id){
   delete Friends._seen[id];
+};
+
+/* ---------------- ожидание ответа отправителем ---------------- */
+
+/* cb(row) — вызов принят или отклонён.
+   cb(null) — вызов исчез: отменён, истёк или отправитель ушёл.
+   Возвращает функцию отмены подписки. */
+Friends.watchChallenge = function (id, cb){
+  if (!id) return function(){};
+
+  let done = false, timer = null, chan = null;
+
+  function stop(){
+    if (timer){ clearInterval(timer); timer = null; }
+    if (chan){ closeChannel(chan); chan = null; }
+  }
+
+  function fire(row){
+    if (done) return;
+    done = true;
+    stop();
+    try { cb(row); } catch (e){}
+  }
+
+  chan = openChannels(function (row){
+    if (done) return;
+    if (row.id !== id) return;
+    const r = normalizeMode(row);
+    if (r.status !== 'pending'){ fire(r); return; }
+    if (heartAge(r) >= ALIVE_MS) fire(null);
+  });
+
+  timer = setInterval(async function (){
+    if (done) return;
+    let row = null;
+    try { row = await Friends.status(id); } catch (e){ return; }
+    if (!row) fire(null);
+    else if (row.status !== 'pending') fire(row);
+  }, POLL_ONE_MS);
+
+  return function(){ done = true; stop(); };
 };
 
 global.Friends = Friends;
