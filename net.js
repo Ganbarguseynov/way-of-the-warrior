@@ -1,6 +1,6 @@
 /* ============================================================
-   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 34)
-   VER 34: ошибка записи кубков бота логируется, профиль обновляется после записи.
+   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 35)
+   VER 35: приз испытания (trial_reward), флаг trial в результате.
    ============================================================ */
 (function (global) {
 'use strict';
@@ -1056,7 +1056,7 @@ Net.cancelFriendly = async function (){
   await Net.leaveMatch();
 };
 
-/* ---------------- партия турнира ---------------- */
+/* ---------------- партия турнира и испытания ---------------- */
 
 Net.startTour = async function (t){
   await Net.cancelQueue();
@@ -1094,7 +1094,6 @@ Net.startTour = async function (t){
   Net.decks  = decksFor(t.side, Net.myDeck(), null);
   Net.levels = levelsFor(t.side, Net.myLevels(), null);
 
-  /* партия с ботом: сразу, без ожидания гостя */
   if (t.bot){
     Net.arena = Arena.arenaOf(myCups);
     Net._tourBotStart();
@@ -1137,7 +1136,6 @@ Net.startTour = async function (t){
   }
 };
 
-/* бот вместо соперника, если тот не подключился */
 Net._tourBotStart = function (){
   if (!Net.tour || Net.state || Net.finished) return;
 
@@ -1181,22 +1179,22 @@ Net._reportTour = function (winner){
 
 Net._reportTrial = function (winner){
   if (!Net.trialType) return;
-  const sb = Net.sb;
-  const key = Net.key;
-  const side = Net.mySide;
-  const type = Net.trialType;
+  const sb = Net.sb, key = Net.key, side = Net.mySide, type = Net.trialType;
 
   sb.rpc('trial_active', { p_key: key, p_type: type }).then(function (res){
     const sess = res && res.data && res.data.session;
-    if (!sess || !sess.id) return null;
-    if (winner === 'draw') return null;
+    if (!sess || !sess.id || winner === 'draw') return null;
     const fn = (winner === side) ? 'trial_win' : 'trial_loss';
-    return sb.rpc(fn, { p_session: sess.id, p_key: key });
-  }).then(function (res){
-    if (res && res.error) console.error('[net] trial report error', res.error);
-    if (res && res.data && res.data.wins !== undefined){
-      try { localStorage.setItem('trialWins', String(res.data.wins)); } catch (e){}
-    }
+    return sb.rpc(fn, { p_session: sess.id, p_key: key }).then(function (r2){
+      if (r2.error) throw r2.error;
+      const st = r2.data || {};
+      try { localStorage.setItem('trialWins', String(st.wins || 0)); } catch (e){}
+      if (st.state !== 'complete') return null;
+      return sb.rpc('trial_reward', { p_session: sess.id, p_key: key }).then(function (r3){
+        if (r3.error) throw r3.error;
+        if (r3.data && r3.data.ok) Net.emit('trialReward', { gems: r3.data.gems, coins: r3.data.coins });
+      });
+    });
   }).catch(function (e){
     console.error('[net] trial report failed', e);
   });
@@ -1310,7 +1308,6 @@ Net._botTick = function (){
   Net.botTimer = setTimeout(Net._botTick, 300);
 };
 
-/* бот считает, что реально проигрывает */
 Net._botLosing = function (s, side){
   if (!s) return false;
 
@@ -2018,12 +2015,13 @@ Net._finish = function (payload){
 
   const wasBot = !!Net.botMode;
   const wasTour = !!Net.tour;
+  const wasTrial = !!Net.tourTrial;
 
   Net.finished = true;
   Net.finishing = false;
 
   if (wasTour && !wasBot) Net._reportTour(payload.winner);
-  if (wasTour && Net.tourTrial) Net._reportTrial(payload.winner);
+  if (wasTour && wasTrial) Net._reportTrial(payload.winner);
 
   if (Net.botTimer){ clearTimeout(Net.botTimer); Net.botTimer = null; }
 
@@ -2068,6 +2066,7 @@ Net._finish = function (payload){
     opponent: opp,
     friendly: wasFriendly,
     tour: wasTour,
+    trial: wasTrial,
     mode: outMode,
     unitWon: false
   });
