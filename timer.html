@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Таймер</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -41,6 +42,7 @@
 <script>
 const tg = window.Telegram.WebApp;
 tg.ready(); tg.expand();
+const sb = supabase.createClient('https://qnpriwfxzuoymoumdtrl.supabase.co', 'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
 
 const DEFAULT_MS = 45000;
 let isRunning = false;
@@ -96,10 +98,27 @@ function resetTimer() {
   setButton("Старт");
 }
 
+async function addXPToCloud(delta) {
+  try {
+    const tgId = localStorage.getItem('tgId');
+    const email = localStorage.getItem('currentEmail') || localStorage.getItem('linkedEmail');
+    if (!tgId && !email) return;
+    let q = sb.from('user_links').select('id,xp');
+    q = tgId ? q.eq('telegram_id', tgId) : q.eq('email', email);
+    const { data, error } = await q.limit(1);
+    if (error || !data || !data.length) return;
+    const row = data[0];
+    await sb.from('user_links').update({ xp: (row.xp || 0) + delta }).eq('id', row.id);
+  } catch (e) {
+    console.log('XP не отправлен:', e);
+  }
+}
+
 function completeSet() {
   sessionCalories += 15;
-  let pending = localStorage.getItem('cachedXP') || 0;
-  localStorage.setItem('cachedXP', parseInt(pending) + 15);
+  let pending = parseInt(localStorage.getItem('cachedXP') || '0');
+  localStorage.setItem('cachedXP', pending + 15);
+  addXPToCloud(15);
   tg.showAlert("+15 XP добавлено!");
 }
 
