@@ -1,9 +1,9 @@
 /* ============================================================
-   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 40)
-   Кубки без потолка. Автопоражение по лагам убрано.
+   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 41)
+   Бой с ботом идёт через тот же отчёт, что и с игроком.
+   Бот — реальная строка arena_players с ключом bot:NNN.
    Состояние уходит только при изменении доски + пульс раз в 2 с.
    Проверка конца партии — не чаще раза в 0.9 с.
-   Пропал из канала на 60 с — партия засчитывается оставшемуся.
    ============================================================ */
 (function (global) {
 'use strict';
@@ -36,8 +36,9 @@ const FRIENDLY_WAIT_MS = 90000;
 
 const TOUR_BOT_MS = 5000;
 
-const CATCHUP_STEP = 1.2;
-const CATCHUP_MAX  = 600;
+const BOT_PREFIX = 'bot:';
+const BOT_CUPS_RANGE = 150;
+const BOT_POOL_LIMIT = 40;
 
 const LOG_MAX = 700;
 const DRAW_OFFER_MAX = 2;
@@ -348,9 +349,7 @@ function sideHasMove(s, side){
   return false;
 }
 
-/* Раньше эта проверка шла 10 раз в секунду и пересчитывала все
-   легальные ходы за обе стороны — отсюда и брались зависания.
-   Теперь не чаще раза в 0.9 с, если не попросили принудительно. */
+/* Проверка не чаще раза в 0.9 с, если не попросили принудительно. */
 Net._checkEnd = function (s, force){
   if (!s || s.over) return;
 
@@ -573,13 +572,6 @@ Net.refresh = async function (){
 
   return Net.me;
 };
-
-/* Потолка больше нет. Метод оставлен пустым: его вызывают другие файлы. */
-Net._enforceCap = async function (){
-  try { localStorage.removeItem('arenaCupsCap'); } catch (e){}
-};
-
-Net.cupsCap = Number.POSITIVE_INFINITY;
 
 Net.rename = async function (raw){
   const name = String(raw || '').trim().slice(0, 16);
@@ -960,9 +952,7 @@ Net._watchStall = function (){
   }, 2000);
 };
 
-/* Хост: соперник пропал из канала надолго — партия достаётся оставшемуся.
-   Это и есть «вышел и не вернулся — проиграл» в тех пределах,
-   которые возможны без серверной таблицы активных партий. */
+/* Хост: соперник пропал из канала надолго — партия достаётся оставшемуся. */
 Net._watchForfeit = function (){
   if (Net._forfeitTimer) return;
   Net._forfeitTimer = setInterval(function (){
@@ -1345,7 +1335,7 @@ Net._reportTrial = function (winner){
   });
 };
 
-/* ---------------- бой с подставным соперником ---------------- */
+/* ---------------- бой с ботом: настоящий игрок из пула ---------------- */
 
 function botNickname(){
   const base = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
@@ -1355,14 +1345,22 @@ function botNickname(){
   return base + '_' + (Math.floor(Math.random() * 900) + 100);
 }
 
-function botCupsFor(myCups){
-  let shift = Math.floor(Math.random() * 101) - 50;
-  if (Math.abs(shift) < 8) shift = (shift < 0 ? -12 : 12);
+/* Бот — строка arena_players с ключом bot:NNN, создана в базе заранее.
+   Кубки и расчёт идут через arena_report_match так же, как у живого игрока. */
+Net._pickBot = async function (myCups){
+  const res = await Net.sb
+    .from('arena_players')
+    .select('player_key,display_name,cups')
+    .like('player_key', BOT_PREFIX + '%')
+    .gte('cups', Math.max(0, myCups - BOT_CUPS_RANGE))
+    .lte('cups', myCups + BOT_CUPS_RANGE)
+    .limit(BOT_POOL_LIMIT);
 
-  let cups = Math.max(0, myCups + shift);
-  if (Math.abs(cups - myCups) < 8) cups = Math.max(0, myCups + 12);
-  return cups;
-}
+  if (res.error) return null;
+  const list = res.data || [];
+  if (!list.length) return null;
+  return list[Math.floor(Math.random() * list.length)];
+};
 
 Net._startBotMatch = async function (){
   if (Net.matchId || Net.botMode) return;
@@ -1371,9 +1369,13 @@ Net._startBotMatch = async function (){
   Net._clearFallback();
 
   const myCups = Net.me ? Net.me.cups : 0;
-  const rivalCups = botCupsFor(myCups);
-  const rivalName = botNickname();
-  const rivalKey = 'pl_' + Math.random().toString(36).slice(2, 12);
+  const bot = await Net._pickBot(myCups);
+
+  if (!bot){
+    Net.emit('error', { message: 'Соперники не найдены. Попробуй позже.' });
+    Net.emit('resumeFailed', {});
+    return;
+  }
 
   Net.matchId = uuid();
   Net.matchMode = Net.mode;
@@ -1386,7 +1388,7 @@ Net._startBotMatch = async function (){
   Net.tourTrial = false;
   Net.trialType = null;
   Net.botSkill = 0.25;
-  Net.arena = Math.min(Arena.arenaOf(myCups), Arena.arenaOf(rivalCups));
+  Net.arena = Math.min(Arena.arenaOf(myCups), Arena.arenaOf(bot.cups || 0));
   Net.finished = false;
   Net.finishing = false;
   Net.state = null;
@@ -1401,9 +1403,9 @@ Net._startBotMatch = async function (){
 
   Net.players = {
     a: { key: Net.key, name: Net.name, cups: myCups },
-    b: { key: rivalKey, name: rivalName, cups: rivalCups }
+    b: { key: bot.player_key, name: bot.display_name || 'Игрок', cups: bot.cups || 0 }
   };
-  Net.setups = { a: Net.mySetup(), b: null };
+  Net.setups = { a: Net.mySetup(), b: Arena.defaultSetup ? Arena.defaultSetup() : null };
   Net.decks = { a: Net.myDeck(), b: shuffled(SPELL_TYPES).slice(0, HAND_SIZE) };
   Net.levels = { a: Net.myLevels(), b: null };
 
@@ -1692,14 +1694,6 @@ Net._botMove = function (){
 
 /* ---------------- возврат в игру ---------------- */
 
-/* Раньше здесь было автопоражение через 15 секунд отсутствия.
-   Именно из-за этого лаг превращался в проигрыш.
-   Теперь отсутствие по времени не засчитывается. */
-Net._catchUp = function (s, awayMs, absentSide){
-  if (!s || s.over) return;
-  return;
-};
-
 Net.checkAway = function (){
   Net.lastSeen = Date.now();
   if (Net.finished) return;
@@ -1771,8 +1765,7 @@ Net._broadcastState = function (){
   Net.matchCh.send({ type:'broadcast', event:'state', payload: slimState(Net.state) });
 };
 
-/* Отправляем не чаще, чем меняется доска, плюс пульс раз в 2 секунды.
-   Эликсир и часы гость досчитывает сам, поэтому ему не нужен поток. */
+/* Отправляем не чаще, чем меняется доска, плюс пульс раз в 2 секунды. */
 Net._push = function (force){
   if (!Net.state) return;
 
@@ -1897,7 +1890,6 @@ Net._applyIntent = function (msg, side){
 
 /* ---------------- конец боя ---------------- */
 
-/* Потолка 140 больше нет: кубки растут и падают без ограничения сверху. */
 Net._estimateCups = function (winner){
   const myCups = Net.me ? Net.me.cups : 0;
   const oppCups = Net.players
@@ -1923,40 +1915,6 @@ Net._estimateCups = function (winner){
 
   if (Net.mySide === 'a') return { a_before:myCups, a_after:after, b_before:oppCups, b_after:oppCups };
   return { a_before:oppCups, a_after:oppCups, b_before:myCups, b_after:after };
-};
-
-Net._localCups = async function (winner){
-  if (Net.friendly) return Net._estimateCups(winner);
-
-  const cups = Net._estimateCups(winner);
-  const after = cups[Net.mySide + '_after'];
-
-  const res = await Net.sb.from('arena_players').update({ cups: after }).eq('player_key', Net.key);
-  if (res.error) console.error('[net] cups update failed', res.error);
-
-  return cups;
-};
-
-/* Если сервер не изменил кубки, хотя должен был — пишем напрямую.
-   Это лечит случай, когда потолок зашит в SQL-функцию. */
-Net._repairCups = async function (before, after){
-  if (Net.friendly) return;
-  if (typeof before !== 'number' || typeof after !== 'number') return;
-  if (before === after) return;
-
-  try {
-    const cur = await Net.refresh();
-    const now = cur ? cur.cups : null;
-    if (typeof now !== 'number') return;
-    if (now !== before) return;
-
-    const res = await Net.sb.from('arena_players')
-      .update({ cups: after })
-      .eq('player_key', Net.key);
-
-    if (res.error) console.error('[net] cups repair failed', res.error);
-    else await Net.refresh();
-  } catch (e){}
 };
 
 Net._saveReplay = function (p){
@@ -1995,7 +1953,6 @@ Net._hostFinish = function (){
 
   Net.finishing = true;
 
-  const isBot = Net.botMode;
   const isFriendly = Net.friendly;
   const isTour = Net.tour;
   const mySide = Net.mySide;
@@ -2022,25 +1979,14 @@ Net._hostFinish = function (){
 
   Net._saveReplay(payload);
 
-  if (Net.matchCh && !isBot){
+  if (Net.matchCh && !Net.botMode){
     Net.matchCh.send({ type:'broadcast', event:'result', payload: payload });
   }
 
   Net._finish(payload);
 
   if (isFriendly) return;
-
-  if (isBot){
-    Net._localCups(s.winner)
-      .then(function(){ return Net.refresh(); })
-      .catch(function(e){ console.error('[net] local cups failed', e); });
-    return;
-  }
-
   if (!winnerKey) return;
-
-  const cupsBefore = payload.cups[mySide + '_before'];
-  const cupsAfter  = payload.cups[mySide + '_after'];
 
   Net.sb.rpc('arena_report_match', {
     p_match:  payload.matchId,
@@ -2050,8 +1996,8 @@ Net._hostFinish = function (){
     p_arena:  Net.arena
   }).then(function (res){
     if (res.error) console.error('[net] report failed', res.error);
-    return Net._repairCups(cupsBefore, cupsAfter);
-  }).catch(function(e){ console.error('[net] report chain failed', e); });
+    return Net.refresh();
+  }).catch(function (e){ console.error('[net] report chain failed', e); });
 };
 
 /* ---------------- действия игрока ---------------- */
@@ -2278,7 +2224,7 @@ Net.leaveMatch = async function (){
 Net.DRAW_OFFER_MAX = DRAW_OFFER_MAX;
 Net.SPELL_TYPES = SPELL_TYPES;
 Net.HAND_SIZE = HAND_SIZE;
-Net.VER = 40;
+Net.VER = 41;
 
 global.Net = Net;
 
