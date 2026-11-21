@@ -149,7 +149,7 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
 </style>
 </head>
 <body data-arena="1">
-<div id="verTag">v52</div>
+<div id="verTag">v53</div>
 
 <div id="wait" class="hidden">
   <div class="wait-box">
@@ -249,7 +249,7 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
 
 <script src="arena.js?v=22"></script>
 <script src="friends.js?v=6"></script>
-<script src="net.js?v=36"></script>
+<script src="net.js?v=37"></script>
 <script src="chests.js?v=5"></script>
 <script>
 const sb = supabase.createClient('https://qnpriwfxzuoymoumdtrl.supabase.co','sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
@@ -526,8 +526,9 @@ function elixPaint(){
   const i=Math.floor(elixView+0.0001);
   if(i!==elixIntShown){
     if(elixIntShown>=0 && i>elixIntShown) elixBubble();
-    elixIntShown=i; num.textContent=i;
+    elixIntShown=i;
   }
+  num.textContent=i;
 }
 function elixRate(){
   const mult=curMode.energyMult||1;
@@ -699,6 +700,12 @@ Net.on('trialProgress',function(d){
 Net.on('trialReward',function(d){
   $('ovNote').textContent='Приз: +'+d.gems+' 💎 +'+d.coins+' 🪙';
   $('ovNote').style.color='#22c55e';
+});
+
+Net.on('trialError',function(d){
+  $('ovCups').textContent='Испытание не засчитано';
+  $('ovNote').textContent=d.message||'Ошибка';
+  $('ovNote').style.color='#ef4444';
 });
 
 $('ovBtn').onclick=function(){
