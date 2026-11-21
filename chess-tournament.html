@@ -354,7 +354,8 @@ $('dockPlay').onclick = function(){
     sessionStorage.setItem('tourStart', JSON.stringify({
       matchId: dockMatch.id, side: dockMatch.side, oppKey: dockMatch.opp_key,
       oppName: dockMatch.opp_name, oppCups: dockMatch.opp_cups,
-      mode: dockMatch.mode, kind: dockMatch.kind
+      mode: dockMatch.mode, kind: dockMatch.kind,
+      trialType: (type === 'basic' || type === 'premium') ? type : null
     }));
   } catch(e){}
   location.href = 'chess-arena.html';
