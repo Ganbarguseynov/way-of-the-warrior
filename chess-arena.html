@@ -149,7 +149,7 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
 </style>
 </head>
 <body data-arena="1">
-<div id="verTag">v50</div>
+<div id="verTag">v51</div>
 
 <div id="wait" class="hidden">
   <div class="wait-box">
@@ -249,7 +249,7 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
 
 <script src="arena.js?v=22"></script>
 <script src="friends.js?v=6"></script>
-<script src="net.js?v=34"></script>
+<script src="net.js?v=35"></script>
 <script src="chests.js?v=5"></script>
 <script>
 const sb = supabase.createClient('https://qnpriwfxzuoymoumdtrl.supabase.co','sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
@@ -662,19 +662,40 @@ Net.on('result',function(r){
   const won=r.winner===r.mySide, draw=r.winner==='draw';
   $('ovTitle').textContent=draw?'НИЧЬЯ':(won?'ПОБЕДА':'ПОРАЖЕНИЕ');
   $('ovTitle').style.color=draw?'#9fb6c4':(won?'#ffcc00':'#ef4444');
-  $('ovArena').textContent='Арена «'+Arena.ARENAS[Net.arena-1].name+'» · '+modeDef(r.mode).name;
-  const sign=r.delta>0?'+':'';
-  $('ovDelta').textContent=draw?'±0':sign+r.delta+' 🏆';
-  $('ovDelta').style.color=r.delta<0?'#ef4444':'#ffcc00';
-  $('ovCups').textContent=r.before+' → '+r.after;
-  const arenaNow=Arena.arenaOf(r.after), arenaThen=Arena.arenaOf(r.before);
-  if(r.tour){ $('ovNote').textContent='Турнирная партия — очки начислены турниру'; $('ovNote').style.color='#5ee0ff'; }
-  else if(r.friendly){ $('ovNote').textContent='Дружеская партия — кубки не изменились'; $('ovNote').style.color='#64748b'; }
-  else if(arenaNow>arenaThen){ $('ovNote').textContent='⬆ НОВАЯ АРЕНА: '+Arena.ARENAS[arenaNow-1].name; $('ovNote').style.color='#22c55e'; }
-  else if(arenaNow<arenaThen){ $('ovNote').textContent='⬇ Ты выпал на арену «'+Arena.ARENAS[arenaNow-1].name+'»'; $('ovNote').style.color='#ef4444'; }
-  else if(!draw && r.delta===0){ $('ovNote').textContent='Пол арены: ниже '+r.floor+' не падаешь'; $('ovNote').style.color='#64748b'; }
-  else { $('ovNote').textContent=''; }
+  $('ovArena').textContent=(r.tour?'Турнир':(r.friendly?'Дружеская партия':'Арена «'+Arena.ARENAS[Net.arena-1].name+'»'))+' · '+modeDef(r.mode).name;
+  if(r.tour){
+    $('ovDelta').textContent=draw?'Ничья':(won?'Победа':'Поражение');
+    $('ovDelta').style.color=won?'#22c55e':(draw?'#9fb6c4':'#ef4444');
+    $('ovCups').textContent='';
+    if(r.trial){
+      $('ovNote').textContent=won?'Приз начисляется…':'Испытание не пройдено, приза нет';
+    } else {
+      $('ovNote').textContent='Турнирная партия засчитана';
+    }
+    $('ovNote').style.color='#5ee0ff';
+  } else if(r.friendly){
+    $('ovDelta').textContent=draw?'Ничья':(won?'Победа':'Поражение');
+    $('ovDelta').style.color=won?'#22c55e':(draw?'#9fb6c4':'#ef4444');
+    $('ovCups').textContent='';
+    $('ovNote').textContent='Дружеская партия — кубки не изменились';
+    $('ovNote').style.color='#64748b';
+  } else {
+    const sign=r.delta>0?'+':'';
+    $('ovDelta').textContent=draw?'±0':sign+r.delta+' 🏆';
+    $('ovDelta').style.color=r.delta<0?'#ef4444':'#ffcc00';
+    $('ovCups').textContent=r.before+' → '+r.after;
+    const arenaNow=Arena.arenaOf(r.after), arenaThen=Arena.arenaOf(r.before);
+    if(arenaNow>arenaThen){ $('ovNote').textContent='⬆ НОВАЯ АРЕНА: '+Arena.ARENAS[arenaNow-1].name; $('ovNote').style.color='#22c55e'; }
+    else if(arenaNow<arenaThen){ $('ovNote').textContent='⬇ Ты выпал на арену «'+Arena.ARENAS[arenaNow-1].name+'»'; $('ovNote').style.color='#ef4444'; }
+    else if(!draw && r.delta===0){ $('ovNote').textContent='Пол арены: ниже '+r.floor+' не падаешь'; $('ovNote').style.color='#64748b'; }
+    else { $('ovNote').textContent=''; }
+  }
   Net.leaveMatch().then(function(){ return Net.refresh(); }).catch(function(){});
+});
+
+Net.on('trialReward',function(d){
+  $('ovNote').textContent='Приз: +'+d.gems+' 💎 +'+d.coins+' 🪙';
+  $('ovNote').style.color='#22c55e';
 });
 
 $('ovBtn').onclick=function(){
