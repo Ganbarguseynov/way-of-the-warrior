@@ -149,7 +149,7 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
 </style>
 </head>
 <body data-arena="1">
-<div id="verTag">v51</div>
+<div id="verTag">v52</div>
 
 <div id="wait" class="hidden">
   <div class="wait-box">
@@ -249,11 +249,13 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
 
 <script src="arena.js?v=22"></script>
 <script src="friends.js?v=6"></script>
-<script src="net.js?v=35"></script>
+<script src="net.js?v=36"></script>
 <script src="chests.js?v=5"></script>
 <script>
 const sb = supabase.createClient('https://qnpriwfxzuoymoumdtrl.supabase.co','sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
 const tg = window.Telegram.WebApp;
+const RETURN_TO = sessionStorage.getItem('arenaReturn') || 'chess-main.html';
+sessionStorage.removeItem('arenaReturn');
 try { tg.ready(); tg.expand(); } catch(e){}
 const $ = function(id){ return document.getElementById(id); };
 const DRAW_MAX = 2;
@@ -322,7 +324,7 @@ function showFatal(e){
 function toMenu(){
   handStop();
   document.body.classList.remove('battle-mode');
-  location.href='chess-main.html';
+  location.href=RETURN_TO;
 }
 
 /* ================= РЕЖИМ ================= */
@@ -664,18 +666,12 @@ Net.on('result',function(r){
   $('ovTitle').style.color=draw?'#9fb6c4':(won?'#ffcc00':'#ef4444');
   $('ovArena').textContent=(r.tour?'Турнир':(r.friendly?'Дружеская партия':'Арена «'+Arena.ARENAS[Net.arena-1].name+'»'))+' · '+modeDef(r.mode).name;
   if(r.tour){
-    $('ovDelta').textContent=draw?'Ничья':(won?'Победа':'Поражение');
-    $('ovDelta').style.color=won?'#22c55e':(draw?'#9fb6c4':'#ef4444');
-    $('ovCups').textContent='';
-    if(r.trial){
-      $('ovNote').textContent=won?'Приз начисляется…':'Испытание не пройдено, приза нет';
-    } else {
-      $('ovNote').textContent='Турнирная партия засчитана';
-    }
+    $('ovDelta').textContent='';
+    $('ovCups').textContent=r.trial?'Считаем победы и поражения…':'';
+    $('ovNote').textContent=r.trial?'':'Турнирная партия засчитана';
     $('ovNote').style.color='#5ee0ff';
   } else if(r.friendly){
-    $('ovDelta').textContent=draw?'Ничья':(won?'Победа':'Поражение');
-    $('ovDelta').style.color=won?'#22c55e':(draw?'#9fb6c4':'#ef4444');
+    $('ovDelta').textContent='';
     $('ovCups').textContent='';
     $('ovNote').textContent='Дружеская партия — кубки не изменились';
     $('ovNote').style.color='#64748b';
@@ -691,6 +687,13 @@ Net.on('result',function(r){
     else { $('ovNote').textContent=''; }
   }
   Net.leaveMatch().then(function(){ return Net.refresh(); }).catch(function(){});
+});
+
+Net.on('trialProgress',function(d){
+  $('ovCups').textContent='Победы '+d.wins+' / 12 · Поражения '+d.losses+' / 3';
+  if(d.state==='complete') $('ovNote').textContent='Испытание пройдено!';
+  else if(d.state && d.state!=='active') $('ovNote').textContent='Испытание окончено';
+  $('ovNote').style.color='#5ee0ff';
 });
 
 Net.on('trialReward',function(d){
