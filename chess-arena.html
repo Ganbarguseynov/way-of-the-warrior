@@ -149,7 +149,7 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
 </style>
 </head>
 <body data-arena="1">
-<div id="verTag">v54</div>
+<div id="verTag">v55</div>
 
 <div id="wait" class="hidden">
   <div class="wait-box">
@@ -248,8 +248,8 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
 <div id="toast"></div>
 
 <script src="arena.js?v=22"></script>
-<script src="friends.js?v=7"></script>
-<script src="net.js?v=39"></script>
+<script src="friends.js?v=8"></script>
+<script src="net.js?v=40"></script>
 <script src="chests.js?v=5"></script>
 <script>
 const sb = supabase.createClient('https://qnpriwfxzuoymoumdtrl.supabase.co','sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
@@ -597,7 +597,7 @@ Net.on('status',function(d){
 });
 Net.on('error',function(d){ toast(d.message); });
 
-/* Связь просела: состояние не приходило дольше 8 секунд.
+/* Связь просела: состояние не приходило дольше 6 секунд.
    Показываем предупреждение, но партию не прерываем. */
 Net.on('stall',function(){
   if(!document.body.classList.contains('battle-mode')) return;
