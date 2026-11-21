@@ -374,6 +374,9 @@ text-overflow: ellipsis;
 </div>
 <script>
 function openChallengeModal(){
+  if (localStorage.getItem('streakPendingReward') === 'true' && typeof claimStreakReward === 'function') {
+    claimStreakReward();
+  }
   document.getElementById('challenge-frame').src = 'challenge.html?embed=1';
   document.getElementById('challenge-modal').classList.add('active');
 }
