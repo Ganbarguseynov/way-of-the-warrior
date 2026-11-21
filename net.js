@@ -1,12 +1,9 @@
 /* ============================================================
-   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 30)
-   Четыре режима:
-     classic  — карты + эликсир, общие 5 минут
-     nocards  — без карт, эликсир, общие 5 минут
-     noelixir — карты, без эликсира, по очереди, по 3 минуты
-     pure     — без карт и эликсира, по очереди, по 3 минуты
-   VER 30: партия турнира (tour) — канал arena_tour_<id>,
+   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 31)
+   VER 31: партия турнира (tour) — канал arena_tour_<id>,
    результат уходит в tour_report, кубки не меняются.
+   Бот в турнирной партии через 5 секунд ожидания.
+   Результат испытания уходит в trial_win / trial_loss.
    ============================================================ */
 (function (global) {
 'use strict';
@@ -34,6 +31,8 @@ const TICK_MS = 100;
 const SEARCH_LIMIT_MS = 3000;
 const RESUME_LIMIT_MS = 6 * 60 * 60 * 1000;
 const FRIENDLY_WAIT_MS = 90000;
+
+const TOUR_BOT_MS = 5000;
 
 const AWAY_GRACE_MS = 15000;
 
@@ -124,9 +123,10 @@ const Net = {
   finished: false, finishing: false,
 
   botMode: false, botTimer: null, fallbackTimer: null, botThinkUntil: 0,
+  botSkill: 0.25,
 
   friendly: false, friendlyHost: false,
-  tour: false,
+  tour: false, tourTrial: false, trialType: null, tourBotTimer: null,
 
   lastSeen: 0,
   replayLog: [], logMark: 0
@@ -618,6 +618,7 @@ Net._clearMatch = function (){
   if (Net.timer){ clearInterval(Net.timer); Net.timer = null; }
   if (Net.botTimer){ clearTimeout(Net.botTimer); Net.botTimer = null; }
   if (Net.resumeTimer){ clearTimeout(Net.resumeTimer); Net.resumeTimer = null; }
+  if (Net.tourBotTimer){ clearTimeout(Net.tourBotTimer); Net.tourBotTimer = null; }
 
   try { localStorage.removeItem(RECORD_KEY); } catch (e){}
   try { localStorage.removeItem(STATE_KEY); } catch (e){}
@@ -881,6 +882,8 @@ Net._beginMatch = async function (m){
   Net.friendly = false;
   Net.friendlyHost = false;
   Net.tour = false;
+  Net.tourTrial = false;
+  Net.trialType = null;
   Net.matchId = m.matchId;
   Net.matchMode = m.mode || Net.mode;
   Net.mySide = m.side;
@@ -930,6 +933,8 @@ Net.startFriendlyHost = async function (o){
   Net.friendly = true;
   Net.friendlyHost = true;
   Net.tour = false;
+  Net.tourTrial = false;
+  Net.trialType = null;
   Net.matchId = o.matchId;
   Net.matchMode = (o.mode && MODE_BY_ID[o.mode]) ? o.mode : Net.mode;
   Net.mySide = 'a';
@@ -1001,6 +1006,8 @@ Net.joinFriendly = async function (o){
   Net.friendly = true;
   Net.friendlyHost = false;
   Net.tour = false;
+  Net.tourTrial = false;
+  Net.trialType = null;
   Net.matchId = o.matchId;
   Net.matchMode = (o.mode && MODE_BY_ID[o.mode]) ? o.mode : Net.mode;
   Net.mySide = 'b';
@@ -1065,6 +1072,9 @@ Net.startTour = async function (t){
   Net.friendly = true;
   Net.friendlyHost = false;
   Net.tour = true;
+  Net.tourTrial = !!t.trialType;
+  Net.trialType = t.trialType || null;
+  Net.botSkill = 0.25;
   Net.matchId = t.matchId;
   Net.matchMode = (t.mode && MODE_BY_ID[t.mode]) ? t.mode : Net.mode;
   Net.mySide = t.side;
@@ -1112,6 +1122,44 @@ Net.startTour = async function (t){
       if (!Net.state && !Net.finished) Net.emit('resumeFailed', {});
     }, FRIENDLY_WAIT_MS);
   }
+
+  if (Net.host){
+    if (Net.tourBotTimer){ clearTimeout(Net.tourBotTimer); Net.tourBotTimer = null; }
+    Net.tourBotTimer = setTimeout(function (){
+      Net.tourBotTimer = null;
+      if (Net.state || Net.finished) return;
+      Net._tourBotStart();
+    }, TOUR_BOT_MS);
+  }
+};
+
+/* бот вместо соперника, если тот не подключился */
+Net._tourBotStart = function (){
+  if (!Net.tour || Net.state || Net.finished) return;
+
+  const myCups = Net.me ? Net.me.cups : 0;
+
+  let skill = 0.25;
+  try {
+    const v = parseInt(localStorage.getItem('trialWins') || '0', 10);
+    if (isFinite(v)) skill = 0.25 + Math.max(0, Math.min(12, v)) * 0.055;
+  } catch (e){}
+  Net.botSkill = Math.max(0.25, Math.min(0.9, skill));
+
+  const rivalName = botNickname();
+  const rivalKey = 'pl_' + Math.random().toString(36).slice(2, 12);
+  const rivalCups = myCups;
+
+  Net.players.b = { key: rivalKey, name: rivalName, cups: rivalCups };
+
+  Net.setups = { a: Net.mySetup(), b: Arena.defaultSetup ? Arena.defaultSetup() : null };
+  Net.decks  = decksFor('a', Net.myDeck(), null);
+  Net.levels = levelsFor('a', Net.myLevels(), null);
+
+  Net.botMode = true;
+
+  Net._hostStart();
+  Net._startBotBrain();
 };
 
 Net._reportTour = function (winner){
@@ -1124,6 +1172,30 @@ Net._reportTour = function (winner){
     p_winner: key
   }).then(function (res){
     if (res.error) console.error('[net] tour report failed', res.error);
+  });
+};
+
+Net._reportTrial = function (winner){
+  if (!Net.trialType) return;
+
+  const rpc = Net.sb.rpc;
+
+  rpc('trial_active', { p_key: Net.key, p_type: Net.trialType }).then(function (res){
+    const sess = res && res.data && res.data.session;
+    if (!sess || !sess.id) return;
+
+    if (winner === 'draw') return;
+
+    if (winner === Net.mySide){
+      return rpc('trial_win', { p_session: sess.id, p_key: Net.key });
+    }
+    return rpc('trial_loss', { p_session: sess.id, p_key: Net.key });
+  }).then(function (res){
+    if (res && res.data && res.data.wins !== undefined){
+      try { localStorage.setItem('trialWins', String(res.data.wins)); } catch (e){}
+    }
+  }).catch(function (e){
+    console.error('[net] trial report failed', e);
   });
 };
 
@@ -1165,6 +1237,9 @@ Net._startBotMatch = async function (){
   Net.friendly = false;
   Net.friendlyHost = false;
   Net.tour = false;
+  Net.tourTrial = false;
+  Net.trialType = null;
+  Net.botSkill = 0.25;
   Net.arena = Math.min(Arena.arenaOf(myCups), Arena.arenaOf(rivalCups));
   Net.finished = false;
   Net.finishing = false;
@@ -1369,6 +1444,30 @@ Net._botCast = function (s){
 
 /* ---------------- искусственный игрок ---------------- */
 
+function pieceVal(pc){
+  if (!pc) return 0;
+  const def = Arena.PIECES[pc.type];
+  return (def && typeof def.val === 'number') ? def.val : 0;
+}
+
+function moveScore(s, side, mv){
+  let sc = 0;
+
+  const target = s.board[mv.ty][mv.tx];
+  if (target) sc += pieceVal(target) * 10;
+
+  if (mv.promo) sc += pieceVal({ type: mv.promo, side: side }) * 6;
+
+  const from = s.board[mv.fy][mv.fx];
+  if (from){
+    const dx = Math.abs(mv.tx - 3.5), dy = Math.abs(mv.ty - 3.5);
+    sc += (3.5 - Math.max(dx, dy)) * 0.4;
+  }
+
+  sc += Math.random() * 3;
+  return sc;
+}
+
 Net._pickMove = function (s, side){
   if (!s || s.over) return null;
 
@@ -1394,11 +1493,21 @@ Net._pickMove = function (s, side){
 
   if (!moves.length) return null;
 
-  const caps = [];
-  for (let i = 0; i < moves.length; i++) if (moves[i].cap) caps.push(moves[i]);
+  const skill = (typeof Net.botSkill === 'number') ? Net.botSkill : 0.25;
 
-  const pool = (caps.length && Math.random() < 0.75) ? caps : moves;
-  return pool[Math.floor(Math.random() * pool.length)];
+  if (Math.random() > skill){
+    const caps = [];
+    for (let i = 0; i < moves.length; i++) if (moves[i].cap) caps.push(moves[i]);
+    const pool = (caps.length && Math.random() < 0.75) ? caps : moves;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  let best = null, bestSc = -Infinity;
+  for (let i = 0; i < moves.length; i++){
+    const sc = moveScore(s, side, moves[i]);
+    if (sc > bestSc){ bestSc = sc; best = moves[i]; }
+  }
+  return best;
 };
 
 Net._autoMove = function (s, side){
@@ -1409,11 +1518,14 @@ Net._autoMove = function (s, side){
   const pick = Net._pickMove(s, side);
   if (!pick) return false;
 
-  const promo = Arena.PROMO_CHOICES[Math.floor(Math.random() * Arena.PROMO_CHOICES.length)];
-  const res = Arena.move(s, side, pick.fx, pick.fy, pick.tx, pick.ty, promo);
+  const promo = (pick.ty === 0 || pick.ty === 7)
+    ? Arena.PROMO_CHOICES[Math.floor(Math.random() * Arena.PROMO_CHOICES.length)]
+    : null;
+
+  const res = Arena.move(s, side, pick.fx, pick.fy, pick.tx, pick.ty, promo || 'q');
 
   if (res && res.ok){
-    Net._logMove(side, pick.fx, pick.fy, pick.tx, pick.ty, promo, s);
+    Net._logMove(side, pick.fx, pick.fy, pick.tx, pick.ty, promo || 'q', s);
     if (def.turn && s.turn === side) s.turn = (side === 'a') ? 'b' : 'a';
     return true;
   }
@@ -1472,6 +1584,8 @@ Net.checkAway = function (){
 /* ---------------- запуск боя ---------------- */
 
 Net._hostStart = function (){
+  if (Net.tourBotTimer){ clearTimeout(Net.tourBotTimer); Net.tourBotTimer = null; }
+
   Net.state = Arena.create({
     id: Net.matchId, arena: Net.arena,
     players: Net.players, setups: Net.setups,
@@ -1804,6 +1918,8 @@ Net.tryResume = async function (){
   Net.friendly = false;
   Net.friendlyHost = false;
   Net.tour = false;
+  Net.tourTrial = false;
+  Net.trialType = null;
   Net.state = null;
   Net.lastSeen = Date.now();
 
@@ -1902,7 +2018,10 @@ Net._finish = function (payload){
   Net.finished = true;
   Net.finishing = false;
 
-  if (wasTour) Net._reportTour(payload.winner);
+  if (wasTour){
+    Net._reportTour(payload.winner);
+    if (Net.tourTrial) Net._reportTrial(payload.winner);
+  }
 
   if (Net.botTimer){ clearTimeout(Net.botTimer); Net.botTimer = null; }
 
@@ -1935,6 +2054,7 @@ Net._finish = function (payload){
 
   Net.botMode = false;
   Net.tour = false;
+  Net.tourTrial = false;
 
   Net.emit('result', {
     winner: payload.winner,
@@ -1976,6 +2096,8 @@ Net.leaveMatch = async function (){
   Net.friendly = false;
   Net.friendlyHost = false;
   Net.tour = false;
+  Net.tourTrial = false;
+  Net.trialType = null;
   Net.botThinkUntil = 0;
 };
 
