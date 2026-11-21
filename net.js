@@ -1,9 +1,8 @@
 /* ============================================================
-   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 41)
+   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 42)
    Бой с ботом идёт через тот же отчёт, что и с игроком.
    Бот — реальная строка arena_players с ключом bot:NNN.
-   Состояние уходит только при изменении доски + пульс раз в 2 с.
-   Проверка конца партии — не чаще раза в 0.9 с.
+   Турнирная партия сохраняется и переживает выход из приложения.
    ============================================================ */
 (function (global) {
 'use strict';
@@ -33,6 +32,9 @@ const TICK_MS = 100;
 const SEARCH_LIMIT_MS = 3000;
 const RESUME_LIMIT_MS = 6 * 60 * 60 * 1000;
 const FRIENDLY_WAIT_MS = 90000;
+
+/* Дольше этого турнирная партия без игрока не висит — поражение. */
+const TOUR_AWAY_MAX = 30 * 60 * 1000;
 
 const TOUR_BOT_MS = 5000;
 
@@ -433,6 +435,43 @@ Net._applyModeTick = function (s, dt){
   Net._checkEnd(s);
 };
 
+/* ---------------- время без игрока (турниры) ---------------- */
+
+/* Возврат в турнирную партию: пока приложения не было, часы шли.
+   Выходит за рамки — партия закрывается поражением. */
+Net._applyAway = function (s, awayMs){
+  if (!s || s.over) return s;
+  if (!(awayMs > 500)) return s;
+
+  const def = MODE_BY_ID[s.mode] || MODE_BY_ID[Net.matchMode] || MODES[0];
+  const dt = awayMs / 1000;
+  const mySide = Net.mySide || 'a';
+
+  if (def.turn){
+    if (!s.clocks) s.clocks = { a: def.time, b: def.time };
+    const who = s.turn || 'a';
+    s.clocks[who] = Math.max(0, (s.clocks[who] || 0) - dt);
+    if (s.clocks[who] <= 0){
+      const winner = (who === 'a') ? 'b' : 'a';
+      Arena.finish(s, cannotMate(s, winner) ? 'draw' : winner);
+    }
+    return s;
+  }
+
+  let left = (typeof s.timeLeft === 'number') ? s.timeLeft : def.time;
+  left -= dt;
+
+  if (left <= 0){
+    s.timeLeft = 0;
+    const other = (mySide === 'a') ? 'b' : 'a';
+    Arena.finish(s, cannotMate(s, other) ? 'draw' : other);
+  } else {
+    s.timeLeft = left;
+  }
+
+  return s;
+};
+
 /* ---------------- журнал ходов ---------------- */
 
 function logAt(s){
@@ -595,18 +634,21 @@ Net.leaderboard = async function (limit){
 /* ---------------- запись текущего матча ---------------- */
 
 Net._writeRecord = function (){
-  if (Net.friendly) return;
+  if (Net.friendly && !Net.tour) return;
   try {
     localStorage.setItem(RECORD_KEY, JSON.stringify({
-      matchId: Net.matchId,
-      side:    Net.mySide,
-      arena:   Net.arena,
-      mode:    Net.matchMode,
-      players: Net.players,
-      decks:   Net.decks,
-      levels:  Net.levels,
-      bot:     !!Net.botMode,
-      at:      Date.now()
+      matchId:   Net.matchId,
+      side:      Net.mySide,
+      arena:     Net.arena,
+      mode:      Net.matchMode,
+      players:   Net.players,
+      decks:     Net.decks,
+      levels:    Net.levels,
+      bot:       !!Net.botMode,
+      tour:      !!Net.tour,
+      trial:     !!Net.tourTrial,
+      trialType: Net.trialType || null,
+      at:        Date.now()
     }));
   } catch (e){}
 };
@@ -1731,6 +1773,8 @@ Net._hostStart = function (){
   Net._lastSentAt = 0;
   Net._endCheckAt = 0;
 
+  Net._writeRecord();
+  Net._saveState(true);
   Net._push(true);
   Net._startLoop();
   Net._watchForfeit();
@@ -2024,6 +2068,7 @@ Net.tryResume = async function (){
   }
 
   const isBot = !!rec.bot;
+  const isTour = !!rec.tour;
 
   Net.matchId = rec.matchId;
   Net.matchMode = MODE_BY_ID[rec.mode] ? rec.mode : 'classic';
@@ -2036,11 +2081,11 @@ Net.tryResume = async function (){
   Net.finished = false;
   Net.finishing = false;
   Net.botMode = isBot;
-  Net.friendly = false;
+  Net.friendly = isTour;
   Net.friendlyHost = false;
-  Net.tour = false;
-  Net.tourTrial = false;
-  Net.trialType = null;
+  Net.tour = isTour;
+  Net.tourTrial = !!rec.trial;
+  Net.trialType = rec.trialType || null;
   Net.state = null;
   Net.lastSeen = Date.now();
   Net._seq = 0;
@@ -2073,9 +2118,20 @@ Net.tryResume = async function (){
     Net.botMode = true;
     Net.host = true;
 
+    /* Турнир: пока приложения не было, часы шли. */
+    if (isTour){
+      const awayMs = Date.now() - (saved.savedAt || rec.at || Date.now());
+      if (awayMs > TOUR_AWAY_MAX){
+        const other = (Net.mySide === 'a') ? 'b' : 'a';
+        Arena.finish(saved, other);
+      } else {
+        Net._applyAway(saved, awayMs);
+      }
+    }
+
     Net.emit('start', {
       side:'a', arena:Net.arena, opponent:Net.players.b,
-      state:saved, mode: Net.matchMode
+      state:saved, mode: Net.matchMode, tour: isTour
     });
 
     Net.saveMark = 0;
@@ -2098,7 +2154,7 @@ Net.tryResume = async function (){
 
     Net.emit('start', {
       side:'a', arena:Net.arena, opponent:Net.players.b,
-      state:saved, mode: Net.matchMode
+      state:saved, mode: Net.matchMode, tour: isTour
     });
 
     Net.saveMark = 0;
@@ -2114,7 +2170,7 @@ Net.tryResume = async function (){
 
   Net.emit('start', {
     side:'b', arena:Net.arena, opponent:Net.players.a,
-    state:null, mode: Net.matchMode
+    state:null, mode: Net.matchMode, tour: isTour
   });
 
   if (Net.matchCh) Net.matchCh.send({ type:'broadcast', event:'hello', payload:{ from: Net.key } });
@@ -2141,7 +2197,7 @@ Net._finish = function (payload){
   Net.finished = true;
   Net.finishing = false;
 
-  if (wasTour && !wasBot) Net._reportTour(payload.winner);
+  if (wasTour) Net._reportTour(payload.winner);
   if (wasTour && wasTrial) Net._reportTrial(payload.winner);
 
   if (Net.botTimer){ clearTimeout(Net.botTimer); Net.botTimer = null; }
@@ -2224,7 +2280,7 @@ Net.leaveMatch = async function (){
 Net.DRAW_OFFER_MAX = DRAW_OFFER_MAX;
 Net.SPELL_TYPES = SPELL_TYPES;
 Net.HAND_SIZE = HAND_SIZE;
-Net.VER = 41;
+Net.VER = 42;
 
 global.Net = Net;
 
