@@ -483,6 +483,36 @@ function hit(type, f0, f1, t0, dur, gain){
   o.start(t0); o.stop(t0 + dur + 0.05);
 }
 
+/* Длинный жёсткий звук: два пилообразных тона через фильтр с падением/ростом частоты, с пульсацией */
+function growl(t0, dur, f0, f1, gain, lpFrom, lpTo, pulse){
+  const c = ac();
+  if (!c) return;
+  [0, 1].forEach(i => {
+    const o = c.createOscillator();
+    const lp = c.createBiquadFilter();
+    const g = c.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(f0 + i * 3, t0);
+    o.frequency.exponentialRampToValueAtTime(f1 + i * 3, t0 + dur);
+    lp.type = 'lowpass';
+    lp.Q.value = 6;
+    lp.frequency.setValueAtTime(lpFrom, t0);
+    lp.frequency.exponentialRampToValueAtTime(lpTo, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(gain, t0 + 0.03);
+    if (pulse){
+      for (let t = t0 + 0.1; t < t0 + dur - 0.3; t += pulse){
+        g.gain.setValueAtTime(gain * 0.25, t);
+        g.gain.setValueAtTime(gain, t + pulse / 2);
+      }
+    }
+    g.gain.setValueAtTime(gain, t0 + dur - 0.15);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(lp); lp.connect(g); g.connect(out);
+    o.start(t0); o.stop(t0 + dur + 0.05);
+  });
+}
+
 /* Шумовой щелчок или удар */
 function noise(t0, dur, gain, hp){
   const c = ac();
@@ -503,15 +533,13 @@ function noise(t0, dur, gain, hp){
   s.start(t0); s.stop(t0 + dur + 0.02);
 }
 
-/* Подготовка: три резких «пип» и один выше — внимание, готовься */
+/* Подготовка: долгий жёсткий пульсирующий зуммер, нарастающий вверх */
 function playPrep(){
   if (!soundOn) return;
   const c = ac(); if (!c) return;
   const t = c.currentTime;
-  hit('square', 1200, null, t,        0.11, 1.0);
-  hit('square', 1200, null, t + 0.18, 0.11, 1.0);
-  hit('square', 1200, null, t + 0.36, 0.11, 1.0);
-  hit('square', 1800, null, t + 0.56, 0.32, 1.0);
+  growl(t, 1.5, 150, 230, 0.9, 900, 2600, 0.125);
+  noise(t, 1.5, 0.25, 1500);
 }
 
 /* Старт тренировки: удар гонга + рог вверх, «БОМ! — ПОЕХАЛИ» */
@@ -529,14 +557,14 @@ function playWork(){
   hit('square', 990, 990, t + 0.6, 0.6, 0.5);
 }
 
-/* Начало отдыха: низкий падающий «бззз» — стоп, восстанавливайся */
+/* Начало отдыха: долгий низкий рык, падающий вниз, с шумом */
 function playRest(){
   if (!soundOn) return;
   const c = ac(); if (!c) return;
   const t = c.currentTime;
-  hit('sawtooth', 620, 150, t, 1.0, 0.9);
-  hit('square',   310,  75, t, 1.0, 0.6);
-  noise(t, 0.25, 0.5, 400);
+  growl(t, 2.2, 520, 90, 0.9, 2600, 300, null);
+  growl(t, 2.2, 260, 45, 0.5, 900, 150, null);
+  noise(t, 2.2, 0.35, 300);
 }
 
 /* Последние 5 секунд отдыха: резкий бип, на последней секунде выше */
