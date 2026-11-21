@@ -1,7 +1,6 @@
 /* ============================================================
-   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 32)
-   VER 32: партия турнира с ботом стартует сразу по флагу bot,
-   результат бота не уходит в tour_report, но идёт в trial_win/trial_loss.
+   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 33)
+   VER 33: исправлена отправка результата испытания (trial_win/trial_loss).
    ============================================================ */
 (function (global) {
 'use strict';
@@ -1182,20 +1181,19 @@ Net._reportTour = function (winner){
 
 Net._reportTrial = function (winner){
   if (!Net.trialType) return;
+  const sb = Net.sb;
+  const key = Net.key;
+  const side = Net.mySide;
+  const type = Net.trialType;
 
-  const rpc = Net.sb.rpc;
-
-  rpc('trial_active', { p_key: Net.key, p_type: Net.trialType }).then(function (res){
+  sb.rpc('trial_active', { p_key: key, p_type: type }).then(function (res){
     const sess = res && res.data && res.data.session;
-    if (!sess || !sess.id) return;
-
-    if (winner === 'draw') return { data: null };
-
-    if (winner === Net.mySide){
-      return rpc('trial_win', { p_session: sess.id, p_key: Net.key });
-    }
-    return rpc('trial_loss', { p_session: sess.id, p_key: Net.key });
+    if (!sess || !sess.id) return null;
+    if (winner === 'draw') return null;
+    const fn = (winner === side) ? 'trial_win' : 'trial_loss';
+    return sb.rpc(fn, { p_session: sess.id, p_key: key });
   }).then(function (res){
+    if (res && res.error) console.error('[net] trial report error', res.error);
     if (res && res.data && res.data.wins !== undefined){
       try { localStorage.setItem('trialWins', String(res.data.wins)); } catch (e){}
     }
