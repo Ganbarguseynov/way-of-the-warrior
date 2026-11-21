@@ -11,12 +11,10 @@ body{margin:0;min-height:100dvh;background:linear-gradient(180deg,#1f7ae0 0%,#0e
 .head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 .back{width:38px;height:38px;border-radius:12px;border:3px solid #fff;background:linear-gradient(180deg,#475569,#1e293b);color:#fff;font-size:20px;font-weight:900;cursor:pointer;flex-shrink:0}
 h1{font-size:20px;font-weight:900;margin:0;text-shadow:0 2px 0 rgba(0,0,0,.35)}
-.modes{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px}
-.chip{padding:8px 6px;border-radius:12px;border:2px solid #b9cdea;background:linear-gradient(180deg,#fff,#e6eefc);color:#132a54;font-size:11.5px;font-weight:900;cursor:pointer;box-shadow:0 3px 0 #8fa8cc;text-align:center}
-.chip.on{border-color:#ffd447;background:linear-gradient(180deg,#ffe082,#ffb300);box-shadow:0 3px 0 #b45309}
-.tabs{display:flex;gap:6px;margin-bottom:12px}
-.tab{flex:1;padding:10px;border-radius:12px;border:3px solid #fff;background:rgba(15,23,42,.5);color:#dbeafe;font-size:13px;font-weight:900;cursor:pointer}
-.tab.on{background:linear-gradient(180deg,#ffe082,#ffb300);color:#5a2d00;border-color:#fff;box-shadow:0 3px 0 #a35f00}
+.sel-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.sel-btn{padding:10px 8px;border-radius:12px;border:3px solid #fff;background:linear-gradient(180deg,#ffe082,#ffb300);color:#5a2d00;cursor:pointer;box-shadow:0 4px 0 #a35f00;text-align:center}
+.sel-btn small{display:block;font-size:10px;font-weight:900;opacity:.75;letter-spacing:.4px;text-transform:uppercase}
+.sel-btn b{display:block;font-size:13.5px;font-weight:900;margin-top:2px}
 .rule{font-size:11.5px;color:#dbeafe;line-height:1.5;margin-bottom:12px;font-weight:600;background:rgba(15,23,42,.45);border-radius:12px;padding:9px 11px}
 .card{background:linear-gradient(145deg,#fff,#eef4ff);border:3px solid #ffd447;border-radius:16px;padding:12px;margin-bottom:10px;color:#132a54;box-shadow:0 5px 0 #b45309}
 .ct{display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -34,6 +32,23 @@ h1{font-size:20px;font-weight:900;margin:0;text-shadow:0 2px 0 rgba(0,0,0,.35)}
 .btn:disabled{opacity:.55}
 .empty{text-align:center;font-size:13px;color:#dbeafe;padding:20px 10px;line-height:1.5}
 .note{font-size:11px;color:#5a7398;margin-top:6px;font-weight:700;text-align:center}
+
+/* окно выбора, как «Режим боя» */
+#modal{position:fixed;inset:0;background:rgba(2,6,23,.75);display:none;align-items:center;justify-content:center;padding:18px;z-index:200}
+#modal.open{display:flex}
+.mbox{width:100%;max-width:400px;background:#fff;border:4px solid #ffd447;border-radius:18px;overflow:hidden;box-shadow:0 8px 0 #b45309}
+.mhead{background:linear-gradient(180deg,#3b8ef0,#1d5fc4);padding:14px 14px 14px 18px;display:flex;justify-content:space-between;align-items:center}
+.mhead h2{margin:0;font-size:18px;font-weight:900;color:#fff}
+.mclose{width:40px;height:40px;border-radius:10px;border:3px solid #fff;background:#ef4444;color:#fff;font-size:18px;font-weight:900;cursor:pointer}
+.mbody{padding:14px;display:flex;flex-direction:column;gap:10px;background:#fff}
+.opt{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;border:3px solid #c7d6ef;background:linear-gradient(180deg,#fff,#eef4ff);box-shadow:0 4px 0 #94a9cc;cursor:pointer;text-align:left;color:#132a54}
+.opt .ic{font-size:28px;width:40px;text-align:center;flex-shrink:0}
+.opt .t{font-size:15px;font-weight:900;color:#132a54}
+.opt .d{font-size:11.5px;font-weight:700;color:#5a7398;margin-top:2px;line-height:1.3}
+.opt.on{border-color:#ffd447;background:linear-gradient(180deg,#ffe082,#ffb300);box-shadow:0 4px 0 #b45309;color:#5a2d00}
+.opt.on .t{color:#5a2d00}
+.opt.on .d{color:#7a4300}
+
 #dock{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(180deg,#16306e,#0a1c40);border-top:3px solid #ffd447;padding:12px 14px 18px;display:none;z-index:50}
 #dock.open{display:block}
 #dockTitle{font-size:15px;font-weight:900;margin-bottom:4px}
@@ -46,16 +61,21 @@ h1{font-size:20px;font-weight:900;margin:0;text-shadow:0 2px 0 rgba(0,0,0,.35)}
 
 <div class="head"><button class="back" onclick="location.href='chess-main.html'">‹</button><h1>Турниры</h1></div>
 
-<div class="modes" id="modes"></div>
-
-<div class="tabs">
-  <button class="tab on" data-tab="champ">Чемпионаты</button>
-  <button class="tab" data-tab="trial">Испытания</button>
+<div class="sel-row">
+  <button class="sel-btn" id="openType"><small>Турнир</small><b id="typeVal">Чемпионаты</b></button>
+  <button class="sel-btn" id="openMode"><small>Режим</small><b id="modeVal">Классика</b></button>
 </div>
 
 <div class="rule" id="rule"></div>
 
 <div id="list"><div class="empty">Загружаем…</div></div>
+
+<div id="modal">
+  <div class="mbox">
+    <div class="mhead"><h2 id="mTitle"></h2><button class="mclose" id="mClose">✕</button></div>
+    <div class="mbody" id="mBody"></div>
+  </div>
+</div>
 
 <div id="dock">
   <div id="dockTitle">Соперник найден</div>
@@ -85,22 +105,27 @@ function playerKey(){
 const KEY = playerKey();
 
 const MODES = [
-  { id:'classic',  name:'Классика',            rule:'Карты и эликсир, общие 5 минут. Ходить можно в любой момент.' },
-  { id:'nocards',  name:'Без карт',            rule:'Эликсир, карт нет. Общие 5 минут, ходить можно в любой момент.' },
-  { id:'noelixir', name:'Без эликсира',        rule:'Карты есть, эликсира нет. Ходы по очереди, по 3 минуты на каждого.' },
-  { id:'pure',     name:'Без карт и эликсира', rule:'Только шахматы. Ходы по очереди, по 3 минуты на каждого.' }
+  { id:'classic',  name:'Классика',            icon:'🃏', short:'Карты + эликсир, 5 минут',  rule:'Карты и эликсир, общие 5 минут. Ходить можно в любой момент.' },
+  { id:'nocards',  name:'Без карт',            icon:'♟',  short:'Эликсир, карт нет',         rule:'Эликсир, карт нет. Общие 5 минут, ходить можно в любой момент.' },
+  { id:'noelixir', name:'Без эликсира',        icon:'⏱️', short:'По очереди, по 3 мин',      rule:'Карты есть, эликсира нет. Ходы по очереди, по 3 минуты на каждого.' },
+  { id:'pure',     name:'Без карт и эликсира', icon:'⚔️', short:'По очереди, по 3 мин',      rule:'Только шахматы. Ходы по очереди, по 3 минуты на каждого.' }
 ];
-const RULES = {
-  champ: 'Чемпионат: играешь с соперником с таким же числом очков. Первые 100 проходят в следующий этап. Принимай партию в течение 5 минут, иначе засчитывается поражение.',
-  trial: 'Испытание: мгновенный бой с равным по победам соперником. 12 побед — испытание пройдено. 3 поражения — выбываешь.'
-};
+const TYPES = [
+  { id:'champ', name:'Чемпионаты', icon:'🏆', short:'Игра с соперником с таким же числом очков',
+    rule:'Чемпионат: играешь с соперником с таким же числом очков. Первые 100 проходят в следующий этап. Принимай партию в течение 5 минут, иначе засчитывается поражение.' },
+  { id:'trial', name:'Испытания', icon:'🎯', short:'Мгновенный бой, 12 побед или 3 поражения',
+    rule:'Испытание: мгновенный бой с равным по победам соперником. 12 побед — испытание пройдено. 3 поражения — выбываешь.' }
+];
+const MODE_BY_ID = {}; MODES.forEach(m => MODE_BY_ID[m.id] = m);
+const TYPE_BY_ID = {}; TYPES.forEach(t => TYPE_BY_ID[t.id] = t);
+
 const CONT = { EU:'Европа', AS:'Азия', AF:'Африка', NA:'Северная Америка', SA:'Южная Америка', OC:'Океания', OTHER:'Прочее' };
 const LVL = { region:'Регион', country:'Страна', continent:'Континент', world:'Мир' };
 const STATE_TXT = { none:'Не в турнире', idle:'Не в очереди', free:'Ищем соперника', busy:'В партии', out:'Выбыл' };
 
-let tab = 'champ';
-let mode = (function(){ const v = localStorage.getItem('arenaMode'); return MODES.some(m => m.id === v) ? v : 'classic'; })();
-let lastMatchId = null, dockMatch = null, dockTimer = null, lastChamp = [], lastTrial = null;
+let type = 'champ';
+let mode = (function(){ const v = localStorage.getItem('arenaMode'); return MODE_BY_ID[v] ? v : 'classic'; })();
+let lastMatchId = null, dockMatch = null, dockTimer = null, lastTrial = null;
 
 function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function toast(t){
@@ -124,27 +149,49 @@ function nameOf(t){
   return t.scope_name || t.scope;
 }
 
-function renderModes(){
-  $('modes').innerHTML = MODES.map(function(m){
-    return '<button class="chip' + (m.id === mode ? ' on' : '') + '" data-mode="' + m.id + '">' + esc(m.name) + '</button>';
-  }).join('');
-  $('rule').textContent = RULES[tab] + ' Режим: ' + (MODES.find(m => m.id === mode) || MODES[0]).rule;
+/* ---------- верхняя панель и правило ---------- */
+
+function renderTop(){
+  $('typeVal').textContent = TYPE_BY_ID[type].name;
+  $('modeVal').textContent = MODE_BY_ID[mode].name;
+  $('rule').textContent = TYPE_BY_ID[type].rule + ' Режим: ' + MODE_BY_ID[mode].rule;
 }
 
-$('modes').onclick = function(e){
-  const b = e.target.closest('[data-mode]'); if (!b) return;
-  mode = b.dataset.mode;
-  try { localStorage.setItem('arenaMode', mode); } catch(err){}
-  renderModes(); loadList();
-};
+/* ---------- окно выбора ---------- */
 
-document.querySelectorAll('.tab').forEach(function(b){
-  b.onclick = function(){
-    tab = b.dataset.tab;
-    document.querySelectorAll('.tab').forEach(function(x){ x.classList.toggle('on', x === b); });
-    renderModes(); loadList();
-  };
-});
+let modalKind = null;
+
+function openModal(kind){
+  modalKind = kind;
+  const isType = kind === 'type';
+  $('mTitle').textContent = isType ? 'Тип турнира' : 'Режим боя';
+  const list = isType ? TYPES : MODES;
+  const cur = isType ? type : mode;
+  $('mBody').innerHTML = list.map(function(o){
+    return '<button class="opt' + (o.id === cur ? ' on' : '') + '" data-id="' + o.id + '">' +
+      '<span class="ic">' + o.icon + '</span>' +
+      '<span><span class="t" style="display:block">' + esc(o.name) + '</span>' +
+      '<span class="d" style="display:block">' + esc(o.short) + '</span></span></button>';
+  }).join('');
+  $('modal').classList.add('open');
+}
+function closeModal(){ $('modal').classList.remove('open'); modalKind = null; }
+
+$('openType').onclick = function(){ openModal('type'); };
+$('openMode').onclick = function(){ openModal('mode'); };
+$('mClose').onclick = closeModal;
+$('modal').onclick = function(e){ if (e.target === $('modal')) closeModal(); };
+$('mBody').onclick = function(e){
+  const b = e.target.closest('[data-id]'); if (!b) return;
+  if (modalKind === 'type'){
+    type = b.dataset.id;
+  } else {
+    mode = b.dataset.id;
+    try { localStorage.setItem('arenaMode', mode); } catch(err){}
+  }
+  closeModal();
+  renderTop(); loadList();
+};
 
 /* ---------- чемпионаты ---------- */
 
@@ -154,15 +201,15 @@ async function loadChamp(){
     $('list').innerHTML = '<div class="card"><div class="nm">Сначала определи регион</div><button class="btn" onclick="location.href=\'chess-region.html\'">📍 Определить регион</button></div>';
     return;
   }
-  lastChamp = (d.tournaments || []).filter(function(t){ return t.level !== 'trial'; });
-  if (!lastChamp.length){ $('list').innerHTML = '<div class="empty">Открытых чемпионатов нет.</div>'; return; }
-  $('list').innerHTML = lastChamp.map(champCard).join('');
+  const list = (d.tournaments || []).filter(function(t){ return t.level !== 'trial'; });
+  if (!list.length){ $('list').innerHTML = '<div class="empty">Открытых чемпионатов нет.</div>'; return; }
+  $('list').innerHTML = list.map(champCard).join('');
 }
 
 function champCard(t){
   const st = t.my_state || 'none';
   let btn = '';
-  if (st === 'none' || st === 'idle') btn = '<button class="btn" data-join="' + esc(t.id) + '">Встать в очередь</button>';
+  if (st === 'none' || st === 'idle') btn = '<button class="btn" data-join="' + esc(t.id) + '">Участвовать</button>';
   else if (st === 'free') btn = '<button class="btn sec" data-leave="' + esc(t.id) + '">Выйти из очереди</button>';
   else if (st === 'busy') btn = '<button class="btn sec" disabled>В партии</button>';
   else btn = '<button class="btn sec" disabled>Выбыл на этом этапе</button>';
@@ -183,7 +230,7 @@ async function loadTrial(){
   const d = await rpc('tour_trial_me', { p_key: KEY, p_mode: mode });
   lastTrial = d;
   const wins = d.wins || 0, losses = d.losses || 0, st = d.state || 'none';
-  const m = MODES.find(x => x.id === mode) || MODES[0];
+  const m = MODE_BY_ID[mode];
 
   let btn;
   if (st === 'busy') btn = '<button class="btn sec" disabled>В партии</button>';
@@ -207,7 +254,7 @@ async function loadTrial(){
 
 async function loadList(){
   try {
-    if (tab === 'champ') await loadChamp(); else await loadTrial();
+    if (type === 'champ') await loadChamp(); else await loadTrial();
   } catch(e){
     $('list').innerHTML = '<div class="empty">Нет связи с сервером. Обнови страницу.</div>';
   }
@@ -243,7 +290,7 @@ function showDock(m){
   $('dock').classList.add('open');
   $('dockTitle').textContent = m.status === 'pending' ? 'Соперник найден' : 'Партия готова';
   $('dockSub').textContent = 'Соперник: ' + (m.opp_name || 'Игрок') + ' · ' + (m.opp_cups || 0) + ' 🏆 · ' +
-    (MODES.find(x => x.id === m.mode) || MODES[0]).name +
+    (MODE_BY_ID[m.mode] || MODES[0]).name +
     (m.kind === 'trial' ? ' · испытание' : ' · чемпионат');
 
   const accept = $('dockAccept'), play = $('dockPlay');
@@ -303,9 +350,6 @@ async function pollMatch(){
     const d = await rpc('tour_my_match', { p_key: KEY });
     const m = d.match;
     if (!m){ hideDock(); lastMatchId = null; return; }
-    if (m.status === 'active' && m.my_ok && m.opp_ok){
-      if (lastMatchId !== m.id){ lastMatchId = m.id; }
-    }
     showDock(m);
   } catch(e){}
 }
@@ -317,9 +361,9 @@ setInterval(function(){
     el.textContent = ms > 0 ? 'до конца ' + left(ms) : 'подводим итоги…';
   });
 }, 1000);
-setInterval(function(){ if (tab === 'champ') loadList(); }, 15000);
+setInterval(function(){ if (type === 'champ') loadList(); }, 15000);
 
-renderModes();
+renderTop();
 loadList();
 pollMatch();
 </script>
