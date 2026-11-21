@@ -7,8 +7,6 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/google-map-react/lib/index.css">
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC2_yl-7WkXXcJZ5QzGwNe1M2E8X9Q9Q9Q"></script>
 <link rel="stylesheet" href="style.css">
 <style>
 .tabs { display: flex; gap: 8px; margin: 10px 0; }
@@ -16,11 +14,11 @@
 .tab.on { background: #5ac8fa; color: #000; border-color: #5ac8fa; }
 .card { background: #1c1c1e; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #2c2c2e; }
 #map { height: 280px; border-radius: 12px; margin-bottom: 10px; background: #0f0f10; }
+.map-missing { height: 280px; border-radius: 12px; margin-bottom: 10px; background: #0f0f10; display: flex; align-items: center; justify-content: center; text-align: center; padding: 20px; box-sizing: border-box; }
 .big { font-size: 34px; font-weight: bold; text-align: center; }
 .muted { color: #8e8e93; font-size: 13px; }
 .chart-box { background: #2c2c2e; border-radius: 12px; padding: 10px; height: 240px; position: relative; margin-bottom: 10px; }
 .hist-item { background: #1c1c1e; padding: 12px; border-radius: 12px; margin-bottom: 8px; border: 1px solid #2c2c2e; font-size: 14px; }
-.marker { width: 20px; height: 20px; background: #5ac8fa; border: 2px solid #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
 </style>
 </head>
 <body>
@@ -89,6 +87,10 @@
 </div>
 
 <script>
+/* ===== ВСТАВЬТЕ КЛЮЧ GOOGLE MAPS В ЭТУ СТРОКУ ===== */
+const GOOGLE_MAPS_KEY = '';
+/* ================================================== */
+
 const tg = window.Telegram.WebApp;
 tg.ready(); tg.expand();
 const sb = supabase.createClient('https://qnpriwfxzuoymoumdtrl.supabase.co', 'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
@@ -108,7 +110,7 @@ const NATIVE = !!(window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Bac
 const BG = NATIVE ? Capacitor.Plugins.BackgroundGeolocation : null;
 
 const $ = id => document.getElementById(id);
-let session = null, map = null, routeLine = [], marker = null, chart = null, historyRows = [];
+let session = null, map = null, polyline = null, marker = null, chart = null, historyRows = [];
 
 function playerKey(){
   const tgId = localStorage.getItem('tgId');
@@ -167,27 +169,46 @@ function showTab(name){
   if (name === 'hist') loadHistory();
 }
 
-function ensureMap(){
-  if (map) return;
-  map = new google.maps.Map($('map'), {
-    zoom: 17,
-    center: { lat: 55.75, lng: 37.62 },
-    mapTypeControl: false,
-    fullscreenControl: false,
-    streetViewControl: false
+function loadGoogleMaps(){
+  return new Promise((resolve, reject) => {
+    if (!GOOGLE_MAPS_KEY) { reject(new Error('no-key')); return; }
+    if (window.google && window.google.maps) { resolve(); return; }
+    window.__gmapsReady = () => resolve();
+    const s = document.createElement('script');
+    s.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(GOOGLE_MAPS_KEY) + '&loading=async&callback=__gmapsReady';
+    s.async = true;
+    s.onerror = () => reject(new Error('load-error'));
+    document.head.appendChild(s);
   });
 }
 
-function showMap(){
+function mapPlaceholder(text){
   $('map-box').style.display = 'block';
-  ensureMap();
+  $('map-box').innerHTML = '<div class="map-missing"><span class="muted">' + text + '</span></div>';
+}
+
+async function showMap(){
+  $('map-box').style.display = 'block';
+  try {
+    await loadGoogleMaps();
+  } catch (e) {
+    mapPlaceholder('Карта Google не подключена: нужен ключ API. Запись дистанции при этом работает.');
+    return;
+  }
+  if (!map) {
+    map = new google.maps.Map($('map'), {
+      zoom: 17,
+      center: { lat: 55.75, lng: 37.62 },
+      mapTypeControl: false,
+      fullscreenControl: false,
+      streetViewControl: false
+    });
+  }
 }
 
 function resetMap(){
-  if (!map) return;
-  if (marker) marker.setMap(null);
-  marker = null;
-  routeLine = [];
+  if (polyline) { polyline.setMap(null); polyline = null; }
+  if (marker) { marker.setMap(null); marker = null; }
 }
 
 function drawLive(){
@@ -195,16 +216,12 @@ function drawLive(){
   if (!s || !map) return;
   const path = s.points.map(p => ({ lat: p.lat, lng: p.lon }));
   if (path.length > 1) {
-    if (!map.polyline) {
-      map.polyline = new google.maps.Polyline({
-        map: map,
-        path: path,
-        strokeColor: '#5ac8fa',
-        strokeWeight: 4,
-        strokeOpacity: 0.8
+    if (!polyline) {
+      polyline = new google.maps.Polyline({
+        map: map, path: path, strokeColor: '#5ac8fa', strokeWeight: 4, strokeOpacity: 0.85
       });
     } else {
-      map.polyline.setPath(path);
+      polyline.setPath(path);
     }
     const bounds = new google.maps.LatLngBounds();
     path.forEach(p => bounds.extend(p));
@@ -212,11 +229,7 @@ function drawLive(){
   }
   const last = path[path.length - 1];
   if (!marker) {
-    marker = new google.maps.Marker({
-      map: map,
-      position: last,
-      title: 'Ты здесь'
-    });
+    marker = new google.maps.Marker({ map: map, position: last });
   } else {
     marker.setPosition(last);
   }
@@ -273,7 +286,7 @@ function startWatch(onPoint, onError){
       lat: pos.coords.latitude, lon: pos.coords.longitude, acc: pos.coords.accuracy,
       time: pos.timestamp, mock: false
     }),
-    err => onError(err.code === 1 ? 'Нет доступа к геолокации. Разрешите её.' : (err.message || 'Ошибка GPS')),
+    err => onError(err.code === 1 ? 'Нет доступа к геолокации. Разрешите её для этого приложения.' : (err.message || 'Ошибка GPS')),
     { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
   );
 }
@@ -301,14 +314,14 @@ async function startSession(){
   };
   $('status').textContent = '';
   $('result').style.display = 'none';
-  showMap();
   resetMap();
+  await showMap();
   try {
     session.watcher = await startWatch(accept, msg => { $('status').textContent = msg; });
   } catch (e) {
     session = null;
     $('map-box').style.display = 'none';
-    $('status').textContent = 'Ошибка GPS: ' + (e.message || e);
+    $('status').textContent = 'Не удалось включить GPS: ' + (e.message || e);
     return;
   }
   $('setup').style.display = 'none';
@@ -325,11 +338,11 @@ function tick(){
   $('live-time').textContent = fmtTime(el);
   $('live-speed').textContent = paceText(SPORTS[s.sport], s.distanceM, el);
   const g = [];
-  if (s.goalM) g.push('Цель: ' + (s.goalM / 1000) + ' км' + (s.goalDone ? ' ✓' : ''));
+  if (s.goalM) g.push('Цель: ' + (s.goalM / 1000) + ' км' + (s.goalDone ? ' (выполнена)' : ''));
   if (s.limitS) g.push('лимит ' + Math.round(s.limitS / 60) + ' мин');
   $('live-goal').textContent = g.join(' · ');
-  let diag = 'GPS: ' + s.points.length + ' точек · слабый сигнал ' + s.weak + ' · отброшено ' + s.jumps;
-  if (s.raw === 0 && el > 30) diag += ' (нет сигнала, выйдите на открытое место)';
+  let diag = 'GPS: получено ' + s.raw + ', принято ' + s.points.length + ', слабый сигнал ' + s.weak + ', отброшено ' + s.jumps;
+  if (s.raw === 0 && el > 30) diag += '. Точек нет: проверьте разрешение на геолокацию и выйдите на открытое место';
   $('diag').textContent = diag;
   if (s.goalM && !s.goalDone && s.distanceM >= s.goalM) s.goalDone = true;
   if (s.limitS && el >= s.limitS) stopSession();
@@ -347,17 +360,17 @@ function downsample(points){
 function showResult(rec){
   const sport = SPORTS[rec.activity];
   const goalLine = rec.goal_m
-    ? (rec.goal_reached ? '✓ Цель выполнена' : '✗ Цель не выполнена: ' + (rec.distance_m / 1000).toFixed(2) + ' / ' + (rec.goal_m / 1000) + ' км')
+    ? (rec.goal_reached ? 'Цель выполнена' : 'Цель не выполнена: ' + (rec.distance_m / 1000).toFixed(2) + ' из ' + (rec.goal_m / 1000) + ' км')
     : '';
   $('result').style.display = 'block';
   $('result').innerHTML =
     '<b>' + sport.name + '</b><br>' +
     'Дистанция: ' + (rec.distance_m / 1000).toFixed(2) + ' км<br>' +
     'Время: ' + fmtTime(rec.duration_s) + '<br>' +
-    'Темп/скорость: ' + paceText(sport, rec.distance_m, rec.duration_s) + '<br>' +
-    'Калории: ~' + rec.kcal + ' ккал<br>' +
+    'Темп / скорость: ' + paceText(sport, rec.distance_m, rec.duration_s) + '<br>' +
+    'Калории: около ' + rec.kcal + '<br>' +
     (goalLine ? goalLine + '<br>' : '') +
-    (rec.flagged ? '<span class="muted">Отброшено GPS: ' + rec.flagged + ' точек</span>' : '');
+    (rec.flagged ? '<span class="muted">Не засчитано точек с подменой GPS: ' + rec.flagged + '</span><br>' : '');
 }
 
 async function stopSession(){
@@ -372,9 +385,10 @@ async function stopSession(){
 
   if (s.points.length < 2 || s.distanceM <= 0) {
     $('map-box').style.display = 'none';
-    $('status').textContent = 'Недостаточно GPS, запись не сохранена.';
+    $('status').textContent = 'Недостаточно точек GPS, запись не сохранена.';
     return;
   }
+  if (map && polyline) map.fitBounds(polyline.getBounds ? new google.maps.LatLngBounds(s.points.map(p => ({ lat: p.lat, lng: p.lon }))) : null);
 
   const rec = {
     player_key: s.key,
@@ -413,7 +427,7 @@ async function flushLog(){
   });
   const { error } = await sb.from('cardio_sessions').insert(rows);
   if (error) {
-    $('status').textContent = 'Ошибка сохранения, повторю позже.';
+    $('status').textContent = 'Не отправлено, повторю позже: ' + error.message;
     return;
   }
   todo.forEach(x => { x.sent = true; });
@@ -425,7 +439,7 @@ async function flushLog(){
 async function loadHistory(){
   const { data, error } = await sb.from('cardio_sessions')
     .select('*').eq('player_key', playerKey()).order('recorded_at', { ascending: true });
-  if (error) { $('hist-status').textContent = 'Ошибка загрузки.'; return; }
+  if (error) { $('hist-status').textContent = 'Не удалось загрузить историю: ' + error.message; return; }
   historyRows = data || [];
   $('hist-status').textContent = '';
   renderHistory();
@@ -447,8 +461,8 @@ function renderHistory(){
   const titles = {
     dist: 'Дистанция, км',
     time: 'Время, мин',
-    kcal: 'Калории',
-    pace: sport.pace ? 'Темп, мин/км' : 'Скорость, км/ч'
+    kcal: 'Калории, ккал',
+    pace: sport.pace ? 'Темп, мин/км (меньше = быстрее)' : 'Скорость, км/ч (больше = быстрее)'
   };
   const labels = rows.map(r => r.recorded_at.slice(0, 10).split('-').reverse().join('.'));
   const values = rows.map(r => {
@@ -460,33 +474,33 @@ function renderHistory(){
   chart = new Chart($('h-chart').getContext('2d'), {
     type: 'line',
     data: { labels: labels, datasets: [{
-      label: titles[metric], data: values, borderColor: '#5ac8fa', backgroundColor: '#5ac8fa22',
+      label: titles[metric], data: values, borderColor: '#5ac8fa', backgroundColor: '#5ac8fa33',
       borderWidth: 2, pointRadius: 3, fill: true, tension: 0.3
     }] },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
+      plugins: { legend: { display: false }, title: { display: true, text: titles[metric], color: '#fff' } },
       scales: {
-        x: { ticks: { color: '#8e8e93' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-        y: { ticks: { color: '#8e8e93' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+        x: { ticks: { color: '#8e8e93' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+        y: { ticks: { color: '#8e8e93' }, grid: { color: 'rgba(255,255,255,0.1)' } }
       }
     }
   });
 
   $('h-list').innerHTML = rows.length
-    ? rows.slice().reverse().map((r, i) =>
-        '<div class="hist-item">' +
-        '<b>' + labels[rows.length - 1 - i] + '</b><br>' +
-        (r.distance_m / 1000).toFixed(2) + ' км · ' + fmtTime(r.duration_s) + ' · ' +
-        paceText(sport, r.distance_m, r.duration_s) + ' · ' + r.kcal + ' ккал</div>'
-      ).join('')
-    : '<p class="muted">Записей нет.</p>';
+    ? rows.slice().reverse().map(r => {
+        const d = r.recorded_at.slice(0, 10).split('-').reverse().join('.');
+        return '<div class="hist-item"><b>' + d + '</b><br>' +
+          (r.distance_m / 1000).toFixed(2) + ' км · ' + fmtTime(r.duration_s) + ' · ' +
+          paceText(sport, r.distance_m, r.duration_s) + ' · ' + r.kcal + ' ккал</div>';
+      }).join('')
+    : '<p class="muted">Записей по этому виду пока нет.</p>';
 }
 
 function init(){
   $('mode-note').textContent = NATIVE
-    ? 'Фоновая запись включена.'
-    : 'В браузере запись работает, пока приложение открыто.';
+    ? 'Фоновая запись включена: можно выключить экран, запись продолжится.'
+    : 'В браузере или Telegram запись останавливается, когда приложение свёрнуто или экран выключен.';
   flushLog();
   loadHistory();
 }
