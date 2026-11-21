@@ -51,6 +51,26 @@ body::after{
   text-shadow:0 2px 0 rgba(0,0,0,.3),0 0 16px rgba(255,212,71,.4);
 }
 
+/* ===== ВКЛАДКИ ===== */
+.tabs{
+  display:flex;gap:8px;margin:0 14px 10px;
+  position:relative;z-index:5;
+}
+.tab{
+  flex:1;padding:11px 6px;border-radius:14px;cursor:pointer;
+  font-size:13px;font-weight:900;letter-spacing:.3px;
+  border:3px solid #fff;color:#1c3f7d;
+  background:linear-gradient(180deg,#e6eefc,#b9cdea);
+  box-shadow:0 4px 0 #8fa8cc,inset 0 2px 0 rgba(255,255,255,.8);
+  transition:transform .1s;
+}
+.tab:active{transform:translateY(2px);box-shadow:0 1px 0 #8fa8cc}
+.tab.on{
+  color:#5a2d00;
+  background:linear-gradient(180deg,#ffe082,#ffb300);
+  box-shadow:0 4px 0 #b45309,inset 0 2px 0 rgba(255,255,255,.9);
+}
+
 /* ===== СВОДКА ===== */
 .summary{
   margin:0 14px 12px;padding:12px 14px;border-radius:16px;
@@ -77,6 +97,11 @@ body::after{
   position:relative;overflow:hidden;
 }
 .hist-card:active{transform:translateY(3px);box-shadow:0 2px 0 #b45309}
+.hist-card.nolink{cursor:default}
+.hist-card.nolink:active{
+  transform:none;
+  box-shadow:0 5px 0 #b45309,0 9px 20px rgba(0,0,0,.25),inset 0 2px 0 rgba(255,255,255,.8);
+}
 
 .hist-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:7px}
 .hist-opp{
@@ -91,6 +116,17 @@ body::after{
 .res-win{color:#fff;background:linear-gradient(180deg,#5ef08a,#22a04a);border:2px solid #fff}
 .res-lose{color:#fff;background:linear-gradient(180deg,#f4665e,#c62828);border:2px solid #fff}
 .res-draw{color:#fff;background:linear-gradient(180deg,#8fa8cc,#5a7398);border:2px solid #fff}
+
+/* турнирная строка */
+.tour-line{
+  display:flex;align-items:center;gap:6px;
+  font-size:11px;font-weight:900;color:#7a4a00;
+  background:linear-gradient(180deg,#ffe9b8,#ffd98a);
+  border:2px solid #ffd447;border-radius:9px;
+  padding:5px 9px;margin-bottom:7px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.tour-line .spacer{flex:1}
 
 /* звёзды */
 .stars{display:flex;gap:3px;margin-bottom:7px;align-items:center}
@@ -188,10 +224,15 @@ body::after{
   <div class="hist-title">📜 История партий</div>
 </div>
 
+<div class="tabs">
+  <button class="tab on" id="tabArena" type="button">⚔️ Арены</button>
+  <button class="tab" id="tabTour" type="button">🏆 Турниры</button>
+</div>
+
 <div class="summary" id="summary">
-  <div class="sum-item"><span>Партий</span><b id="sumGames">0</b></div>
-  <div class="sum-item"><span>Побед</span><b id="sumWins">0</b></div>
-  <div class="sum-item"><span>Звёзды</span><b id="sumStars" class="stars-mini">0</b></div>
+  <div class="sum-item"><span id="sumL1">Партий</span><b id="sumGames">0</b></div>
+  <div class="sum-item"><span id="sumL2">Побед</span><b id="sumWins">0</b></div>
+  <div class="sum-item"><span id="sumL3">Звёзды</span><b id="sumStars" class="stars-mini">0</b></div>
 </div>
 
 <div class="hist-list" id="histList">
@@ -228,7 +269,7 @@ body::after{
   </div>
 </div>
 
-<script src="arena.js?v=18"></script>
+<script src="arena.js?v=22"></script>
 <script>
 const sb = supabase.createClient(
   'https://qnpriwfxzuoymoumdtrl.supabase.co',
@@ -236,6 +277,17 @@ const sb = supabase.createClient(
 );
 
 const $ = function (id){ return document.getElementById(id); };
+
+const MODE_NAMES = {
+  classic:  'Классика',
+  nocards:  'Без карт',
+  noelixir: 'Без эликсира',
+  pure:     'Без карт и эликсира'
+};
+
+function modeName(id){
+  return MODE_NAMES[id] || 'Турнир';
+}
 
 function playerKey(){
   const tgId = localStorage.getItem('tgId');
@@ -268,7 +320,15 @@ function dateRu(iso){
   } catch (e){ return ''; }
 }
 
-let rows = [];
+/* ================= СОСТОЯНИЕ ВКЛАДОК ================= */
+
+let tab = 'arena';
+let rowsArena = [];
+let rowsTour = [];
+let tourIds = {};
+let rowById = {};
+let tourMissing = false;
+let loaded = false;
 
 /* ================= ЗВЁЗДЫ ================= */
 
@@ -356,38 +416,101 @@ function starHtml(n){
   return h;
 }
 
-/* ================= СПИСОК ================= */
+/* ================= ЗАГРУЗКА ================= */
 
-async function loadList(){
+async function loadAll(){
   const list = $('histList');
+  list.innerHTML = '<div class="hist-empty">Загрузка…</div>';
 
-  const res = await sb
+  const qa = sb
     .from('arena_replays')
     .select('match_id,my_side,arena,winner,opponent_name,seconds,created_at,setup_a,setup_b,moves')
     .eq('player_key', playerKey())
     .order('created_at', { ascending: false })
     .limit(100);
 
-  if (res.error){
+  const qt = sb
+    .from('tour_results')
+    .select('match_id,opponent_name,mode,result,seconds,played_at')
+    .eq('player_key', playerKey())
+    .order('played_at', { ascending: false })
+    .limit(100);
+
+  let ra, rt;
+  try {
+    const both = await Promise.all([qa, qt]);
+    ra = both[0];
+    rt = both[1];
+  } catch (e){
     list.innerHTML = '<div class="hist-empty">Не удалось загрузить историю.<br>' +
-      (res.error.message || '') + '</div>';
+      ((e && e.message) || 'сеть недоступна') + '</div>';
     return;
   }
 
-  rows = res.data || [];
+  if (ra.error){
+    list.innerHTML = '<div class="hist-empty">Не удалось загрузить историю.<br>' +
+      (ra.error.message || '') + '</div>';
+    return;
+  }
+
+  rowsArena = ra.data || [];
+
+  /* таблицы турниров может ещё не быть — это не ошибка страницы */
+  if (rt.error){
+    tourMissing = true;
+    rowsTour = [];
+  } else {
+    tourMissing = false;
+    rowsTour = rt.data || [];
+  }
+
+  tourIds = {};
+  for (let i = 0; i < rowsTour.length; i++) tourIds[rowsTour[i].match_id] = true;
+
+  rowById = {};
+  for (let i = 0; i < rowsArena.length; i++) rowById[rowsArena[i].match_id] = rowsArena[i];
+
+  loaded = true;
+  render();
+}
+
+/* ================= ОТРИСОВКА ================= */
+
+function render(){
+  if (!loaded) return;
+  if (tab === 'arena') renderArena();
+  else renderTour();
+}
+
+function setSummary(games, wins, third, thirdIsStars){
+  $('sumGames').textContent = String(games);
+  $('sumWins').textContent = String(wins);
+  $('sumStars').textContent = thirdIsStars ? (third + ' ★') : String(third);
+  $('sumStars').classList.toggle('stars-mini', !!thirdIsStars);
+}
+
+function renderArena(){
+  $('sumL1').textContent = 'Партий';
+  $('sumL2').textContent = 'Побед';
+  $('sumL3').textContent = 'Звёзды';
+
+  const list = $('histList');
+
+  const rows = rowsArena.filter(function (r){
+    return !tourIds[r.match_id];
+  });
 
   if (!rows.length){
     list.innerHTML = '<div class="hist-empty">Пока нет записанных партий.<br>' +
       'Сыграй бой — он появится здесь.</div>';
-    $('sumGames').textContent = '0';
-    $('sumWins').textContent  = '0';
-    $('sumStars').textContent = '0';
+    setSummary(0, 0, 0, true);
     return;
   }
 
   let html = '';
   let wins = 0;
   let starsTotal = 0;
+  const clickable = [];
 
   rows.forEach(function (r){
     let cls = 'res-draw', txt = 'НИЧЬЯ';
@@ -412,15 +535,80 @@ async function loadList(){
           '<span>' + fmt(r.seconds) + '</span>' +
         '</div>' +
       '</div>';
+
+    clickable.push(r.match_id);
   });
 
   list.innerHTML = html;
-
-  $('sumGames').textContent = rows.length;
-  $('sumWins').textContent  = wins;
-  $('sumStars').textContent = starsTotal + ' ★';
+  setSummary(rows.length, wins, starsTotal, true);
 
   const cards = list.querySelectorAll('.hist-card');
+  for (let i = 0; i < cards.length; i++){
+    (function (el){
+      el.onclick = function (){ openReplay(el.dataset.id); };
+    })(cards[i]);
+  }
+}
+
+function renderTour(){
+  $('sumL1').textContent = 'Партий';
+  $('sumL2').textContent = 'Побед';
+  $('sumL3').textContent = 'Поражений';
+
+  const list = $('histList');
+
+  if (tourMissing){
+    list.innerHTML = '<div class="hist-empty">Турнирные партии ещё не записываются.<br>' +
+      'Сначала выполните SQL — и результаты начнут сохраняться.</div>';
+    setSummary(0, 0, 0, false);
+    return;
+  }
+
+  if (!rowsTour.length){
+    list.innerHTML = '<div class="hist-empty">Турнирных партий пока нет.<br>' +
+      'Сыграй в турнире — результат появится здесь.</div>';
+    setSummary(0, 0, 0, false);
+    return;
+  }
+
+  let html = '';
+  let wins = 0;
+  let losses = 0;
+
+  rowsTour.forEach(function (r){
+    let cls = 'res-draw', txt = 'НИЧЬЯ';
+
+    if (r.result === 'win'){ cls = 'res-win'; txt = 'ПОБЕДА'; wins++; }
+    else if (r.result === 'loss'){ cls = 'res-lose'; txt = 'ПОРАЖЕНИЕ'; losses++; }
+
+    const hasReplay = !!rowById[r.match_id];
+    const cardCls = 'hist-card' + (hasReplay ? '' : ' nolink');
+
+    html +=
+      '<div class="' + cardCls + '" data-id="' + r.match_id + '"' +
+        (hasReplay ? ' data-replay="1"' : '') + '>' +
+        '<div class="hist-top">' +
+          '<div class="hist-opp">' + (r.opponent_name || 'Соперник') + '</div>' +
+          '<div class="hist-res ' + cls + '">' + txt + '</div>' +
+        '</div>' +
+        '<div class="tour-line">' +
+          '<span>🏆 Турнир</span>' +
+          '<span>·</span>' +
+          '<span>' + modeName(r.mode) + '</span>' +
+          '<span class="spacer"></span>' +
+          (hasReplay ? '<span>▶ смотреть</span>' : '') +
+        '</div>' +
+        '<div class="hist-meta">' +
+          '<span>' + dateRu(r.played_at) + '</span>' +
+          '<span>' + fmt(r.seconds) + '</span>' +
+        '</div>' +
+      '</div>';
+  });
+
+  list.innerHTML = html;
+  setSummary(rowsTour.length, wins, losses, false);
+
+  const cards = list.querySelectorAll('.hist-card[data-replay]');
   for (let i = 0; i < cards.length; i++){
     (function (el){
       el.onclick = function (){ openReplay(el.dataset.id); };
@@ -668,7 +856,23 @@ function closeReplay(){
   $('replay').classList.remove('open');
 }
 
-/* ================= КНОПКИ ================= */
+/* ================= ВКЛАДКИ И КНОПКИ ================= */
+
+$('tabArena').onclick = function (){
+  if (tab === 'arena') return;
+  tab = 'arena';
+  $('tabArena').classList.add('on');
+  $('tabTour').classList.remove('on');
+  render();
+};
+
+$('tabTour').onclick = function (){
+  if (tab === 'tour') return;
+  tab = 'tour';
+  $('tabTour').classList.add('on');
+  $('tabArena').classList.remove('on');
+  render();
+};
 
 $('rpPlay').onclick = function (){
   if (playTimer) stopPlay();
@@ -697,7 +901,7 @@ $('rpSlider').oninput = function (){
   seek(t);
 };
 
-loadList();
+loadAll();
 </script>
 </body>
 </html>
