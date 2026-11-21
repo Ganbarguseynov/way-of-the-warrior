@@ -668,7 +668,8 @@ Net.on('result',function(r){
   $('ovDelta').style.color=r.delta<0?'#ef4444':'#ffcc00';
   $('ovCups').textContent=r.before+' → '+r.after;
   const arenaNow=Arena.arenaOf(r.after), arenaThen=Arena.arenaOf(r.before);
-  if(r.friendly){ $('ovNote').textContent='Дружеская партия — кубки не изменились'; $('ovNote').style.color='#64748b'; }
+  if(r.tour){ $('ovNote').textContent='Турнирная партия — очки начислены турниру'; $('ovNote').style.color='#5ee0ff'; }
+  else if(r.friendly){ $('ovNote').textContent='Дружеская партия — кубки не изменились'; $('ovNote').style.color='#64748b'; }
   else if(arenaNow>arenaThen){ $('ovNote').textContent='⬆ НОВАЯ АРЕНА: '+Arena.ARENAS[arenaNow-1].name; $('ovNote').style.color='#22c55e'; }
   else if(arenaNow<arenaThen){ $('ovNote').textContent='⬇ Ты выпал на арену «'+Arena.ARENAS[arenaNow-1].name+'»'; $('ovNote').style.color='#ef4444'; }
   else if(!draw && r.delta===0){ $('ovNote').textContent='Пол арены: ниже '+r.floor+' не падаешь'; $('ovNote').style.color='#64748b'; }
@@ -930,6 +931,14 @@ async function boot(){
     await Net.init({ client: sb, key: playerKey(), name: playerName(), seed: 0 });
   }catch(e){ showFatal(e); return; }
 
+  const tourRaw=sessionStorage.getItem('tourStart');
+  if(tourRaw){
+    sessionStorage.removeItem('tourStart');
+    try{ await Net.startTour(JSON.parse(tourRaw)); }
+    catch(e){ showFatal(e); }
+    return;
+  }
+
   /* дружеский вход: партию запускает блок ниже, восстановление и меню не нужны */
   if(window.__friendlyEntry) return;
 
@@ -1055,26 +1064,6 @@ elixBuildBubbles();
   }
   history.replaceState(null,'',location.pathname);
   waitNet(start);
-})();
-
-/* ================= ОЧКИ ТУРНИРА: рейтинговая победа ================= */
-
-(function(){
-  function key(){
-    var t=localStorage.getItem('tgId'); if(t) return 'tg:'+t;
-    var e=localStorage.getItem('currentEmail')||localStorage.getItem('linkedEmail');
-    if(e) return 'email:'+e.toLowerCase();
-    var a=localStorage.getItem('arenaAnonId');
-    if(!a){ a='anon:'+Math.random().toString(36).slice(2,10); localStorage.setItem('arenaAnonId',a); }
-    return a;
-  }
-  Net.on('result',function(r){
-    if(!r || r.friendly) return;
-    if(!r.winner || r.winner==='draw') return;
-    if(r.winner!==r.mySide) return;
-    sb.rpc('geo_win',{ p_key:key(), p_name:localStorage.getItem('userName')||'Игрок' })
-      .then(function(){}).catch(function(){});
-  });
 })();
 
 boot();
