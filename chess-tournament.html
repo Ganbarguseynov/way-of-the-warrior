@@ -27,13 +27,13 @@ h1{font-size:20px;font-weight:900;margin:0;text-shadow:0 2px 0 rgba(0,0,0,.35)}
 .stat b{font-size:15px;font-weight:900}
 .bar{height:10px;border-radius:6px;background:#dbe7fb;overflow:hidden;margin:6px 0 4px}
 .bar i{display:block;height:100%;background:linear-gradient(90deg,#43e97b,#ffd447)}
-.btn{width:100%;padding:12px;border:3px solid #fff;border-radius:12px;font-size:13.5px;font-weight:900;color:#fff;cursor:pointer;background:linear-gradient(180deg,#22c55e,#15803d);box-shadow:0 4px 0 #0b5426}
+.btn{width:100%;padding:12px;border:3px solid #fff;border-radius:12px;font-size:13.5px;font-weight:900;color:#fff;cursor:pointer;background:linear-gradient(180deg,#22c55e,#15803d);box-shadow:0 4px 0 #0b5426;margin-top:4px}
 .btn.sec{background:linear-gradient(180deg,#64748b,#334155);box-shadow:0 4px 0 #111827}
+.btn.gem{background:linear-gradient(180deg,#7dd3fc,#2563eb);box-shadow:0 4px 0 #1e3a8a}
 .btn:disabled{opacity:.55}
 .empty{text-align:center;font-size:13px;color:#dbeafe;padding:20px 10px;line-height:1.5}
 .note{font-size:11px;color:#5a7398;margin-top:6px;font-weight:700;text-align:center}
 
-/* окно выбора, как «Режим боя» */
 #modal{position:fixed;inset:0;background:rgba(2,6,23,.75);display:none;align-items:center;justify-content:center;padding:18px;z-index:200}
 #modal.open{display:flex}
 .mbox{width:100%;max-width:400px;background:#fff;border:4px solid #ffd447;border-radius:18px;overflow:hidden;box-shadow:0 8px 0 #b45309}
@@ -43,8 +43,8 @@ h1{font-size:20px;font-weight:900;margin:0;text-shadow:0 2px 0 rgba(0,0,0,.35)}
 .mbody{padding:14px;display:flex;flex-direction:column;gap:10px;background:#fff}
 .opt{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;border:3px solid #c7d6ef;background:linear-gradient(180deg,#fff,#eef4ff);box-shadow:0 4px 0 #94a9cc;cursor:pointer;text-align:left;color:#132a54}
 .opt .ic{font-size:28px;width:40px;text-align:center;flex-shrink:0}
-.opt .t{font-size:15px;font-weight:900;color:#132a54}
-.opt .d{font-size:11.5px;font-weight:700;color:#5a7398;margin-top:2px;line-height:1.3}
+.opt .t{font-size:15px;font-weight:900;color:#132a54;display:block}
+.opt .d{font-size:11.5px;font-weight:700;color:#5a7398;margin-top:2px;line-height:1.3;display:block}
 .opt.on{border-color:#ffd447;background:linear-gradient(180deg,#ffe082,#ffb300);box-shadow:0 4px 0 #b45309;color:#5a2d00}
 .opt.on .t{color:#5a2d00}
 .opt.on .d{color:#7a4300}
@@ -58,7 +58,7 @@ h1{font-size:20px;font-weight:900;margin:0;text-shadow:0 2px 0 rgba(0,0,0,.35)}
 </style>
 </head>
 <body>
-<div style="position:fixed;left:8px;bottom:8px;font-size:10px;font-weight:900;color:#facc15;background:#0f172a;border:1px solid #facc15;padding:3px 8px;border-radius:6px;z-index:999">tour-v2</div>
+<div style="position:fixed;left:8px;bottom:8px;font-size:10px;font-weight:900;color:#facc15;background:#0f172a;border:1px solid #facc15;padding:3px 8px;border-radius:6px;z-index:999">tour-v3</div>
 
 <div class="head"><button class="back" onclick="location.href='chess-main.html'">‹</button><h1>Турниры</h1></div>
 
@@ -68,7 +68,6 @@ h1{font-size:20px;font-weight:900;margin:0;text-shadow:0 2px 0 rgba(0,0,0,.35)}
 </div>
 
 <div class="rule" id="rule"></div>
-
 <div id="list"><div class="empty">Загружаем…</div></div>
 
 <div id="modal">
@@ -106,19 +105,22 @@ function playerKey(){
 const KEY = playerKey();
 
 const MODES = [
-  { id:'classic',  name:'Классика',            icon:'🃏', short:'Карты + эликсир, 5 минут',  rule:'Карты и эликсир, общие 5 минут. Ходить можно в любой момент.' },
-  { id:'nocards',  name:'Без карт',            icon:'♟',  short:'Эликсир, карт нет',         rule:'Эликсир, карт нет. Общие 5 минут, ходить можно в любой момент.' },
-  { id:'noelixir', name:'Без эликсира',        icon:'⏱️', short:'По очереди, по 3 мин',      rule:'Карты есть, эликсира нет. Ходы по очереди, по 3 минуты на каждого.' },
-  { id:'pure',     name:'Без карт и эликсира', icon:'⚔️', short:'По очереди, по 3 мин',      rule:'Только шахматы. Ходы по очереди, по 3 минуты на каждого.' }
+  { id:'classic',  name:'Классика',            icon:'🃏', short:'Карты + эликсир, 5 минут', rule:'Карты и эликсир, общие 5 минут. Ходить можно в любой момент.' },
+  { id:'nocards',  name:'Без карт',            icon:'♟',  short:'Эликсир, карт нет',        rule:'Эликсир, карт нет. Общие 5 минут, ходить можно в любой момент.' },
+  { id:'noelixir', name:'Без эликсира',        icon:'⏱️', short:'По очереди, по 3 мин',     rule:'Карты есть, эликсира нет. Ходы по очереди, по 3 минуты на каждого.' },
+  { id:'pure',     name:'Без карт и эликсира', icon:'⚔️', short:'По очереди, по 3 мин',     rule:'Только шахматы. Ходы по очереди, по 3 минуты на каждого.' }
 ];
 const TYPES = [
   { id:'champ', name:'Чемпионаты', icon:'🏆', short:'Игра с соперником с таким же числом очков',
     rule:'Чемпионат: играешь с соперником с таким же числом очков. Первые 100 проходят в следующий этап. Принимай партию в течение 5 минут, иначе засчитывается поражение.' },
-  { id:'trial', name:'Испытания', icon:'🎯', short:'Мгновенный бой, 12 побед или 3 поражения',
-    rule:'Испытание: мгновенный бой с равным по победам соперником. 12 побед — испытание пройдено. 3 поражения — выбываешь.' }
+  { id:'basic', name:'Обычное испытание', icon:'🎯', short:'Вход 10 💎 · 12 побед или 3 поражения',
+    rule:'Обычное испытание: вход 10 💎. Соперник с таким же числом побед. 12 побед — испытание пройдено, 3 поражения — выбываешь.' },
+  { id:'premium', name:'Крупное испытание', icon:'💠', short:'Вход 100 💎 · призы в 10 раз больше',
+    rule:'Крупное испытание: вход 100 💎. Соперник с таким же числом побед. 12 побед — испытание пройдено, 3 поражения — выбываешь. Призы в 10 раз больше обычного.' }
 ];
 const MODE_BY_ID = {}; MODES.forEach(m => MODE_BY_ID[m.id] = m);
 const TYPE_BY_ID = {}; TYPES.forEach(t => TYPE_BY_ID[t.id] = t);
+const TRIAL_COST = { basic: 10, premium: 100 };
 
 const CONT = { EU:'Европа', AS:'Азия', AF:'Африка', NA:'Северная Америка', SA:'Южная Америка', OC:'Океания', OTHER:'Прочее' };
 const LVL = { region:'Регион', country:'Страна', continent:'Континент', world:'Мир' };
@@ -126,7 +128,7 @@ const STATE_TXT = { none:'Не в турнире', idle:'Не в очереди'
 
 let type = 'champ';
 let mode = (function(){ const v = localStorage.getItem('arenaMode'); return MODE_BY_ID[v] ? v : 'classic'; })();
-let lastMatchId = null, dockMatch = null, dockTimer = null, lastTrial = null;
+let dockMatch = null, dockTimer = null;
 
 function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function toast(t){
@@ -150,18 +152,15 @@ function nameOf(t){
   return t.scope_name || t.scope;
 }
 
-/* ---------- верхняя панель и правило ---------- */
-
 function renderTop(){
   $('typeVal').textContent = TYPE_BY_ID[type].name;
   $('modeVal').textContent = MODE_BY_ID[mode].name;
-  $('rule').textContent = TYPE_BY_ID[type].rule + ' Режим: ' + MODE_BY_ID[mode].rule;
+  $('rule').textContent = TYPE_BY_ID[type].rule + (type === 'champ' ? ' Режим: ' + MODE_BY_ID[mode].rule : '');
 }
 
 /* ---------- окно выбора ---------- */
 
 let modalKind = null;
-
 function openModal(kind){
   modalKind = kind;
   const isType = kind === 'type';
@@ -171,8 +170,8 @@ function openModal(kind){
   $('mBody').innerHTML = list.map(function(o){
     return '<button class="opt' + (o.id === cur ? ' on' : '') + '" data-id="' + o.id + '">' +
       '<span class="ic">' + o.icon + '</span>' +
-      '<span><span class="t" style="display:block">' + esc(o.name) + '</span>' +
-      '<span class="d" style="display:block">' + esc(o.short) + '</span></span></button>';
+      '<span><span class="t">' + esc(o.name) + '</span>' +
+      '<span class="d">' + esc(o.short) + '</span></span></button>';
   }).join('');
   $('modal').classList.add('open');
 }
@@ -228,27 +227,37 @@ function champCard(t){
 /* ---------- испытания ---------- */
 
 async function loadTrial(){
-  const d = await rpc('tour_trial_me', { p_key: KEY, p_mode: mode });
-  lastTrial = d;
-  const wins = d.wins || 0, losses = d.losses || 0, st = d.state || 'none';
+  const cost = TRIAL_COST[type];
+  const d = await rpc('trial_active', { p_key: KEY, p_type: type });
+  const s = d.session;
   const m = MODE_BY_ID[mode];
+  const title = TYPE_BY_ID[type].name;
 
-  let btn;
-  if (st === 'busy') btn = '<button class="btn sec" disabled>В партии</button>';
-  else if (st === 'free') btn = '<button class="btn sec" id="trialCancel">Ищем соперника… отменить</button>';
-  else if (st === 'out' || losses >= 3) btn = '<button class="btn" id="trialJoin">Начать заново</button>';
-  else if (wins >= 12) btn = '<button class="btn" id="trialJoin">Начать заново</button>';
-  else btn = '<button class="btn" id="trialJoin">Начать испытание</button>';
+  let wins = 0, losses = 0, stateLabel = 'Не начато', btn = '';
+
+  if (!s){
+    btn = '<button class="btn gem" data-trial-start="1">Начать · ' + cost + ' 💎</button>';
+  } else {
+    wins = s.wins; losses = s.losses;
+    if (s.state === 'active'){
+      stateLabel = 'Идёт испытание';
+      btn = '<button class="btn" data-trial-find="1">Искать соперника</button>';
+    } else {
+      stateLabel = s.state === 'complete' ? 'Испытание пройдено' : 'Испытание окончено';
+      btn = '<button class="btn" data-trial-claim="' + esc(s.id) + '">Забрать приз</button>';
+    }
+  }
 
   $('list').innerHTML = '<div class="card">' +
-    '<div class="ct"><span class="lvl">Испытание</span><span class="tm">' + esc(m.name) + '</span></div>' +
-    '<div class="nm">' + esc(STATE_TXT[st] || st) + '</div>' +
+    '<div class="ct"><span class="lvl">' + esc(title) + '</span><span class="tm">' + esc(m.name) + '</span></div>' +
+    '<div class="nm">' + esc(stateLabel) + '</div>' +
     '<div class="stat">' +
       '<div><span>ПОБЕДЫ</span><b>' + wins + ' / 12</b></div>' +
       '<div><span>ПОРАЖЕНИЯ</span><b>' + losses + ' / 3</b></div>' +
     '</div>' +
     '<div class="bar"><i style="width:' + Math.min(100, wins / 12 * 100) + '%"></i></div>' +
-    btn + '<div class="note">Соперник подбирается с таким же числом побед</div></div>';
+    btn +
+    '<div class="note">Соперник подбирается с таким же числом побед</div></div>';
 }
 
 /* ---------- список ---------- */
@@ -257,15 +266,16 @@ async function loadList(){
   try {
     if (type === 'champ') await loadChamp(); else await loadTrial();
   } catch(e){
-    $('list').innerHTML = '<div class="empty">Нет связи с сервером. Обнови страницу.</div>';
+    $('list').innerHTML = '<div class="empty">Нет связи с сервером: ' + esc(e.message) + '</div>';
   }
 }
 
 $('list').onclick = async function(e){
   const j = e.target.closest('[data-join]');
   const l = e.target.closest('[data-leave]');
-  const tj = e.target.closest('#trialJoin');
-  const tc = e.target.closest('#trialCancel');
+  const ts = e.target.closest('[data-trial-start]');
+  const tf = e.target.closest('[data-trial-find]');
+  const tc = e.target.closest('[data-trial-claim]');
   try {
     if (j){
       const r = await rpc('tour_champ_join', { p_key: KEY, p_t: j.dataset.join, p_mode: mode });
@@ -273,12 +283,16 @@ $('list').onclick = async function(e){
     } else if (l){
       await rpc('tour_leave', { p_key: KEY, p_t: l.dataset.leave });
       toast('Вышел из очереди');
-    } else if (tj){
+    } else if (ts){
+      const r = await rpc('trial_start', { p_key: KEY, p_mode: mode, p_type: type });
+      if (!r.ok) toast(r.error); else toast('Испытание начато');
+    } else if (tf){
       const r = await rpc('tour_trial_join', { p_key: KEY, p_mode: mode });
       if (!r.ok) toast(r.error); else toast('Ищем соперника…');
     } else if (tc){
-      await rpc('tour_leave', { p_key: KEY, p_t: lastTrial && lastTrial.tid });
-      toast('Поиск отменён');
+      const r = await rpc('trial_reward', { p_session: tc.dataset.trialClaim, p_key: KEY });
+      if (!r.ok) toast(r.error);
+      else toast('Приз: ' + r.gems + ' 💎, ' + r.coins + ' 🪙');
     } else return;
   } catch(err){ toast(err.message || 'Ошибка'); }
   loadList(); pollMatch();
@@ -350,7 +364,7 @@ async function pollMatch(){
   try {
     const d = await rpc('tour_my_match', { p_key: KEY });
     const m = d.match;
-    if (!m){ hideDock(); lastMatchId = null; return; }
+    if (!m){ hideDock(); return; }
     showDock(m);
   } catch(e){}
 }
