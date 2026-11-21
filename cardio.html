@@ -6,16 +6,36 @@
 <title>Дистанция</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link rel="stylesheet" href="style.css">
+<style>
+.tabs { display: flex; gap: 8px; margin: 10px 0; }
+.tab { flex: 1; padding: 10px; border-radius: 10px; border: 1px solid #3a3a3c; background: #2c2c2e; color: #fff; font-weight: 700; cursor: pointer; }
+.tab.on { background: #5ac8fa; color: #000; border-color: #5ac8fa; }
+.card { background: #1c1c1e; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #2c2c2e; }
+#map { height: 260px; border-radius: 12px; margin-bottom: 10px; background: #0f0f10; }
+.big { font-size: 34px; font-weight: bold; text-align: center; }
+.muted { color: #8e8e93; font-size: 13px; }
+.chart-box { background: #2c2c2e; border-radius: 12px; padding: 10px; height: 240px; position: relative; margin-bottom: 10px; }
+.hist-item { background: #1c1c1e; padding: 12px; border-radius: 12px; margin-bottom: 8px; border: 1px solid #2c2c2e; font-size: 14px; }
+</style>
 </head>
 <body>
 <div class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Дистанция</h1>
-<p id="mode-note" style="color: #8e8e93; font-size: 13px;"></p>
+<p id="mode-note" class="muted"></p>
 <p id="status" style="color: #ff9500; font-size: 13px;"></p>
 
-<div id="setup" style="background: #1c1c1e; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #2c2c2e;">
+<div class="tabs">
+<button id="tab-rec" class="tab on" onclick="showTab('rec')">Запись</button>
+<button id="tab-hist" class="tab" onclick="showTab('hist')">История</button>
+</div>
+
+<div id="rec-box">
+<div id="setup" class="card">
 <div class="form-group"><label>Вид</label>
 <select id="sport">
 <option value="run">🏃 Бег</option>
@@ -25,18 +45,44 @@
 </select></div>
 <div class="form-group"><label>Цель, км (необязательно)</label><input type="number" id="goal-km" step="0.1" min="0"></div>
 <div class="form-group"><label>Лимит времени, мин (необязательно)</label><input type="number" id="goal-min" step="1" min="0"></div>
-<button id="start-btn" class="btn" onclick="startSession()">Старт</button>
+<button class="btn" onclick="startSession()">Старт</button>
 </div>
 
-<div id="live" style="display: none; background: #1c1c1e; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #2c2c2e; text-align: center;">
-<div id="live-km" style="font-size: 34px; font-weight: bold;">0.00 км</div>
-<div id="live-time" style="color: #8e8e93; font-size: 14px;">00:00:00</div>
+<div id="live" class="card" style="display: none; text-align: center;">
+<div id="live-km" class="big">0.00 км</div>
+<div id="live-time" class="muted">00:00:00</div>
 <div id="live-speed" style="color: #5ac8fa; font-size: 14px; margin-top: 6px;">—</div>
-<div id="live-goal" style="color: #8e8e93; font-size: 12px; margin-top: 6px;"></div>
+<div id="live-goal" class="muted" style="margin-top: 6px;"></div>
+<div id="diag" class="muted" style="margin-top: 8px;"></div>
 <button class="btn" style="background: #ff3b30; color: #fff; margin-top: 12px;" onclick="stopSession()">Стоп</button>
 </div>
 
-<div id="result" style="display: none; background: #1c1c1e; padding: 15px; border-radius: 12px; border: 1px solid #2c2c2e; font-size: 14px; line-height: 1.6;"></div>
+<div id="map-box" style="display: none;"><div id="map"></div></div>
+
+<div id="result" class="card" style="display: none; font-size: 14px; line-height: 1.6;"></div>
+</div>
+
+<div id="hist-box" style="display: none;">
+<div class="card">
+<div class="form-group"><label>Вид</label>
+<select id="h-sport" onchange="renderHistory()">
+<option value="run">🏃 Бег</option>
+<option value="walk">🚶 Ходьба</option>
+<option value="bike">🚴 Велоспорт</option>
+<option value="ski">⛷ Лыжи</option>
+</select></div>
+<div class="form-group"><label>Показатель</label>
+<select id="h-metric" onchange="renderHistory()">
+<option value="dist">Дистанция, км</option>
+<option value="pace">Темп или скорость</option>
+<option value="time">Время, мин</option>
+<option value="kcal">Калории</option>
+</select></div>
+</div>
+<div class="chart-box"><canvas id="h-chart"></canvas></div>
+<p id="hist-status" style="color: #ff9500; font-size: 13px;"></p>
+<div id="h-list"></div>
+</div>
 </div>
 
 <script>
@@ -45,20 +91,20 @@ tg.ready(); tg.expand();
 const sb = supabase.createClient('https://qnpriwfxzuoymoumdtrl.supabase.co', 'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
 
 const SPORTS = {
-  run:  { name: 'Бег',       met: 9.8, maxMs: 9,  pace: true },
-  walk: { name: 'Ходьба',    met: 3.5, maxMs: 3.5, pace: true },
-  bike: { name: 'Велоспорт', met: 8.0, maxMs: 25, pace: false },
-  ski:  { name: 'Лыжи',      met: 7.0, maxMs: 15, pace: true }
+  run:  { name: 'Бег',       met: 9.8, maxMs: 9,    pace: true },
+  walk: { name: 'Ходьба',    met: 3.5, maxMs: 3.5,  pace: true },
+  bike: { name: 'Велоспорт', met: 8.0, maxMs: 25,   pace: false },
+  ski:  { name: 'Лыжи',      met: 7.0, maxMs: 15,   pace: true }
 };
-const MAX_ACCURACY_M = 25;
-const SPEED_TOLERANCE = 1.2;
-const MAX_ROUTE_POINTS = 600;
+const MAX_ACC = 50;
+const SPEED_TOL = 1.3;
+const MIN_STEP = 3;
+const MAX_ROUTE = 600;
 const NATIVE = !!(window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.BackgroundGeolocation);
 const BG = NATIVE ? Capacitor.Plugins.BackgroundGeolocation : null;
 
-let session = null;
-
 const $ = id => document.getElementById(id);
+let session = null, map = null, routeLine = null, marker = null, chart = null, historyRows = [];
 
 function playerKey(){
   const tgId = localStorage.getItem('tgId');
@@ -92,40 +138,92 @@ function fmtTime(sec){
   return [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60].map(v => String(v).padStart(2, '0')).join(':');
 }
 
-function paceText(sport, distM, durS){
-  if (!(distM > 0) || !(durS > 0)) return '—';
+function paceValue(sport, distM, durS){
   const km = distM / 1000;
+  if (!(km > 0) || !(durS > 0)) return null;
+  return sport.pace ? (durS / 60) / km : km / (durS / 3600);
+}
+
+function paceText(sport, distM, durS){
+  const v = paceValue(sport, distM, durS);
+  if (v === null) return '—';
   if (sport.pace) {
-    const p = durS / 60 / km;
-    let m = Math.floor(p), s = Math.round((p - m) * 60);
+    let m = Math.floor(v), s = Math.round((v - m) * 60);
     if (s === 60) { m++; s = 0; }
     return m + ':' + String(s).padStart(2, '0') + ' мин/км';
   }
-  return (km / (durS / 3600)).toFixed(1) + ' км/ч';
+  return v.toFixed(1) + ' км/ч';
+}
+
+function showTab(name){
+  $('tab-rec').classList.toggle('on', name === 'rec');
+  $('tab-hist').classList.toggle('on', name === 'hist');
+  $('rec-box').style.display = name === 'rec' ? 'block' : 'none';
+  $('hist-box').style.display = name === 'hist' ? 'block' : 'none';
+  if (name === 'hist') loadHistory();
+}
+
+function ensureMap(){
+  if (map) return;
+  map = L.map('map').setView([55.75, 37.62], 15);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+  routeLine = L.polyline([], { color: '#5ac8fa', weight: 4 }).addTo(map);
+}
+
+function showMap(){
+  $('map-box').style.display = 'block';
+  ensureMap();
+  map.invalidateSize();
+}
+
+function resetMap(){
+  if (!map) return;
+  routeLine.setLatLngs([]);
+  if (marker) { marker.remove(); marker = null; }
+}
+
+function drawLive(){
+  const s = session;
+  if (!s || !map) return;
+  const ll = s.points.map(p => [p.lat, p.lon]);
+  routeLine.setLatLngs(ll);
+  const last = ll[ll.length - 1];
+  if (!marker) {
+    marker = L.circleMarker(last, { radius: 8, color: '#fff', weight: 2, fillColor: '#5ac8fa', fillOpacity: 1 }).addTo(map);
+    map.setView(last, 17);
+  } else {
+    marker.setLatLng(last);
+    map.panTo(last);
+  }
+}
+
+function addPoint(s, p){
+  s.last = p;
+  s.points.push(p);
+  drawLive();
 }
 
 function accept(p){
-  if (!session) return;
-  if (p.time < session.startedAt - 2000) return;
-  if (p.mock) { session.flagged++; return; }
-  if (!(p.acc <= MAX_ACCURACY_M)) return;
-
-  const last = session.last;
-  if (!last) {
-    session.last = p; session.points.push(p);
-    return;
-  }
-  const dt = (p.time - last.time) / 1000;
+  const s = session;
+  if (!s) return;
+  s.raw++;
+  if (p.time < s.startedAt - 2000) return;
+  if (p.mock) { s.flagged++; return; }
+  if (!(p.acc <= MAX_ACC)) { s.weak++; return; }
+  if (!s.last) { addPoint(s, p); return; }
+  const dt = (p.time - s.last.time) / 1000;
   if (!(dt > 0)) return;
-  const d = haversine(last, p);
-  const v = d / dt;
-  if (v > SPORTS[session.sport].maxMs * SPEED_TOLERANCE || (d > 100 && dt < 5)) {
-    session.flagged++;
+  const d = haversine(s.last, p);
+  if (d < MIN_STEP) return;
+  if (d / dt > SPORTS[s.sport].maxMs * SPEED_TOL || (d > 150 && dt < 10)) {
+    s.jumps++;
+    s.rejectRun++;
+    if (s.rejectRun >= 5) { s.last = null; s.rejectRun = 0; }
     return;
   }
-  session.distanceM += d;
-  session.last = p;
-  session.points.push(p);
+  s.rejectRun = 0;
+  s.distanceM += d;
+  addPoint(s, p);
 }
 
 function startWatch(onPoint, onError){
@@ -145,14 +243,14 @@ function startWatch(onPoint, onError){
       });
     });
   }
-  return Promise.resolve(navigator.geolocation.watchPosition(
+  return navigator.geolocation.watchPosition(
     pos => onPoint({
       lat: pos.coords.latitude, lon: pos.coords.longitude, acc: pos.coords.accuracy,
       time: pos.timestamp, mock: false
     }),
-    err => onError(err.message || 'Нет доступа к GPS'),
-    { enableHighAccuracy: true, maximumAge: 0 }
-  ));
+    err => onError(err.code === 1 ? 'Нет доступа к геолокации. Разрешите её для этого приложения.' : (err.message || 'Ошибка GPS')),
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
+  );
 }
 
 async function stopWatch(id){
@@ -163,11 +261,6 @@ async function stopWatch(id){
 
 async function startSession(){
   if (session) return;
-  const tgId = localStorage.getItem('tgId');
-  const email = localStorage.getItem('currentEmail') || localStorage.getItem('linkedEmail');
-  if (!tgId && !email) {
-    $('status').textContent = 'Войдите на главной, чтобы результаты сохранялись в аккаунт.';
-  }
   const goalKm = parseFloat($('goal-km').value);
   const goalMin = parseFloat($('goal-min').value);
   session = {
@@ -177,14 +270,19 @@ async function startSession(){
     goalM: goalKm > 0 ? goalKm * 1000 : 0,
     limitS: goalMin > 0 ? goalMin * 60 : 0,
     goalDone: false,
-    points: [], last: null, distanceM: 0, flagged: 0,
+    points: [], last: null, distanceM: 0,
+    flagged: 0, weak: 0, jumps: 0, raw: 0, rejectRun: 0,
     watcher: null, timer: null
   };
+  $('status').textContent = '';
   $('result').style.display = 'none';
+  showMap();
+  resetMap();
   try {
     session.watcher = await startWatch(accept, msg => { $('status').textContent = msg; });
   } catch (e) {
     session = null;
+    $('map-box').style.display = 'none';
     $('status').textContent = 'Не удалось включить GPS: ' + (e.message || e);
     return;
   }
@@ -195,40 +293,30 @@ async function startSession(){
 }
 
 function tick(){
-  if (!session) return;
-  const el = (Date.now() - session.startedAt) / 1000;
-  $('live-km').textContent = (session.distanceM / 1000).toFixed(2) + ' км';
+  const s = session;
+  if (!s) return;
+  const el = (Date.now() - s.startedAt) / 1000;
+  $('live-km').textContent = (s.distanceM / 1000).toFixed(2) + ' км';
   $('live-time').textContent = fmtTime(el);
-  $('live-speed').textContent = paceText(SPORTS[session.sport], session.distanceM, el);
-  let goalText = '';
-  if (session.goalM) goalText += 'Цель: ' + (session.goalM / 1000) + ' км';
-  if (session.limitS) goalText += (goalText ? ' · ' : '') + 'лимит ' + Math.round(session.limitS / 60) + ' мин';
-  if (session.goalDone) goalText += ' · цель выполнена, можно продолжать';
-  $('live-goal').textContent = goalText;
-  if (session.limitS && el >= session.limitS) { stopSession(); return; }
-  if (session.goalM && !session.goalDone && session.distanceM >= session.goalM) session.goalDone = true;
+  $('live-speed').textContent = paceText(SPORTS[s.sport], s.distanceM, el);
+  const g = [];
+  if (s.goalM) g.push('Цель: ' + (s.goalM / 1000) + ' км' + (s.goalDone ? ' (выполнена)' : ''));
+  if (s.limitS) g.push('лимит ' + Math.round(s.limitS / 60) + ' мин');
+  $('live-goal').textContent = g.join(' · ');
+  let diag = 'GPS: получено ' + s.raw + ', принято ' + s.points.length + ', слабый сигнал ' + s.weak + ', отброшено ' + s.jumps;
+  if (s.raw === 0 && el > 30) diag += '. Точек пока нет: проверьте доступ к геолокации и выйдите на открытое место';
+  $('diag').textContent = diag;
+  if (s.goalM && !s.goalDone && s.distanceM >= s.goalM) s.goalDone = true;
+  if (s.limitS && el >= s.limitS) stopSession();
 }
 
 function downsample(points){
-  const step = Math.max(1, Math.ceil(points.length / MAX_ROUTE_POINTS));
+  const step = Math.max(1, Math.ceil(points.length / MAX_ROUTE));
   const out = [];
   for (let i = 0; i < points.length; i += step) out.push([points[i].lat, points[i].lon, points[i].time]);
   const last = points[points.length - 1];
-  if (last && (!out.length || out[out.length - 1][2] !== last.time)) out.push([last.lat, last.lon, last.time]);
+  if (last && out[out.length - 1][2] !== last.time) out.push([last.lat, last.lon, last.time]);
   return out;
-}
-
-function routeSvg(route){
-  if (route.length < 2) return '';
-  const lat0 = route.reduce((a, r) => a + r[0], 0) / route.length;
-  const kx = Math.cos(lat0 * Math.PI / 180);
-  const xs = route.map(r => r[1] * kx), ys = route.map(r => r[0]);
-  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
-  const span = Math.max(maxX - minX, maxY - minY) || 1e-9;
-  const k = 260 / span;
-  const pts = route.map((r, i) => (10 + (xs[i] - minX) * k).toFixed(1) + ',' + (10 + (maxY - ys[i]) * k).toFixed(1)).join(' ');
-  return '<svg viewBox="0 0 280 280" width="100%" style="margin-top: 10px; background: #0f0f10; border-radius: 8px;">' +
-    '<polyline fill="none" stroke="#5ac8fa" stroke-width="3" points="' + pts + '"/></svg>';
 }
 
 function showResult(rec){
@@ -244,13 +332,12 @@ function showResult(rec){
     'Темп / скорость: ' + paceText(sport, rec.distance_m, rec.duration_s) + '<br>' +
     'Калории: около ' + rec.kcal + '<br>' +
     (goalLine ? goalLine + '<br>' : '') +
-    (rec.flagged ? '<span style="color: #8e8e93; font-size: 12px;">Не засчитано точек: ' + rec.flagged + '</span><br>' : '') +
-    routeSvg(rec.route);
+    (rec.flagged ? '<span class="muted">Не засчитано точек с подменой GPS: ' + rec.flagged + '</span><br>' : '');
 }
 
 async function stopSession(){
-  if (!session) return;
   const s = session;
+  if (!s) return;
   session = null;
   clearInterval(s.timer);
   const durS = (Date.now() - s.startedAt) / 1000;
@@ -258,10 +345,13 @@ async function stopSession(){
   $('live').style.display = 'none';
   $('setup').style.display = 'block';
 
-  if (s.points.length === 0 || s.distanceM <= 0) {
-    $('status').textContent = 'GPS не получил точек. Запись не сохранена.';
+  if (s.points.length < 2 || s.distanceM <= 0) {
+    $('map-box').style.display = 'none';
+    $('status').textContent = 'Недостаточно точек GPS, запись не сохранена.';
     return;
   }
+  if (map && routeLine.getLatLngs().length > 1) map.fitBounds(routeLine.getBounds(), { padding: [20, 20] });
+
   const rec = {
     player_key: s.key,
     activity: s.sport,
@@ -276,10 +366,10 @@ async function stopSession(){
     recorded_at: new Date(s.startedAt).toISOString()
   };
   showResult(rec);
-  saveRecord(rec);
+  queueRecord(rec);
 }
 
-function saveRecord(rec){
+function queueRecord(rec){
   let log = [];
   try { log = JSON.parse(localStorage.getItem('cardioLog') || '[]'); } catch (e) {}
   log.push(Object.assign({ sent: false }, rec));
@@ -305,13 +395,75 @@ async function flushLog(){
   todo.forEach(x => { x.sent = true; });
   localStorage.setItem('cardioLog', JSON.stringify(log));
   $('status').textContent = '';
+  loadHistory();
+}
+
+async function loadHistory(){
+  const { data, error } = await sb.from('cardio_sessions')
+    .select('*').eq('player_key', playerKey()).order('recorded_at', { ascending: true });
+  if (error) { $('hist-status').textContent = 'Не удалось загрузить историю: ' + error.message; return; }
+  historyRows = data || [];
+  $('hist-status').textContent = '';
+  renderHistory();
+}
+
+function metricValue(row, metric){
+  if (metric === 'dist') return row.distance_m / 1000;
+  if (metric === 'time') return row.duration_s / 60;
+  if (metric === 'kcal') return row.kcal;
+  return paceValue(SPORTS[row.activity], row.distance_m, row.duration_s);
+}
+
+function renderHistory(){
+  const sportKey = $('h-sport').value;
+  const metric = $('h-metric').value;
+  const sport = SPORTS[sportKey];
+  const rows = historyRows.filter(r => r.activity === sportKey);
+
+  const titles = {
+    dist: 'Дистанция, км',
+    time: 'Время, мин',
+    kcal: 'Калории, ккал',
+    pace: sport.pace ? 'Темп, мин/км (меньше = быстрее)' : 'Скорость, км/ч (больше = быстрее)'
+  };
+  const labels = rows.map(r => r.recorded_at.slice(0, 10).split('-').reverse().join('.'));
+  const values = rows.map(r => {
+    const v = metricValue(r, metric);
+    return v === null ? null : Math.round(v * 100) / 100;
+  });
+
+  if (chart) chart.destroy();
+  chart = new Chart($('h-chart').getContext('2d'), {
+    type: 'line',
+    data: { labels: labels, datasets: [{
+      label: titles[metric], data: values, borderColor: '#5ac8fa', backgroundColor: '#5ac8fa33',
+      borderWidth: 2, pointRadius: 3, fill: true, tension: 0.3
+    }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, title: { display: true, text: titles[metric], color: '#fff' } },
+      scales: {
+        x: { ticks: { color: '#8e8e93' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+        y: { ticks: { color: '#8e8e93' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+      }
+    }
+  });
+
+  $('h-list').innerHTML = rows.length
+    ? rows.slice().reverse().map(r =>
+        '<div class="hist-item"><b>' + labels[rows.indexOf(r)] + '</b><br>' +
+        (r.distance_m / 1000).toFixed(2) + ' км · ' + fmtTime(r.duration_s) + ' · ' +
+        paceText(sport, r.distance_m, r.duration_s) + ' · ' + r.kcal + ' ккал</div>'
+      ).join('')
+    : '<p class="muted">Записей по этому виду пока нет.</p>';
 }
 
 function init(){
   $('mode-note').textContent = NATIVE
     ? 'Фоновая запись включена: можно выключить экран, запись продолжится.'
-    : 'Вы в браузере или Telegram: запись останавливается, когда приложение свёрнуто или экран выключен. Для фоновой записи нужна установка приложения.';
+    : 'В браузере или Telegram запись останавливается, когда приложение свёрнуто или экран выключен.';
   flushLog();
+  loadHistory();
 }
 
 init();
