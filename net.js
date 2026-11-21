@@ -1,7 +1,9 @@
 /* ============================================================
-   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 39)
+   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 40)
    Кубки без потолка. Автопоражение по лагам убрано.
-   Переподключение канала, реже рассылка, реже запись состояния.
+   Состояние уходит только при изменении доски + пульс раз в 2 с.
+   Проверка конца партии — не чаще раза в 0.9 с.
+   Пропал из канала на 60 с — партия засчитывается оставшемуся.
    ============================================================ */
 (function (global) {
 'use strict';
@@ -21,8 +23,11 @@ const UNITS_KEY    = 'chessUnits';
 const UNIT_CHANCE  = 0.03;
 
 const PUSH_MS = 400;
+const HEARTBEAT_MS = 2000;
+const END_CHECK_MS = 900;
+const FORFEIT_MS = 60000;
 const STATE_SAVE_MS = 5000;
-const STALL_MS = 8000;
+const STALL_MS = 6000;
 const TICK_MS = 100;
 
 const SEARCH_LIMIT_MS = 3000;
@@ -124,7 +129,10 @@ const Net = {
   lastSeen: 0,
   replayLog: [], logMark: 0,
 
-  _lastStateAt: 0, _stallTimer: null, _reattachTimer: null
+  _lastStateAt: 0, _stallTimer: null, _reattachTimer: null,
+  _seq: 0, _lastSentSig: '', _lastSentAt: 0,
+  _foeSeenAt: 0, _forfeitTimer: null,
+  _endCheckAt: 0, _lastResyncAt: 0
 };
 
 Net.on = function (evt, fn){
@@ -210,7 +218,7 @@ Net.myLevels = function (){
 function slimState(s){
   return {
     id: s.id, arena: s.arena, players: s.players,
-    mode: s.mode || null,
+    mode: s.mode || null, seq: s.seq || 0,
     turnMode: !!s.turnMode, turn: s.turn || null, clocks: s.clocks || null,
     board: s.board, energy: s.energy, energyAcc: s.energyAcc,
     hand: s.hand, spellUsed: s.spellUsed,
@@ -242,6 +250,40 @@ function ensureSpellFields(s){
   if (!s.drawOffer) s.drawOffer = { a:false, b:false };
   return s;
 }
+
+/* ---------------- отпечаток состояния ---------------- */
+
+function pieceCode(p){
+  if (!p) return '.';
+  let c = p.type.slice(0, 2) + p.side;
+  if (p.hp && p.hp > 1) c += p.hp;
+  if (p.shield) c += 's' + p.shield;
+  if (p.rage) c += 'r' + p.rage;
+  if (p.frozenUntil) c += 'f' + Math.ceil(p.frozenUntil);
+  return c;
+}
+
+Net._stateSig = function (s){
+  if (!s || !s.board) return '';
+  let out = '';
+  for (let y = 0; y < 8; y++){
+    const row = s.board[y];
+    for (let x = 0; x < 8; x++) out += pieceCode(row && row[x]) + ',';
+  }
+  if (s.blocked){
+    const ks = Object.keys(s.blocked);
+    ks.sort();
+    for (let i = 0; i < ks.length; i++) out += ks[i] + '@' + Math.ceil(s.blocked[ks[i]]) + ';';
+  }
+  if (s.deal){
+    out += '|' + ((s.deal.a && s.deal.a.cur) || '-') + ((s.deal.b && s.deal.b.cur) || '-');
+  }
+  out += '|' + (s.turn || '-');
+  if (s.clocks) out += '|' + Math.ceil(s.clocks.a || 0) + ':' + Math.ceil(s.clocks.b || 0);
+  out += '|' + (s.over ? '1' : '0') + (s.phase || '-') + (s.winner || '-');
+  if (s.drawOffer) out += (s.drawOffer.a ? 'A' : '') + (s.drawOffer.b ? 'B' : '');
+  return out;
+};
 
 /* ---------------- режим: надстройка над Arena ---------------- */
 
@@ -306,8 +348,18 @@ function sideHasMove(s, side){
   return false;
 }
 
-Net._checkEnd = function (s){
+/* Раньше эта проверка шла 10 раз в секунду и пересчитывала все
+   легальные ходы за обе стороны — отсюда и брались зависания.
+   Теперь не чаще раза в 0.9 с, если не попросили принудительно. */
+Net._checkEnd = function (s, force){
   if (!s || s.over) return;
+
+  if (!force){
+    const now = Date.now();
+    if (now - Net._endCheckAt < END_CHECK_MS) return;
+    Net._endCheckAt = now;
+  }
+
   if (cannotMate(s, 'a') && cannotMate(s, 'b')){ Arena.finish(s, 'draw'); return; }
 
   const other = { a:'b', b:'a' };
@@ -590,6 +642,9 @@ Net._clearMatch = function (){
   if (Net.botTimer){ clearTimeout(Net.botTimer); Net.botTimer = null; }
   if (Net.resumeTimer){ clearTimeout(Net.resumeTimer); Net.resumeTimer = null; }
   if (Net.tourBotTimer){ clearTimeout(Net.tourBotTimer); Net.tourBotTimer = null; }
+  if (Net._stallTimer){ clearInterval(Net._stallTimer); Net._stallTimer = null; }
+  if (Net._forfeitTimer){ clearInterval(Net._forfeitTimer); Net._forfeitTimer = null; }
+  if (Net._reattachTimer){ clearTimeout(Net._reattachTimer); Net._reattachTimer = null; }
 
   try { localStorage.removeItem(RECORD_KEY); } catch (e){}
   try { localStorage.removeItem(STATE_KEY); } catch (e){}
@@ -781,8 +836,14 @@ Net._attach = async function (){
     if (Net.host) return;
 
     const incoming = ensureSpellFields(payloadOf(msg));
+    if (!incoming) return;
 
-    if (incoming && incoming.mode && MODE_BY_ID[incoming.mode] && incoming.mode !== Net.matchMode){
+    if (typeof incoming.seq === 'number' && typeof Net._lastSeq === 'number'){
+      if (incoming.seq < Net._lastSeq) return;
+      Net._lastSeq = incoming.seq;
+    }
+
+    if (incoming.mode && MODE_BY_ID[incoming.mode] && incoming.mode !== Net.matchMode){
       Net.matchMode = incoming.mode;
       Net.emit('mode', { mode: Net.matchMode });
     }
@@ -800,7 +861,7 @@ Net._attach = async function (){
     const p = payloadOf(msg) || {};
 
     if (Net.friendly && Net.host && !Net.state){ Net._friendlyBuildFor(p); return; }
-    if (Net.host && Net.state) Net._push();
+    if (Net.host && Net.state) Net._push(true);
   });
 
   ch.on('broadcast', { event: 'error' }, function (msg){
@@ -817,6 +878,19 @@ Net._attach = async function (){
   ch.on('presence', { event: 'sync' }, function (){
     if (Net.friendly && Net.host && !Net.state) Net._friendlyFromPresence();
 
+    const raw = ch.presenceState() || {};
+    const keys = Object.keys(raw);
+    let foe = false;
+
+    for (let i = 0; i < keys.length; i++){
+      const arr = raw[keys[i]] || [];
+      for (let j = 0; j < arr.length; j++){
+        const p = arr[j];
+        if (p && p.key && p.key !== Net.key) foe = true;
+      }
+    }
+    if (foe) Net._foeSeenAt = Date.now();
+
     if (Net.friendly && !Net.host && !Net.state && Net.matchCh){
       Net.matchCh.send({
         type: 'broadcast', event: 'hello',
@@ -828,7 +902,7 @@ Net._attach = async function (){
       });
     }
 
-    if (Net.host && Net.state) Net._push();
+    if (Net.host && Net.state) Net._push(true);
   });
 
   await ch.subscribe(async function (status){
@@ -862,16 +936,46 @@ Net._reattachSoon = function (ch){
     Net.matchCh = null;
     try { await Net.sb.removeChannel(ch); } catch (e){}
     try { await Net._attach(); } catch (e){}
-  }, 1500);
+  }, 1200);
 };
 
+/* Гость: если состояние не приходило STALL_MS — сам просит его заново. */
 Net._watchStall = function (){
   if (Net._stallTimer) return;
   Net._stallTimer = setInterval(function (){
     if (!Net.matchId || Net.finished || Net.host) return;
+
     const dt = Date.now() - (Net._lastStateAt || 0);
-    if (dt > STALL_MS) Net.emit('stall', { ms: dt });
+    if (dt < STALL_MS) return;
+
+    Net.emit('stall', { ms: dt });
+
+    const now = Date.now();
+    if (now - (Net._lastResyncAt || 0) > 4000 && Net.matchCh){
+      Net._lastResyncAt = now;
+      try {
+        Net.matchCh.send({ type:'broadcast', event:'hello', payload:{ from: Net.key, resync: true } });
+      } catch (e){}
+    }
   }, 2000);
+};
+
+/* Хост: соперник пропал из канала надолго — партия достаётся оставшемуся.
+   Это и есть «вышел и не вернулся — проиграл» в тех пределах,
+   которые возможны без серверной таблицы активных партий. */
+Net._watchForfeit = function (){
+  if (Net._forfeitTimer) return;
+  Net._forfeitTimer = setInterval(function (){
+    if (!Net.host || Net.botMode || Net.finished) return;
+
+    const s = Net.state;
+    if (!s || s.over) return;
+    if (!Net._foeSeenAt) return;
+    if (Date.now() - Net._foeSeenAt < FORFEIT_MS) return;
+
+    Arena.finish(s, Net.mySide);
+    Net._hostFinish();
+  }, 5000);
 };
 
 /* ---------------- бой с живым игроком ---------------- */
@@ -895,6 +999,13 @@ Net._beginMatch = async function (m){
   Net.finishing = false;
   Net.state = null;
   Net.lastSeen = Date.now();
+  Net._seq = 0;
+  Net._lastSeq = 0;
+  Net._lastSentSig = '';
+  Net._lastSentAt = 0;
+  Net._foeSeenAt = 0;
+  Net._endCheckAt = 0;
+  Net._lastResyncAt = 0;
   Net._logReset();
 
   const myCups = Net.me ? Net.me.cups : 0;
@@ -946,6 +1057,12 @@ Net.startFriendlyHost = async function (o){
   Net.finishing = false;
   Net.state = null;
   Net.lastSeen = Date.now();
+  Net._seq = 0;
+  Net._lastSeq = 0;
+  Net._lastSentSig = '';
+  Net._lastSentAt = 0;
+  Net._foeSeenAt = 0;
+  Net._endCheckAt = 0;
   Net._logReset();
 
   try { localStorage.removeItem(RECORD_KEY); } catch (e){}
@@ -1019,6 +1136,13 @@ Net.joinFriendly = async function (o){
   Net.finishing = false;
   Net.state = null;
   Net.lastSeen = Date.now();
+  Net._seq = 0;
+  Net._lastSeq = 0;
+  Net._lastSentSig = '';
+  Net._lastSentAt = 0;
+  Net._foeSeenAt = 0;
+  Net._endCheckAt = 0;
+  Net._lastResyncAt = 0;
   Net._logReset();
 
   try { localStorage.removeItem(RECORD_KEY); } catch (e){}
@@ -1086,6 +1210,13 @@ Net.startTour = async function (t){
   Net.finishing = false;
   Net.state = null;
   Net.lastSeen = Date.now();
+  Net._seq = 0;
+  Net._lastSeq = 0;
+  Net._lastSentSig = '';
+  Net._lastSentAt = 0;
+  Net._foeSeenAt = 0;
+  Net._endCheckAt = 0;
+  Net._lastResyncAt = 0;
   Net._logReset();
 
   try { localStorage.removeItem(RECORD_KEY); } catch (e){}
@@ -1261,6 +1392,11 @@ Net._startBotMatch = async function (){
   Net.state = null;
   Net.lastSeen = Date.now();
   Net.botThinkUntil = 0;
+  Net._seq = 0;
+  Net._lastSeq = 0;
+  Net._lastSentSig = '';
+  Net._lastSentAt = 0;
+  Net._endCheckAt = 0;
   Net._logReset();
 
   Net.players = {
@@ -1315,7 +1451,7 @@ Net._botTick = function (){
     Net._botCast(s);
     Net._botMove();
     if (s.over){ Net._hostFinish(); return; }
-    Net._push();
+    Net._push(true);
   }
 
   if (!Net.botMode || Net.finished || !Net.state || Net.state.over) return;
@@ -1550,7 +1686,7 @@ Net._botMove = function (){
   const s = Net.state;
   if (!s || s.over) return false;
   const moved = Net._autoMove(s, 'b');
-  Net._checkEnd(s);
+  Net._checkEnd(s, true);
   return moved;
 };
 
@@ -1558,7 +1694,7 @@ Net._botMove = function (){
 
 /* Раньше здесь было автопоражение через 15 секунд отсутствия.
    Именно из-за этого лаг превращался в проигрыш.
-   Теперь отсутствие никогда не засчитывается как поражение. */
+   Теперь отсутствие по времени не засчитывается. */
 Net._catchUp = function (s, awayMs, absentSide){
   if (!s || s.over) return;
   return;
@@ -1568,7 +1704,7 @@ Net.checkAway = function (){
   Net.lastSeen = Date.now();
   if (Net.finished) return;
   if (!Net.state || !Net.host) return;
-  Net._push();
+  Net._push(true);
 };
 
 /* ---------------- запуск боя ---------------- */
@@ -1597,8 +1733,13 @@ Net._hostStart = function (){
 
   Net.saveMark = 0;
   Net.lastSeen = Date.now();
-  Net._push();
+  Net._lastSentSig = '';
+  Net._lastSentAt = 0;
+  Net._endCheckAt = 0;
+
+  Net._push(true);
   Net._startLoop();
+  Net._watchForfeit();
 };
 
 Net._startLoop = function (){
@@ -1630,13 +1771,28 @@ Net._broadcastState = function (){
   Net.matchCh.send({ type:'broadcast', event:'state', payload: slimState(Net.state) });
 };
 
-Net._push = function (){
+/* Отправляем не чаще, чем меняется доска, плюс пульс раз в 2 секунды.
+   Эликсир и часы гость досчитывает сам, поэтому ему не нужен поток. */
+Net._push = function (force){
   if (!Net.state) return;
 
   if (Net.host){
     Net.emit('state', Net.state);
     Net._saveState(false);
   }
+
+  if (!Net.matchCh) return;
+
+  const sig = Net._stateSig(Net.state);
+  const now = Date.now();
+
+  if (!force && sig === Net._lastSentSig && now - Net._lastSentAt < HEARTBEAT_MS) return;
+
+  Net._lastSentSig = sig;
+  Net._lastSentAt = now;
+  Net._seq = (Net._seq || 0) + 1;
+  Net.state.seq = Net._seq;
+
   Net._broadcastState();
 };
 
@@ -1732,11 +1888,11 @@ Net._applyIntent = function (msg, side){
     }
   }
 
-  Net._checkEnd(s);
+  Net._checkEnd(s, true);
 
   if (s.over){ Net._hostFinish(); return; }
 
-  Net._push();
+  Net._push(true);
 };
 
 /* ---------------- конец боя ---------------- */
@@ -1781,6 +1937,28 @@ Net._localCups = async function (winner){
   return cups;
 };
 
+/* Если сервер не изменил кубки, хотя должен был — пишем напрямую.
+   Это лечит случай, когда потолок зашит в SQL-функцию. */
+Net._repairCups = async function (before, after){
+  if (Net.friendly) return;
+  if (typeof before !== 'number' || typeof after !== 'number') return;
+  if (before === after) return;
+
+  try {
+    const cur = await Net.refresh();
+    const now = cur ? cur.cups : null;
+    if (typeof now !== 'number') return;
+    if (now !== before) return;
+
+    const res = await Net.sb.from('arena_players')
+      .update({ cups: after })
+      .eq('player_key', Net.key);
+
+    if (res.error) console.error('[net] cups repair failed', res.error);
+    else await Net.refresh();
+  } catch (e){}
+};
+
 Net._saveReplay = function (p){
   if (!p || !p.moves || !p.moves.length) return;
   if (!Net.sb || !Net.key) return;
@@ -1820,6 +1998,7 @@ Net._hostFinish = function (){
   const isBot = Net.botMode;
   const isFriendly = Net.friendly;
   const isTour = Net.tour;
+  const mySide = Net.mySide;
 
   const winnerKey =
     s.winner === 'a' ? Net.players.a.key :
@@ -1855,17 +2034,24 @@ Net._hostFinish = function (){
     Net._localCups(s.winner)
       .then(function(){ return Net.refresh(); })
       .catch(function(e){ console.error('[net] local cups failed', e); });
-  } else if (winnerKey){
-    Net.sb.rpc('arena_report_match', {
-      p_match:  payload.matchId,
-      p_a:      Net.players.a.key,
-      p_b:      Net.players.b.key,
-      p_winner: winnerKey,
-      p_arena:  Net.arena
-    }).then(function (res){
-      if (res.error) console.error('[net] report failed', res.error);
-    });
+    return;
   }
+
+  if (!winnerKey) return;
+
+  const cupsBefore = payload.cups[mySide + '_before'];
+  const cupsAfter  = payload.cups[mySide + '_after'];
+
+  Net.sb.rpc('arena_report_match', {
+    p_match:  payload.matchId,
+    p_a:      Net.players.a.key,
+    p_b:      Net.players.b.key,
+    p_winner: winnerKey,
+    p_arena:  Net.arena
+  }).then(function (res){
+    if (res.error) console.error('[net] report failed', res.error);
+    return Net._repairCups(cupsBefore, cupsAfter);
+  }).catch(function(e){ console.error('[net] report chain failed', e); });
 };
 
 /* ---------------- действия игрока ---------------- */
@@ -1911,6 +2097,13 @@ Net.tryResume = async function (){
   Net.trialType = null;
   Net.state = null;
   Net.lastSeen = Date.now();
+  Net._seq = 0;
+  Net._lastSeq = 0;
+  Net._lastSentSig = '';
+  Net._lastSentAt = 0;
+  Net._foeSeenAt = 0;
+  Net._endCheckAt = 0;
+  Net._lastResyncAt = 0;
 
   try {
     const savedLog = JSON.parse(localStorage.getItem(LOG_KEY) || '[]');
@@ -1946,7 +2139,7 @@ Net.tryResume = async function (){
 
     Net._startLoop();
     Net._startBotBrain();
-    Net._push();
+    Net._push(true);
     return true;
   }
 
@@ -1968,7 +2161,8 @@ Net.tryResume = async function (){
     if (saved.over){ Net._hostFinish(); return true; }
 
     Net._startLoop();
-    Net._push();
+    Net._watchForfeit();
+    Net._push(true);
     return true;
   }
 
@@ -2057,7 +2251,6 @@ Net.leaveMatch = async function (){
   Net._clearFallback();
 
   if (Net.retry){ clearInterval(Net.retry); Net.retry = null; }
-  if (Net._stallTimer){ clearInterval(Net._stallTimer); Net._stallTimer = null; }
 
   if (Net.matchCh){
     try { await Net.matchCh.untrack(); } catch (e){}
@@ -2079,12 +2272,13 @@ Net.leaveMatch = async function (){
   Net.tourTrial = false;
   Net.trialType = null;
   Net.botThinkUntil = 0;
+  Net._foeSeenAt = 0;
 };
 
 Net.DRAW_OFFER_MAX = DRAW_OFFER_MAX;
 Net.SPELL_TYPES = SPELL_TYPES;
 Net.HAND_SIZE = HAND_SIZE;
-Net.VER = 39;
+Net.VER = 40;
 
 global.Net = Net;
 
