@@ -1,11 +1,7 @@
 /* ============================================================
    net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 32)
-   VER 31: партия турнира (tour) — канал arena_tour_<id>,
-   результат уходит в tour_report, кубки не меняются.
-   Бот в турнирной партии через 5 секунд ожидания.
-   Результат испытания уходит в trial_win / trial_loss.
-   VER 32: бот в испытании стартует сразу (t.bot),
-   результат бота не отправляется в tour_report.
+   VER 32: партия турнира с ботом стартует сразу по флагу bot,
+   результат бота не уходит в tour_report, но идёт в trial_win/trial_loss.
    ============================================================ */
 (function (global) {
 'use strict';
@@ -1092,13 +1088,14 @@ Net.startTour = async function (t){
   try { localStorage.removeItem(STATE_KEY); } catch (e){}
 
   const meP = { key: Net.key, name: Net.name, cups: myCups };
-  const oppP = { key: t.oppKey || ('pl_' + Math.random().toString(36).slice(2, 12)), name: t.oppName || 'Игрок', cups: oppCups };
+  const oppP = { key: t.oppKey, name: t.oppName || 'Игрок', cups: oppCups };
 
   Net.players = Net.host ? { a: meP, b: oppP } : { a: oppP, b: meP };
   Net.setups = null;
   Net.decks  = decksFor(t.side, Net.myDeck(), null);
   Net.levels = levelsFor(t.side, Net.myLevels(), null);
 
+  /* партия с ботом: сразу, без ожидания гостя */
   if (t.bot){
     Net.arena = Arena.arenaOf(myCups);
     Net._tourBotStart();
@@ -1154,9 +1151,6 @@ Net._tourBotStart = function (){
   } catch (e){}
   Net.botSkill = Math.max(0.25, Math.min(0.9, skill));
 
-  if (!Net.players) Net.players = { a: { key: Net.key, name: Net.name, cups: myCups }, b: null };
-  if (!Net.players.a) Net.players.a = { key: Net.key, name: Net.name, cups: myCups };
-
   const rivalName = botNickname();
   const rivalKey = 'pl_' + Math.random().toString(36).slice(2, 12);
   const rivalCups = myCups;
@@ -1167,11 +1161,7 @@ Net._tourBotStart = function (){
   Net.decks  = decksFor('a', Net.myDeck(), null);
   Net.levels = levelsFor('a', Net.myLevels(), null);
 
-  if (Net.tourBotTimer){ clearTimeout(Net.tourBotTimer); Net.tourBotTimer = null; }
-
   Net.botMode = true;
-  Net.mySide = 'a';
-  Net.host = true;
 
   Net._hostStart();
   Net._startBotBrain();
@@ -1199,7 +1189,7 @@ Net._reportTrial = function (winner){
     const sess = res && res.data && res.data.session;
     if (!sess || !sess.id) return;
 
-    if (winner === 'draw') return;
+    if (winner === 'draw') return { data: null };
 
     if (winner === Net.mySide){
       return rpc('trial_win', { p_session: sess.id, p_key: Net.key });
