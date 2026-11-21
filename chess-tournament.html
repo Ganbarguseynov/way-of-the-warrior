@@ -251,7 +251,6 @@ function showDock(m){
     accept.style.display = m.my_ok ? 'none' : 'block';
     accept.disabled = false;
     play.style.display = 'none';
-    $('dockSub').textContent += m.my_ok ? '' : '';
   } else if (m.status === 'active'){
     accept.style.display = 'none';
     play.style.display = 'block';
@@ -304,7 +303,6 @@ async function pollMatch(){
     const d = await rpc('tour_my_match', { p_key: KEY });
     const m = d.match;
     if (!m){ hideDock(); lastMatchId = null; return; }
-    m.id = m.id;
     if (m.status === 'active' && m.my_ok && m.opp_ok){
       if (lastMatchId !== m.id){ lastMatchId = m.id; }
     }
