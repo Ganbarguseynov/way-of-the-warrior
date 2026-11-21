@@ -186,7 +186,7 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
 </head>
 <body>
 
-<div id="verTag">v27</div>
+<div id="verTag">v28</div>
 
 <div class="top-bar">
   <div class="profile-badge" id="profileBadge">
@@ -199,7 +199,7 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
   <div class="top-right">
     <div class="currencies">
       <div class="currency trophy">🏆 <span id="trophies-count">0</span></div>
-      <div class="currency coin">🪙 <span id="coins-count">1250</span></div>
+      <div class="currency coin">🪙 <span id="coins-count">0</span></div>
       <div class="currency gem">💎 <span id="gems-count">50</span></div>
     </div>
     <button class="burger" id="burger" aria-label="Меню"><span></span><span></span><span></span></button>
@@ -255,7 +255,7 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
 
 <div id="arenaModal">
   <div id="arenaModalHead">
-    <div id="arenaHeadLeft"><h3>Все арены</h3><span class="verChip">v27</span></div>
+    <div id="arenaHeadLeft"><h3>Все арены</h3><span class="verChip">v28</span></div>
     <button id="arenaClose">✕</button>
   </div>
   <div id="arenaMineBar">Ты на арене <span id="mineBarText">…</span></div>
@@ -289,7 +289,7 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
     <button class="m-item" data-act="rules"><div class="m-ico">📖</div><div class="m-txt"><div class="m-name">Игровой процесс</div><div class="m-sub">Как играть и как считаются звёзды</div></div><div class="m-arrow">›</div></button>
     <button class="m-item" data-act="fair"><div class="m-ico">⚖️</div><div class="m-txt"><div class="m-name">Правила честной игры</div><div class="m-sub">Уважай других игроков</div></div><div class="m-arrow">›</div></button>
   </div>
-  <div class="drawer-foot">Chess Royale · версия 27</div>
+  <div class="drawer-foot">Chess Royale · версия 28</div>
 </div>
 
 <div id="infoModal">
@@ -310,7 +310,7 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;height:4px;z-index:12
       <div id="nickErr"></div>
       <button id="nickOk">Сохранить</button>
       <button id="nickLater">Не сейчас</button>
-      <div id="nickVer">окно v27</div>
+      <div id="nickVer">окно v28</div>
     </div>
   </div>
 </div>
@@ -395,6 +395,16 @@ function setGems(v){
   const el = $('gems-count'); if (el) el.textContent = n;
 }
 
+async function updateWallet(){
+  try {
+    const res = await sb.rpc('wallet_get', { p_key: playerKey() });
+    if (res.error) throw res.error;
+    const w = res.data || {};
+    $('gems-count').textContent = (typeof w.gems === 'number') ? w.gems : 50;
+    $('coins-count').textContent = (typeof w.coins === 'number') ? w.coins : 0;
+  } catch(e){ console.error(e); }
+}
+
 function curMode(){
   let v = null;
   try { v = localStorage.getItem(MODE_KEY); } catch(e){}
@@ -475,7 +485,6 @@ function render(cups){
   $('player-arena-label').textContent = 'Арена ' + arena;
   $('trophies-count').textContent = cups;
   $('current-trophies').textContent = cups;
-  setGems(getGems());
 
   $('arena-title').textContent = 'Арена ' + arena + ': ' + NAMES[arena-1];
   $('arena-subtitle').textContent = RULES[arena-1] || '';
@@ -694,10 +703,12 @@ $('battleBtn').onclick = function(){
 
 renderModes();
 render(0);
+updateWallet();
 boot();
 setTimeout(function(){ buildArenaBrowser(); primeAllSlideVideos(); }, 600);
+setInterval(updateWallet, 10000);
 document.addEventListener('visibilitychange', function(){
-  if (!document.hidden) boot();
+  if (!document.hidden){ boot(); updateWallet(); }
   else { const v = $('arenaVideo'); if (v){ try { v.pause(); } catch(e){} } }
 });
 </script>
