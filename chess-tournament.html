@@ -30,6 +30,7 @@ h1{font-size:20px;font-weight:900;margin:0;text-shadow:0 2px 0 rgba(0,0,0,.35)}
 .btn{width:100%;padding:12px;border:3px solid #fff;border-radius:12px;font-size:13.5px;font-weight:900;color:#fff;cursor:pointer;background:linear-gradient(180deg,#22c55e,#15803d);box-shadow:0 4px 0 #0b5426;margin-top:4px}
 .btn.sec{background:linear-gradient(180deg,#64748b,#334155);box-shadow:0 4px 0 #111827}
 .btn.gem{background:linear-gradient(180deg,#7dd3fc,#2563eb);box-shadow:0 4px 0 #1e3a8a}
+.btn.search{background:linear-gradient(180deg,#ef4444,#991b1b);box-shadow:0 4px 0 #7f1d1d}
 .btn:disabled{opacity:.55}
 .empty{text-align:center;font-size:13px;color:#dbeafe;padding:20px 10px;line-height:1.5}
 .note{font-size:11px;color:#5a7398;margin-top:6px;font-weight:700;text-align:center}
@@ -58,7 +59,7 @@ h1{font-size:20px;font-weight:900;margin:0;text-shadow:0 2px 0 rgba(0,0,0,.35)}
 </style>
 </head>
 <body>
-<div style="position:fixed;left:8px;bottom:8px;font-size:10px;font-weight:900;color:#facc15;background:#0f172a;border:1px solid #facc15;padding:3px 8px;border-radius:6px;z-index:999">tour-v4</div>
+<div style="position:fixed;left:8px;bottom:8px;font-size:10px;font-weight:900;color:#facc15;background:#0f172a;border:1px solid #facc15;padding:3px 8px;border-radius:6px;z-index:999">tour-v5</div>
 
 <div class="head"><button class="back" onclick="location.href='chess-main.html'">‹</button><h1>Турниры</h1></div>
 
@@ -122,6 +123,7 @@ const MODE_BY_ID = {}; MODES.forEach(m => MODE_BY_ID[m.id] = m);
 const TYPE_BY_ID = {}; TYPES.forEach(t => TYPE_BY_ID[t.id] = t);
 const TRIAL_COST = { basic: 10, premium: 100 };
 const BOT_WAIT_MS = 5000;
+const SEARCH_KEY = 'trialSearch';
 
 const CONT = { EU:'Европа', AS:'Азия', AF:'Африка', NA:'Северная Америка', SA:'Южная Америка', OC:'Океания', OTHER:'Прочее' };
 const LVL = { region:'Регион', country:'Страна', continent:'Континент', world:'Мир' };
@@ -151,6 +153,16 @@ function nameOf(t){
   if (t.level === 'continent') return CONT[t.scope] || t.scope;
   if (t.level === 'world') return 'Весь мир';
   return t.scope_name || t.scope;
+}
+
+function getSearch(){
+  try { return JSON.parse(sessionStorage.getItem(SEARCH_KEY) || 'null'); } catch(e){ return null; }
+}
+function setSearch(v){
+  try {
+    if (v) sessionStorage.setItem(SEARCH_KEY, JSON.stringify(v));
+    else sessionStorage.removeItem(SEARCH_KEY);
+  } catch(e){}
 }
 
 function renderTop(){
@@ -233,6 +245,8 @@ async function loadTrial(){
   const s = d.session;
   const m = MODE_BY_ID[mode];
   const title = TYPE_BY_ID[type].name;
+  const srch = getSearch();
+  const searching = !!(srch && srch.type === type && s && s.state === 'active');
 
   let wins = 0, losses = 0, stateLabel = 'Не начато', btn = '';
 
@@ -241,8 +255,10 @@ async function loadTrial(){
   } else {
     wins = s.wins; losses = s.losses;
     if (s.state === 'active'){
-      stateLabel = 'Идёт испытание';
-      btn = '<button class="btn" data-trial-find="1">Искать соперника</button>';
+      stateLabel = searching ? 'Ищем соперника…' : 'Идёт испытание';
+      btn = searching
+        ? '<button class="btn search" disabled>Ищем соперника…</button>'
+        : '<button class="btn" data-trial-find="1">Искать соперника</button>';
     } else {
       stateLabel = s.state === 'complete' ? 'Испытание пройдено' : 'Испытание окончено';
       btn = '<button class="btn" data-trial-claim="' + esc(s.id) + '">Забрать приз</button>';
@@ -259,18 +275,28 @@ async function loadTrial(){
     '<div class="bar"><i style="width:' + Math.min(100, wins / 12 * 100) + '%"></i></div>' +
     btn +
     '<div class="note">Соперник подбирается с таким же числом побед</div></div>';
+
+  if (searching) scheduleTrialBot(srch);
 }
 
 /* ---------- бот, если соперник не найден за 5 секунд ---------- */
 
-function startTrialBotTimer(){
-  clearTimeout(botTimer);
-  const t = type;
+function startTrialSearch(){
+  const srch = { type: type, at: Date.now() };
+  setSearch(srch);
+  scheduleTrialBot(srch);
+}
+
+function scheduleTrialBot(srch){
+  if (botTimer) return;
+  const wait = Math.max(0, srch.at + BOT_WAIT_MS - Date.now());
   botTimer = setTimeout(function(){
     botTimer = null;
-    if (dockMatch) return;
-    launchTrialBot(t);
-  }, BOT_WAIT_MS);
+    const cur = getSearch();
+    if (!cur || dockMatch) return;
+    setSearch(null);
+    launchTrialBot(cur.type);
+  }, wait);
 }
 
 function launchTrialBot(t){
@@ -316,7 +342,7 @@ $('list').onclick = async function(e){
     } else if (tf){
       const r = await rpc('tour_trial_join', { p_key: KEY, p_mode: mode });
       if (!r.ok) toast(r.error);
-      else { toast('Ищем соперника…'); startTrialBotTimer(); }
+      else { toast('Ищем соперника…'); startTrialSearch(); }
     } else if (tc){
       const r = await rpc('trial_reward', { p_session: tc.dataset.trialClaim, p_key: KEY });
       if (!r.ok) toast(r.error);
@@ -394,6 +420,11 @@ async function pollMatch(){
     const d = await rpc('tour_my_match', { p_key: KEY });
     const m = d.match;
     if (!m){ hideDock(); return; }
+    if (getSearch()){
+      setSearch(null);
+      clearTimeout(botTimer); botTimer = null;
+      loadList();
+    }
     showDock(m);
   } catch(e){}
 }
