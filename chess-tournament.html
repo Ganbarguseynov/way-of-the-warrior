@@ -7,74 +7,65 @@
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-body{margin:0;min-height:100dvh;background:linear-gradient(180deg,#1e1b4b,#0f172a 60%);color:#fff;padding:14px 14px 100px;user-select:none}
-.head{display:flex;align-items:center;gap:10px;margin-bottom:6px}
-.back{width:38px;height:38px;border-radius:12px;border:2px solid #fff;background:linear-gradient(180deg,#475569,#1e293b);color:#fff;font-size:20px;font-weight:900;cursor:pointer;flex-shrink:0}
-h1{font-size:22px;font-weight:900;margin:0;text-shadow:0 2px 0 rgba(0,0,0,.4)}
-.reg{font-size:12.5px;color:#5ee0ff;font-weight:800;margin:0 0 12px;min-height:16px}
-.path{display:flex;align-items:center;justify-content:space-between;gap:4px;background:rgba(15,23,42,.7);border:2px solid #334155;border-radius:14px;padding:10px 8px;margin-bottom:10px}
-.path span{flex:1;text-align:center;font-size:10.5px;font-weight:900;color:#64748b;line-height:1.2}
-.path span.on{color:#ffd447}
-.path i{font-style:normal;color:#475569;font-weight:900}
-.rule{font-size:11.5px;color:#94a3b8;line-height:1.5;margin-bottom:12px;font-weight:600}
-.card{background:linear-gradient(145deg,#1e293b,#0f172a);border:2px solid #334155;border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 4px 0 #050b16}
-.card.region{border-color:#22c55e}
-.card.country{border-color:#5ee0ff}
-.card.continent{border-color:#a78bfa}
-.card.world{border-color:#ffd447}
+body{margin:0;min-height:100dvh;background:linear-gradient(180deg,#1f7ae0 0%,#0e2a5e 60%);color:#fff;padding:14px 14px 30px;user-select:none}
+.head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.back{width:38px;height:38px;border-radius:12px;border:3px solid #fff;background:linear-gradient(180deg,#475569,#1e293b);color:#fff;font-size:20px;font-weight:900;cursor:pointer;flex-shrink:0}
+h1{font-size:20px;font-weight:900;margin:0;text-shadow:0 2px 0 rgba(0,0,0,.35)}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px}
+.chip{padding:8px 6px;border-radius:12px;border:2px solid #b9cdea;background:linear-gradient(180deg,#fff,#e6eefc);color:#132a54;font-size:11.5px;font-weight:900;cursor:pointer;box-shadow:0 3px 0 #8fa8cc;text-align:center}
+.chip.on{border-color:#ffd447;background:linear-gradient(180deg,#ffe082,#ffb300);box-shadow:0 3px 0 #b45309}
+.tabs{display:flex;gap:6px;margin-bottom:12px}
+.tab{flex:1;padding:10px;border-radius:12px;border:3px solid #fff;background:rgba(15,23,42,.5);color:#dbeafe;font-size:13px;font-weight:900;cursor:pointer}
+.tab.on{background:linear-gradient(180deg,#ffe082,#ffb300);color:#5a2d00;border-color:#fff;box-shadow:0 3px 0 #a35f00}
+.rule{font-size:11.5px;color:#dbeafe;line-height:1.5;margin-bottom:12px;font-weight:600;background:rgba(15,23,42,.45);border-radius:12px;padding:9px 11px}
+.card{background:linear-gradient(145deg,#fff,#eef4ff);border:3px solid #ffd447;border-radius:16px;padding:12px;margin-bottom:10px;color:#132a54;box-shadow:0 5px 0 #b45309}
 .ct{display:flex;justify-content:space-between;align-items:center;gap:8px}
-.lvl{font-size:10px;font-weight:900;letter-spacing:.8px;color:#94a3b8;text-transform:uppercase}
-.tm{font-size:12px;font-weight:900;color:#ffd447;font-variant-numeric:tabular-nums;white-space:nowrap}
-.nm{font-size:17px;font-weight:900;margin:6px 0 10px}
-.stat{display:flex;border-radius:11px;overflow:hidden;margin-bottom:10px;border:1px solid #334155}
-.stat div{flex:1;padding:8px 4px;text-align:center;background:rgba(0,0,0,.25)}
-.stat div+div{border-left:1px solid #334155}
-.stat span{display:block;font-size:9px;color:#94a3b8;font-weight:800}
-.stat b{display:block;font-size:16px;font-weight:900;margin-top:2px}
-.btn{width:100%;padding:12px;border:0;border-radius:11px;font-size:13px;font-weight:900;color:#fff;cursor:pointer;background:linear-gradient(145deg,#475569,#1e293b)}
-.play{position:fixed;left:14px;right:14px;bottom:18px;padding:14px;border:3px solid #fff;border-radius:16px;font-size:15px;font-weight:900;color:#5a2d00;background:linear-gradient(180deg,#ffe082,#ffb300);box-shadow:0 5px 0 #a35f00;cursor:pointer}
-.empty{text-align:center;font-size:13px;color:#94a3b8;padding:20px 10px;line-height:1.5}
-.modal{position:fixed;inset:0;background:rgba(2,6,23,.88);display:flex;align-items:flex-end;justify-content:center;z-index:50}
-.modal.hidden{display:none}
-.box{width:100%;max-width:420px;max-height:82vh;display:flex;flex-direction:column;background:#0f172a;border:2px solid #ffd447;border-radius:18px 18px 0 0}
-.bh{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid #334155}
-.bh b{font-size:15px;font-weight:900}
-.bh button{width:32px;height:32px;border-radius:9px;border:2px solid #fff;background:#c62828;color:#fff;font-weight:900;cursor:pointer}
-.bb{overflow-y:auto;padding:10px 14px 20px}
-.me{font-size:12.5px;color:#5ee0ff;font-weight:900;margin-bottom:10px}
-.row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:rgba(15,23,42,.6);border:1px solid #334155;margin-bottom:6px;font-size:13px}
-.row.me{border-color:#5ee0ff}
-.row.cut{border-bottom:3px dashed #f59e0b}
-.row .rk{width:34px;font-weight:900;color:#ffd447}
-.row .nn{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:800}
-.row .pt{font-weight:900}
-.tst{position:fixed;bottom:110px;left:50%;transform:translateX(-50%);background:#1e293b;border:1px solid #475569;padding:9px 14px;border-radius:10px;font-size:12.5px;font-weight:800;display:none;z-index:60;max-width:88vw;text-align:center}
+.lvl{font-size:10px;font-weight:900;color:#5a7398;letter-spacing:.6px;text-transform:uppercase}
+.tm{font-size:11px;font-weight:900;color:#b45309;white-space:nowrap}
+.nm{font-size:16px;font-weight:900;margin:4px 0 8px}
+.stat{display:flex;gap:6px;margin-bottom:8px}
+.stat div{flex:1;padding:6px;border-radius:10px;background:#dbe7fb;text-align:center}
+.stat span{display:block;font-size:9px;font-weight:900;color:#5a7398}
+.stat b{font-size:15px;font-weight:900}
+.bar{height:10px;border-radius:6px;background:#dbe7fb;overflow:hidden;margin:6px 0 4px}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,#43e97b,#ffd447)}
+.btn{width:100%;padding:12px;border:3px solid #fff;border-radius:12px;font-size:13.5px;font-weight:900;color:#fff;cursor:pointer;background:linear-gradient(180deg,#22c55e,#15803d);box-shadow:0 4px 0 #0b5426}
+.btn.sec{background:linear-gradient(180deg,#64748b,#334155);box-shadow:0 4px 0 #111827}
+.btn:disabled{opacity:.55}
+.empty{text-align:center;font-size:13px;color:#dbeafe;padding:20px 10px;line-height:1.5}
+.note{font-size:11px;color:#5a7398;margin-top:6px;font-weight:700;text-align:center}
+#dock{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(180deg,#16306e,#0a1c40);border-top:3px solid #ffd447;padding:12px 14px 18px;display:none;z-index:50}
+#dock.open{display:block}
+#dockTitle{font-size:15px;font-weight:900;margin-bottom:4px}
+#dockSub{font-size:12px;color:#dbeafe;margin-bottom:8px;line-height:1.4}
+#dockTimer{font-size:26px;font-weight:900;color:#ffd447;text-align:center;margin:6px 0}
+.toast{position:fixed;left:50%;bottom:120px;transform:translateX(-50%);background:#1e293b;border:1px solid #475569;padding:9px 14px;border-radius:10px;font-size:12.5px;font-weight:800;display:none;z-index:60;max-width:88vw;text-align:center}
 </style>
 </head>
 <body>
 
 <div class="head"><button class="back" onclick="location.href='chess-main.html'">‹</button><h1>Турниры</h1></div>
-<div class="reg" id="reg"></div>
 
-<div class="path">
-  <span data-l="region">Регион</span><i>›</i>
-  <span data-l="country">Страна</span><i>›</i>
-  <span data-l="continent">Континент</span><i>›</i>
-  <span data-l="world">Мир</span>
+<div class="modes" id="modes"></div>
+
+<div class="tabs">
+  <button class="tab on" data-tab="champ">Чемпионаты</button>
+  <button class="tab" data-tab="trial">Испытания</button>
 </div>
-<div class="rule">Турнир идёт 24 часа. Очки — за победы в рейтинговых боях. Первые 100 игроков проходят в следующий этап.</div>
+
+<div class="rule" id="rule"></div>
 
 <div id="list"><div class="empty">Загружаем…</div></div>
 
-<button class="play" id="play">⚔️ Играть рейтинговый бой</button>
-
-<div id="modal" class="modal hidden">
-  <div class="box">
-    <div class="bh"><b id="mTitle"></b><button id="mClose">✕</button></div>
-    <div class="bb" id="mBody"></div>
-  </div>
+<div id="dock">
+  <div id="dockTitle">Соперник найден</div>
+  <div id="dockSub"></div>
+  <div id="dockTimer"></div>
+  <button class="btn" id="dockAccept">Принять партию</button>
+  <button class="btn sec" id="dockPlay" style="display:none">Начать партию</button>
 </div>
-<div class="tst" id="tst"></div>
+
+<div class="toast" id="toast"></div>
 
 <script>
 const sb = supabase.createClient(
@@ -93,19 +84,39 @@ function playerKey(){
 }
 const KEY = playerKey();
 
-const LVL = { region:'Регион', country:'Страна', continent:'Континент', world:'Мир' };
+const MODES = [
+  { id:'classic',  name:'Классика',            rule:'Карты и эликсир, общие 5 минут. Ходить можно в любой момент.' },
+  { id:'nocards',  name:'Без карт',            rule:'Эликсир, карт нет. Общие 5 минут, ходить можно в любой момент.' },
+  { id:'noelixir', name:'Без эликсира',        rule:'Карты есть, эликсира нет. Ходы по очереди, по 3 минуты на каждого.' },
+  { id:'pure',     name:'Без карт и эликсира', rule:'Только шахматы. Ходы по очереди, по 3 минуты на каждого.' }
+];
+const RULES = {
+  champ: 'Чемпионат: играешь с соперником с таким же числом очков. Первые 100 проходят в следующий этап. Принимай партию в течение 5 минут, иначе засчитывается поражение.',
+  trial: 'Испытание: мгновенный бой с равным по победам соперником. 12 побед — испытание пройдено. 3 поражения — выбываешь.'
+};
 const CONT = { EU:'Европа', AS:'Азия', AF:'Африка', NA:'Северная Америка', SA:'Южная Америка', OC:'Океания', OTHER:'Прочее' };
-const ORDER = { region:1, country:2, continent:3, world:4 };
+const LVL = { region:'Регион', country:'Страна', continent:'Континент', world:'Мир' };
+const STATE_TXT = { none:'Не в турнире', idle:'Не в очереди', free:'Ищем соперника', busy:'В партии', out:'Выбыл' };
+
+let tab = 'champ';
+let mode = (function(){ const v = localStorage.getItem('arenaMode'); return MODES.some(m => m.id === v) ? v : 'classic'; })();
+let lastMatchId = null, dockMatch = null, dockTimer = null, lastChamp = [], lastTrial = null;
 
 function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function toast(t){
-  const e = $('tst'); e.textContent = t; e.style.display = 'block';
-  clearTimeout(window.__tt); window.__tt = setTimeout(function(){ e.style.display = 'none'; }, 2400);
+  const e = $('toast'); e.textContent = t; e.style.display = 'block';
+  clearTimeout(window.__tt); window.__tt = setTimeout(function(){ e.style.display = 'none'; }, 2600);
+}
+function rpc(name, args){
+  return sb.rpc(name, args).then(function(r){
+    if (r.error) throw new Error(r.error.message);
+    return r.data || {};
+  });
 }
 function left(ms){
-  if (ms <= 0) return 'подводим итоги';
-  const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
-  return h + 'ч ' + String(m).padStart(2,'0') + 'м ' + String(x).padStart(2,'0') + 'с';
+  if (ms <= 0) return '0:00';
+  const s = Math.ceil(ms / 1000);
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
 }
 function nameOf(t){
   if (t.level === 'continent') return CONT[t.scope] || t.scope;
@@ -113,101 +124,206 @@ function nameOf(t){
   return t.scope_name || t.scope;
 }
 
-let reloadAt = 0;
+function renderModes(){
+  $('modes').innerHTML = MODES.map(function(m){
+    return '<button class="chip' + (m.id === mode ? ' on' : '') + '" data-mode="' + m.id + '">' + esc(m.name) + '</button>';
+  }).join('');
+  $('rule').textContent = RULES[tab] + ' Режим: ' + (MODES.find(m => m.id === mode) || MODES[0]).rule;
+}
 
-async function load(){
+$('modes').onclick = function(e){
+  const b = e.target.closest('[data-mode]'); if (!b) return;
+  mode = b.dataset.mode;
+  try { localStorage.setItem('arenaMode', mode); } catch(err){}
+  renderModes(); loadList();
+};
+
+document.querySelectorAll('.tab').forEach(function(b){
+  b.onclick = function(){
+    tab = b.dataset.tab;
+    document.querySelectorAll('.tab').forEach(function(x){ x.classList.toggle('on', x === b); });
+    renderModes(); loadList();
+  };
+});
+
+/* ---------- чемпионаты ---------- */
+
+async function loadChamp(){
+  const d = await rpc('geo_state', { p_key: KEY });
+  if (!d.ok){
+    $('list').innerHTML = '<div class="card"><div class="nm">Сначала определи регион</div><button class="btn" onclick="location.href=\'chess-region.html\'">📍 Определить регион</button></div>';
+    return;
+  }
+  lastChamp = (d.tournaments || []).filter(function(t){ return t.level !== 'trial'; });
+  if (!lastChamp.length){ $('list').innerHTML = '<div class="empty">Открытых чемпионатов нет.</div>'; return; }
+  $('list').innerHTML = lastChamp.map(champCard).join('');
+}
+
+function champCard(t){
+  const st = t.my_state || 'none';
+  let btn = '';
+  if (st === 'none' || st === 'idle') btn = '<button class="btn" data-join="' + esc(t.id) + '">Встать в очередь</button>';
+  else if (st === 'free') btn = '<button class="btn sec" data-leave="' + esc(t.id) + '">Выйти из очереди</button>';
+  else if (st === 'busy') btn = '<button class="btn sec" disabled>В партии</button>';
+  else btn = '<button class="btn sec" disabled>Выбыл на этом этапе</button>';
+
+  return '<div class="card">' +
+    '<div class="ct"><span class="lvl">' + LVL[t.level] + '</span><span class="tm" data-end="' + esc(t.ends_at) + '"></span></div>' +
+    '<div class="nm">' + esc(nameOf(t)) + '</div>' +
+    '<div class="stat">' +
+      '<div><span>ТВОЁ СОСТОЯНИЕ</span><b style="font-size:11px">' + esc(STATE_TXT[st] || st) + '</b></div>' +
+      '<div><span>ОЧКИ</span><b>' + (t.my_points || 0) + '</b></div>' +
+      '<div><span>УЧАСТНИКОВ</span><b>' + (t.total || 0) + '</b></div>' +
+    '</div>' + btn + '</div>';
+}
+
+/* ---------- испытания ---------- */
+
+async function loadTrial(){
+  const d = await rpc('tour_trial_me', { p_key: KEY, p_mode: mode });
+  lastTrial = d;
+  const wins = d.wins || 0, losses = d.losses || 0, st = d.state || 'none';
+  const m = MODES.find(x => x.id === mode) || MODES[0];
+
+  let btn;
+  if (st === 'busy') btn = '<button class="btn sec" disabled>В партии</button>';
+  else if (st === 'free') btn = '<button class="btn sec" id="trialCancel">Ищем соперника… отменить</button>';
+  else if (st === 'out' || losses >= 3) btn = '<button class="btn" id="trialJoin">Начать заново</button>';
+  else if (wins >= 12) btn = '<button class="btn" id="trialJoin">Начать заново</button>';
+  else btn = '<button class="btn" id="trialJoin">Начать испытание</button>';
+
+  $('list').innerHTML = '<div class="card">' +
+    '<div class="ct"><span class="lvl">Испытание</span><span class="tm">' + esc(m.name) + '</span></div>' +
+    '<div class="nm">' + esc(STATE_TXT[st] || st) + '</div>' +
+    '<div class="stat">' +
+      '<div><span>ПОБЕДЫ</span><b>' + wins + ' / 12</b></div>' +
+      '<div><span>ПОРАЖЕНИЯ</span><b>' + losses + ' / 3</b></div>' +
+    '</div>' +
+    '<div class="bar"><i style="width:' + Math.min(100, wins / 12 * 100) + '%"></i></div>' +
+    btn + '<div class="note">Соперник подбирается с таким же числом побед</div></div>';
+}
+
+/* ---------- список ---------- */
+
+async function loadList(){
   try {
-    const st = await sb.rpc('geo_state', { p_key: KEY });
-    const me = await sb.rpc('geo_me', { p_key: KEY });
-    const m = (me && me.data) || {};
-    $('reg').textContent = m.region_name ? 'Регион: ' + m.region_name : 'Регион не определён';
-    if (st.error){ $('list').innerHTML = '<div class="empty">Ошибка: ' + esc(st.error.message) + '</div>'; return; }
-    const s = st.data || {};
-    if (!s.ok){
-      $('list').innerHTML = '<div class="card"><div class="nm">Сначала определи регион</div><button class="btn" onclick="location.href=\'chess-region.html\'">📍 Определить регион</button></div>';
-      return;
-    }
-    render(s.tournaments || []);
+    if (tab === 'champ') await loadChamp(); else await loadTrial();
   } catch(e){
     $('list').innerHTML = '<div class="empty">Нет связи с сервером. Обнови страницу.</div>';
   }
 }
 
-function render(list){
-  list.sort(function(a, b){ return (ORDER[a.level] || 9) - (ORDER[b.level] || 9); });
-  const have = {};
-  list.forEach(function(t){ have[t.level] = true; });
-  document.querySelectorAll('.path span').forEach(function(el){
-    el.classList.toggle('on', !!have[el.dataset.l]);
-  });
-  if (!list.length){ $('list').innerHTML = '<div class="empty">Открытых турниров нет.</div>'; return; }
-
-  let h = '';
-  list.forEach(function(t){
-    h += '<div class="card ' + t.level + '" data-end="' + esc(t.ends_at) + '">' +
-      '<div class="ct"><span class="lvl">' + LVL[t.level] + '</span><span class="tm"></span></div>' +
-      '<div class="nm">' + esc(nameOf(t)) + '</div>' +
-      '<div class="stat">' +
-        '<div><span>ТВОИ ОЧКИ</span><b>' + (t.my_points || 0) + '</b></div>' +
-        '<div><span>УЧАСТНИКОВ</span><b>' + (t.total || 0) + '</b></div>' +
-      '</div>' +
-      '<button class="btn" data-board="' + esc(t.id) + '" data-title="' + esc(LVL[t.level] + ': ' + nameOf(t)) + '">Таблица · топ-100 идут дальше</button>' +
-    '</div>';
-  });
-  $('list').innerHTML = h;
-  tick();
-}
-
-function tick(){
-  let expired = false;
-  document.querySelectorAll('[data-end]').forEach(function(el){
-    const ms = new Date(el.dataset.end) - Date.now();
-    el.querySelector('.tm').textContent = ms > 0 ? 'до конца ' + left(ms) : 'подводим итоги…';
-    if (ms <= 0) expired = true;
-  });
-  if (expired && Date.now() - reloadAt > 5000){ reloadAt = Date.now(); load(); }
-}
-
-async function board(id, title){
-  $('mTitle').textContent = title;
-  $('mBody').innerHTML = '<div class="empty">Загружаем…</div>';
-  $('modal').classList.remove('hidden');
+$('list').onclick = async function(e){
+  const j = e.target.closest('[data-join]');
+  const l = e.target.closest('[data-leave]');
+  const tj = e.target.closest('#trialJoin');
+  const tc = e.target.closest('#trialCancel');
   try {
-    const r = await sb.rpc('geo_board', { p_tid: id, p_key: KEY });
-    if (r.error){ $('mBody').innerHTML = '<div class="empty">Ошибка загрузки</div>'; return; }
-    const d = r.data || {}, me = d.me;
-    let h = '<div class="me">' +
-      (me ? ('Ты: ' + me.rank + ' место · ' + me.points + ' очк.') : 'Ты пока без очков') +
-      ' · участников: ' + (d.total || 0) + '</div>';
-    const top = d.top || [];
-    if (!top.length) h += '<div class="empty">Пока никто не набрал очков.<br>Выиграй рейтинговый бой — и ты в таблице.</div>';
-    top.forEach(function(p){
-      h += '<div class="row' + (p.me ? ' me' : '') + (p.rk === 100 ? ' cut' : '') + '">' +
-        '<span class="rk">' + p.rk + '</span>' +
-        '<span class="nn">' + esc(p.name || 'Игрок') + '</span>' +
-        '<span class="pt">' + p.points + '</span></div>';
-    });
-    $('mBody').innerHTML = h;
-  } catch(e){
-    $('mBody').innerHTML = '<div class="empty">Нет связи с сервером</div>';
+    if (j){
+      const r = await rpc('tour_champ_join', { p_key: KEY, p_t: j.dataset.join, p_mode: mode });
+      if (!r.ok) toast(r.error); else toast('Ты в очереди');
+    } else if (l){
+      await rpc('tour_leave', { p_key: KEY, p_t: l.dataset.leave });
+      toast('Вышел из очереди');
+    } else if (tj){
+      const r = await rpc('tour_trial_join', { p_key: KEY, p_mode: mode });
+      if (!r.ok) toast(r.error); else toast('Ищем соперника…');
+    } else if (tc){
+      await rpc('tour_leave', { p_key: KEY, p_t: lastTrial && lastTrial.tid });
+      toast('Поиск отменён');
+    } else return;
+  } catch(err){ toast(err.message || 'Ошибка'); }
+  loadList(); pollMatch();
+};
+
+/* ---------- принятие партии ---------- */
+
+function showDock(m){
+  dockMatch = m;
+  $('dock').classList.add('open');
+  $('dockTitle').textContent = m.status === 'pending' ? 'Соперник найден' : 'Партия готова';
+  $('dockSub').textContent = 'Соперник: ' + (m.opp_name || 'Игрок') + ' · ' + (m.opp_cups || 0) + ' 🏆 · ' +
+    (MODES.find(x => x.id === m.mode) || MODES[0]).name +
+    (m.kind === 'trial' ? ' · испытание' : ' · чемпионат');
+
+  const accept = $('dockAccept'), play = $('dockPlay');
+  if (m.status === 'pending'){
+    accept.style.display = m.my_ok ? 'none' : 'block';
+    accept.disabled = false;
+    play.style.display = 'none';
+    $('dockSub').textContent += m.my_ok ? '' : '';
+  } else if (m.status === 'active'){
+    accept.style.display = 'none';
+    play.style.display = 'block';
+  }
+  if (!dockTimer) dockTimer = setInterval(tickDock, 500);
+  tickDock();
+}
+
+function tickDock(){
+  if (!dockMatch) return;
+  if (dockMatch.status === 'pending'){
+    const dl = new Date(dockMatch.deadline) - Date.now();
+    $('dockTimer').textContent = dockMatch.my_ok ? 'Ждём соперника…' : 'Принять за ' + left(dl);
+  } else {
+    $('dockTimer').textContent = '';
   }
 }
 
-$('list').onclick = function(e){
-  const b = e.target.closest('[data-board]');
-  if (b) board(b.getAttribute('data-board'), b.getAttribute('data-title'));
-};
-$('mClose').onclick = function(){ $('modal').classList.add('hidden'); };
-$('modal').onclick = function(e){ if (e.target === $('modal')) $('modal').classList.add('hidden'); };
+function hideDock(){
+  dockMatch = null;
+  $('dock').classList.remove('open');
+  if (dockTimer){ clearInterval(dockTimer); dockTimer = null; }
+}
 
-$('play').onclick = function(){
-  try { sessionStorage.setItem('arenaAutoQueue', '1'); } catch(e){}
+$('dockAccept').onclick = async function(){
+  if (!dockMatch) return;
+  $('dockAccept').disabled = true;
+  try {
+    const r = await rpc('tour_accept', { p_match: dockMatch.id, p_key: KEY });
+    if (!r.ok) toast(r.error);
+  } catch(e){ toast(e.message); }
+  $('dockAccept').disabled = false;
+  pollMatch();
+};
+
+$('dockPlay').onclick = function(){
+  if (!dockMatch) return;
+  try {
+    sessionStorage.setItem('tourStart', JSON.stringify({
+      matchId: dockMatch.id, side: dockMatch.side, oppKey: dockMatch.opp_key,
+      oppName: dockMatch.opp_name, oppCups: dockMatch.opp_cups,
+      mode: dockMatch.mode, kind: dockMatch.kind
+    }));
+  } catch(e){}
   location.href = 'chess-arena.html';
 };
 
-load();
-setInterval(tick, 1000);
-setInterval(load, 30000);
+async function pollMatch(){
+  try {
+    const d = await rpc('tour_my_match', { p_key: KEY });
+    const m = d.match;
+    if (!m){ hideDock(); lastMatchId = null; return; }
+    m.id = m.id;
+    if (m.status === 'active' && m.my_ok && m.opp_ok){
+      if (lastMatchId !== m.id){ lastMatchId = m.id; }
+    }
+    showDock(m);
+  } catch(e){}
+}
+
+setInterval(pollMatch, 2000);
+setInterval(function(){
+  document.querySelectorAll('[data-end]').forEach(function(el){
+    const ms = new Date(el.dataset.end) - Date.now();
+    el.textContent = ms > 0 ? 'до конца ' + left(ms) : 'подводим итоги…';
+  });
+}, 1000);
+setInterval(function(){ if (tab === 'champ') loadList(); }, 15000);
+
+renderModes();
+loadList();
+pollMatch();
 </script>
 </body>
 </html>
