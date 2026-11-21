@@ -8,413 +8,361 @@
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="style.css">
 <style>
-/* ============ НАСТРОЙКА ============ */
-.wk-sec {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.09);
-  border-radius: 16px;
-  padding: 14px;
-  margin-bottom: 12px;
+:root{
+  --ink:#dde3e7;
+  --prep:#44585f;
+  --work:#8b2323;
+  --rest:#1d6b41;
 }
-.wk-sec-title {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-  color: #8e8e93;
-  margin-bottom: 10px;
-}
-.wk-chips {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-  -webkit-overflow-scrolling: touch;
-}
-.wk-chips::-webkit-scrollbar { display: none; }
-.wk-chip {
-  flex: 0 0 auto;
-  padding: 9px 14px;
-  border-radius: 11px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.05);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: 0.18s;
-}
-.wk-chip.on {
-  background: linear-gradient(135deg, #ffcc00, #ffd700);
-  color: #000;
-  border-color: #ffcc00;
-}
-.wk-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-.wk-row:last-child { margin-bottom: 0; }
-.wk-row.col {
-  display: block;
-  margin-bottom: 12px;
-}
-.wk-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #d1d1d6;
-  display: block;
-  margin-bottom: 8px;
-}
-.wk-row .wk-label { margin-bottom: 0; }
-.wk-stepper {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: rgba(0,0,0,0.35);
-  border-radius: 12px;
-  padding: 3px;
-}
-.wk-stepper button {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  border: none;
-  background: rgba(255,255,255,0.09);
-  color: #fff;
-  font-size: 19px;
-  font-weight: 700;
-  line-height: 1;
-  cursor: pointer;
-}
-.wk-stepper span {
-  min-width: 40px;
-  text-align: center;
-  font-size: 17px;
-  font-weight: 700;
-  color: #ffcc00;
-}
-.wk-custom {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1.35fr 44px;
-  gap: 6px;
-  margin-top: 4px;
-}
-.wk-custom input, .wk-custom select {
-  padding: 10px 6px;
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(0,0,0,0.3);
-  color: #fff;
-  font-size: 13px;
-  text-align: center;
-  outline: none;
-  box-sizing: border-box;
-}
-.wk-custom select { text-align: left; padding-left: 8px; font-size: 12px; }
-.wk-custom button {
-  border-radius: 10px;
-  border: none;
-  background: linear-gradient(135deg, #ffcc00, #ffd700);
-  color: #000;
-  font-weight: 800;
-  font-size: 15px;
-  cursor: pointer;
-}
-.wk-summary {
-  font-size: 12px;
-  color: #8e8e93;
-  text-align: center;
-  margin-top: 12px;
-  line-height: 1.5;
-}
-.wk-start {
-  width: 100%;
-  padding: 16px;
-  border-radius: 14px;
-  border: none;
-  background: linear-gradient(135deg, #ffcc00, #ffd700);
-  color: #000;
-  font-size: 16px;
-  font-weight: 800;
-  letter-spacing: 0.4px;
-  cursor: pointer;
-  box-shadow: 0 6px 18px rgba(255,204,0,0.25);
-  margin-top: 4px;
-}
-.wk-start:active { transform: scale(0.98); }
+*{ -webkit-tap-highlight-color:transparent; box-sizing:border-box; }
 
-/* ============ ЭКРАН ТРЕНИРОВКИ ============ */
-.wk-run {
-  position: fixed;
-  inset: 0;
-  z-index: 900;
-  display: none;
-  flex-direction: column;
-  padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
-  box-sizing: border-box;
-  color: #fff;
-  transition: background 0.45s ease;
-  overflow: hidden;
+/* ================= НАСТРОЙКА ================= */
+.tabs{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:4px 0 18px; }
+.tab{
+  padding:13px; border-radius:12px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.05);
+  color:#8e8e93; font-size:14px; font-weight:700; cursor:pointer;
+  transition:.18s;
 }
-.wk-run.show { display: flex; }
-.wk-run.work { background: linear-gradient(165deg, #6d0b0b 0%, #c92a2a 52%, #7d0f0f 100%); }
-.wk-run.rest { background: linear-gradient(165deg, #07401f 0%, #1f9d55 52%, #0a4d27 100%); }
+.tab.on{
+  background:linear-gradient(135deg,#ffcc00,#ffd700);
+  color:#000; border-color:#ffcc00;
+  box-shadow:0 4px 14px rgba(255,204,0,.22);
+}
+.pane{ display:none; }
+.pane.on{ display:block; }
 
-.wk-bar {
-  height: 4px;
-  border-radius: 4px;
-  background: rgba(0,0,0,0.3);
-  overflow: hidden;
-  margin-bottom: 14px;
-  flex: 0 0 auto;
+.empty{
+  background:rgba(255,255,255,.04);
+  border:1px dashed rgba(255,255,255,.14);
+  border-radius:16px;
+  padding:38px 22px;
+  text-align:center;
 }
-.wk-bar > div {
-  height: 100%;
-  width: 100%;
-  background: rgba(255,255,255,0.85);
-  transition: width 0.25s linear;
+.empty-icon{ font-size:44px; margin-bottom:12px; }
+.empty-title{ font-size:17px; font-weight:800; margin-bottom:8px; }
+.empty-text{ font-size:13px; color:#8e8e93; line-height:1.55; }
+
+.wk-sec{
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.09);
+  border-radius:16px;
+  padding:14px;
+  margin-bottom:12px;
 }
-.wk-top {
-  text-align: center;
-  flex: 0 0 auto;
+.wk-sec-title{
+  font-size:11px; font-weight:700; letter-spacing:1.2px;
+  text-transform:uppercase; color:#8e8e93; margin-bottom:10px;
 }
-.wk-round {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  opacity: 0.75;
-  text-transform: uppercase;
+.wk-chips{
+  display:flex; gap:8px; overflow-x:auto; padding-bottom:2px;
+  -webkit-overflow-scrolling:touch;
 }
-.wk-phase {
-  font-size: 17px;
-  font-weight: 800;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  margin-top: 3px;
+.wk-chips::-webkit-scrollbar{ display:none; }
+.wk-chip{
+  flex:0 0 auto; padding:9px 14px; border-radius:11px;
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.05);
+  color:#fff; font-size:13px; font-weight:600;
+  cursor:pointer; white-space:nowrap; transition:.18s;
 }
-.wk-run.work .wk-phase { animation: wkPulse 1.6s ease-in-out infinite; }
-@keyframes wkPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.55; }
+.wk-chip.on{
+  background:linear-gradient(135deg,#ffcc00,#ffd700);
+  color:#000; border-color:#ffcc00;
+}
+.wk-row{
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:12px;
+}
+.wk-row:last-child{ margin-bottom:0; }
+.wk-row.col{ display:block; }
+.wk-label{
+  font-size:13px; font-weight:600; color:#d1d1d6;
+  display:block; margin-bottom:8px;
+}
+.wk-row .wk-label{ margin-bottom:0; }
+.wk-stepper{
+  display:flex; align-items:center; gap:4px;
+  background:rgba(0,0,0,.35); border-radius:12px; padding:3px;
+}
+.wk-stepper button{
+  width:34px; height:34px; border-radius:9px; border:none;
+  background:rgba(255,255,255,.09); color:#fff;
+  font-size:19px; font-weight:700; line-height:1; cursor:pointer;
+}
+.wk-stepper span{
+  min-width:42px; text-align:center;
+  font-size:17px; font-weight:700; color:#ffcc00;
+}
+.wk-custom{
+  display:grid; grid-template-columns:1fr 1fr 1.4fr 44px;
+  gap:6px; margin-top:6px;
+}
+.wk-custom input,.wk-custom select{
+  padding:10px 6px; border-radius:10px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(0,0,0,.3); color:#fff;
+  font-size:13px; text-align:center; outline:none;
+}
+.wk-custom select{ text-align:left; padding-left:8px; font-size:12px; }
+.wk-custom button{
+  border-radius:10px; border:none;
+  background:linear-gradient(135deg,#ffcc00,#ffd700);
+  color:#000; font-weight:800; font-size:15px; cursor:pointer;
+}
+.wk-summary{
+  font-size:12px; color:#8e8e93; text-align:center;
+  margin-top:12px; line-height:1.6;
+}
+.wk-start{
+  width:100%; padding:16px; border-radius:14px; border:none;
+  background:linear-gradient(135deg,#ffcc00,#ffd700);
+  color:#000; font-size:16px; font-weight:800; letter-spacing:.4px;
+  cursor:pointer; box-shadow:0 6px 18px rgba(255,204,0,.25);
+  margin-top:6px;
+}
+.wk-start:active{ transform:scale(.98); }
+
+/* ================= ЭКРАН ТАЙМЕРА ================= */
+.run{
+  position:fixed; inset:0; z-index:900;
+  display:none; flex-direction:column;
+  padding:calc(16px + env(safe-area-inset-top)) 20px calc(16px + env(safe-area-inset-bottom));
+  color:var(--ink);
+  transition:background .5s ease;
+  overflow:hidden;
+}
+.run.show{ display:flex; }
+.run.prep{ background:linear-gradient(180deg,#3d5158 0%,#4b6068 55%,#3a4d54 100%); }
+.run.work{ background:linear-gradient(180deg,#6d1414 0%,#942b2b 55%,#681212 100%); }
+.run.rest{ background:linear-gradient(180deg,#0e4829 0%,#1d6b41 55%,#0c3f25 100%); }
+
+.topbar{
+  display:flex; justify-content:space-between; align-items:flex-start;
+  flex:0 0 auto;
+}
+.tb-label{ font-size:12px; opacity:.6; margin-bottom:3px; letter-spacing:.3px; }
+.tb-value{
+  font-size:27px; font-weight:700; letter-spacing:.5px;
+  font-variant-numeric:tabular-nums;
+}
+.tb-right{ text-align:right; }
+
+.mid{
+  flex:1 1 auto; min-height:0;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+}
+.bigclock{
+  font-size:clamp(66px,23vw,116px);
+  font-weight:800; line-height:1; letter-spacing:-3px;
+  font-variant-numeric:tabular-nums;
+  text-shadow:0 6px 30px rgba(0,0,0,.28);
+}
+.phase{
+  font-size:clamp(19px,5.6vw,25px);
+  font-weight:800; letter-spacing:1.5px;
+  text-transform:uppercase; margin-top:16px; opacity:.94;
+}
+.run.work .phase{ animation:wkPulse 1.8s ease-in-out infinite; }
+@keyframes wkPulse{
+  0%,100%{ opacity:.94; }
+  50%{ opacity:.55; }
+}
+.lap{
+  margin-top:24px; background:none; border:none; padding:10px;
+  color:rgba(255,255,255,.82); cursor:pointer;
 }
 
-.wk-clock {
-  flex: 1 1 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: clamp(46px, 14vw, 68px);
-  font-weight: 300;
-  letter-spacing: 2px;
-  font-variant-numeric: tabular-nums;
-  font-family: 'SF Mono', Monaco, 'Courier New', monospace;
-  text-shadow: 0 4px 24px rgba(0,0,0,0.4);
-  min-height: 0;
+.bottombar{
+  display:flex; justify-content:space-between; align-items:center;
+  flex:0 0 auto; padding:0 2px 10px;
 }
+.icon-btn{
+  background:none; border:none; padding:8px; cursor:pointer;
+  color:rgba(255,255,255,.85); display:flex;
+}
+.icon-btn.off{ color:rgba(255,255,255,.35); }
 
-.wk-ex {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: rgba(0,0,0,0.28);
-  border: 1px solid rgba(255,255,255,0.16);
-  border-radius: 16px;
-  padding: 10px;
-  margin-bottom: 10px;
+.controls{
+  display:grid; grid-template-columns:1fr auto 1fr;
+  align-items:center; gap:20px; flex:0 0 auto;
+  padding-bottom:2px;
 }
-.wk-ex-img {
-  width: 62px;
-  height: 62px;
-  flex: 0 0 62px;
-  border-radius: 12px;
-  background: rgba(0,0,0,0.35);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 30px;
-  overflow: hidden;
+.ctl{
+  background:none; border:none; color:#fff;
+  cursor:pointer; padding:12px;
+  display:flex; justify-content:center;
 }
-.wk-ex-img img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.wk-ex-name {
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1.2;
-}
-.wk-ex-reps {
-  font-size: 11px;
-  opacity: 0.7;
-  margin-top: 3px;
-}
+.ctl:active{ opacity:.6; }
 
-.wk-hint {
-  flex: 0 0 auto;
-  text-align: center;
-  font-size: 12px;
-  opacity: 0.75;
-  margin-bottom: 10px;
-  min-height: 16px;
+/* ================= ФИНИШ ================= */
+.wk-finish{
+  position:fixed; inset:0; z-index:950;
+  display:none; flex-direction:column;
+  align-items:center; justify-content:center;
+  text-align:center; padding:24px;
+  background:linear-gradient(180deg,#0a0a12 0%,#1a1206 55%,#0a0a12 100%);
+  color:#fff; overflow-y:auto;
 }
-
-.wk-actions {
-  flex: 0 0 auto;
-  display: grid;
-  grid-template-columns: 1fr 1fr 0.85fr;
-  gap: 8px;
+.wk-finish.show{ display:flex; }
+.wk-trophy{ font-size:72px; margin-bottom:8px; }
+.wk-finish h2{ font-size:22px; margin:0 0 10px; }
+.wk-fin-stats{
+  font-size:13px; color:#8e8e93; line-height:1.7; margin-bottom:18px;
 }
-.wk-actions button {
-  padding: 13px 6px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.25);
-  background: rgba(0,0,0,0.25);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
+.wk-fin-xp{
+  font-size:28px; font-weight:800; color:#ffcc00; margin-bottom:22px;
 }
-.wk-actions button:active { background: rgba(0,0,0,0.4); }
-.wk-actions .stop { border-color: rgba(255,255,255,0.4); }
-
-/* ============ ФИНИШ ============ */
-.wk-finish {
-  position: fixed;
-  inset: 0;
-  z-index: 950;
-  display: none;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 24px;
-  box-sizing: border-box;
-  background: linear-gradient(165deg, #0a0a12 0%, #1a1206 55%, #0a0a12 100%);
-  color: #fff;
-  overflow-y: auto;
+.wk-quote{
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:16px; padding:18px;
+  max-width:360px; margin-bottom:24px;
 }
-.wk-finish.show { display: flex; }
-.wk-trophy { font-size: 72px; margin-bottom: 8px; }
-.wk-finish h2 { font-size: 22px; margin: 0 0 10px; }
-.wk-fin-stats {
-  font-size: 13px;
-  color: #8e8e93;
-  line-height: 1.7;
-  margin-bottom: 22px;
+.wk-quote p:first-child{
+  font-style:italic; font-size:16px; line-height:1.45; margin:0 0 10px;
 }
-.wk-fin-xp {
-  font-size: 26px;
-  font-weight: 800;
-  color: #ffcc00;
-  margin-bottom: 22px;
-}
-.wk-quote {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 16px;
-  padding: 18px;
-  max-width: 360px;
-  box-sizing: border-box;
-  margin-bottom: 24px;
-}
-.wk-quote p:first-child {
-  font-style: italic;
-  font-size: 16px;
-  line-height: 1.45;
-  margin: 0 0 10px;
-}
-.wk-quote p:last-child {
-  text-align: right;
-  font-weight: 700;
-  font-size: 12px;
-  color: #8e8e93;
-  margin: 0;
+.wk-quote p:last-child{
+  text-align:right; font-weight:700; font-size:12px; color:#8e8e93; margin:0;
 }
 </style>
 </head>
 <body>
 
-<!-- ================= НАСТРОЙКА ================= -->
+<!-- ================== НАСТРОЙКА ================== -->
 <div id="setup" class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Тренировка</h1>
 
-<div class="wk-sec">
-  <div class="wk-sec-title">Упражнение</div>
-  <div class="wk-chips" id="exChips"></div>
+<div class="tabs">
+  <button id="tabCardio" class="tab" onclick="setTab('cardio')">Кардио</button>
+  <button id="tabTimer" class="tab on" onclick="setTab('timer')">Таймер</button>
 </div>
 
-<div class="wk-sec">
-  <div class="wk-row">
-    <span class="wk-label">Раунды</span>
-    <div class="wk-stepper">
-      <button onclick="bumpRounds(-1)">−</button>
-      <span id="roundsVal">3</span>
-      <button onclick="bumpRounds(1)">+</button>
+<div id="paneCardio" class="pane">
+  <div class="empty">
+    <div class="empty-icon">🏃</div>
+    <div class="empty-title">Кардио</div>
+    <div class="empty-text">Раздел пустой. Скажите, какое кардио нужно — бег, ходьба, интервалы — и я сделаю.</div>
+  </div>
+</div>
+
+<div id="paneTimer" class="pane on">
+
+  <div class="wk-sec">
+    <div class="wk-row">
+      <span class="wk-label">Подходы</span>
+      <div class="wk-stepper">
+        <button onclick="bumpRounds(-1)">−</button>
+        <span id="roundsVal">3</span>
+        <button onclick="bumpRounds(1)">+</button>
+      </div>
     </div>
+
+    <div class="wk-row col">
+      <span class="wk-label">Подготовка</span>
+      <div class="wk-chips" id="prepChips"></div>
+    </div>
+
+    <div class="wk-row col">
+      <span class="wk-label">Тренировка</span>
+      <div class="wk-chips" id="workChips"></div>
+    </div>
+
+    <div class="wk-row col">
+      <span class="wk-label">Отдых</span>
+      <div class="wk-chips" id="restChips"></div>
+    </div>
+
+    <div class="wk-custom">
+      <input id="c-min" type="number" min="0" placeholder="мин">
+      <input id="c-sec" type="number" min="0" max="59" placeholder="сек">
+      <select id="c-target">
+        <option value="prep">Подготовка</option>
+        <option value="work">Тренировка</option>
+        <option value="rest">Отдых</option>
+      </select>
+      <button onclick="applyCustom()">✓</button>
+    </div>
+
+    <div class="wk-summary" id="summary"></div>
   </div>
 
-  <div class="wk-row col">
-    <span class="wk-label">Тренировка</span>
-    <div class="wk-chips" id="workChips"></div>
-  </div>
-
-  <div class="wk-row col">
-    <span class="wk-label">Отдых</span>
-    <div class="wk-chips" id="restChips"></div>
-  </div>
-
-  <div class="wk-custom">
-    <input id="c-min" type="number" min="0" placeholder="мин">
-    <input id="c-sec" type="number" min="0" max="59" placeholder="сек">
-    <select id="c-target">
-      <option value="work">Тренировка</option>
-      <option value="rest">Отдых</option>
-    </select>
-    <button onclick="applyCustom()">✓</button>
-  </div>
-
-  <div class="wk-summary" id="summary"></div>
+  <button class="wk-start" onclick="startSession()">Начать тренировку</button>
+</div>
 </div>
 
-<button class="wk-start" onclick="startSession()">Начать тренировку</button>
-</div>
-
-<!-- ================= ТРЕНИРОВКА ================= -->
-<div id="run" class="wk-run work">
-  <div class="wk-bar"><div id="bar"></div></div>
-
-  <div class="wk-top">
-    <div class="wk-round" id="roundLabel">Раунд 1 / 3</div>
-    <div class="wk-phase" id="phaseLabel">Тренировка</div>
-  </div>
-
-  <div class="wk-clock" id="clock">05:00</div>
-
-  <div class="wk-ex" id="exCard">
-    <div class="wk-ex-img" id="exImg">💪</div>
+<!-- ================== ТАЙМЕР ================== -->
+<div id="run" class="run prep">
+  <div class="topbar">
     <div>
-      <div class="wk-ex-name" id="exName"></div>
-      <div class="wk-ex-reps" id="exReps"></div>
+      <div class="tb-label">Оставшееся время</div>
+      <div class="tb-value" id="totalLeft">00:00</div>
+    </div>
+    <div class="tb-right">
+      <div class="tb-label">Подходы</div>
+      <div class="tb-value" id="setsVal">0/3</div>
     </div>
   </div>
 
-  <div class="wk-hint" id="hint"></div>
+  <div class="mid">
+    <div class="bigclock" id="clock">00:05</div>
+    <div class="phase" id="phaseLabel">Подготовка</div>
+    <button class="lap" onclick="restartPhase()" aria-label="Начать заново">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="1.9"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20.5 12a8.5 8.5 0 1 1-2.9-6.4"/>
+        <path d="M20.5 3.6v5.2h-5.2"/>
+      </svg>
+    </button>
+  </div>
 
-  <div class="wk-actions">
-    <button id="pauseBtn" onclick="togglePause()">Пауза</button>
-    <button onclick="skipPhase()">Дальше</button>
-    <button class="stop" onclick="stopSession()">Стоп</button>
+  <div class="bottombar">
+    <button class="icon-btn" id="lockBtn" onclick="toggleWake()" aria-label="Не гасить экран">
+      <svg id="lockIcon" width="26" height="26" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round">
+        <rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/>
+        <path d="M8 10.5V7a4 4 0 0 1 7.6-1.7"/>
+      </svg>
+    </button>
+    <button class="icon-btn" id="soundBtn" onclick="toggleSound()" aria-label="Звук">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M4 9.5h3.2L12 5.4v13.2L7.2 14.5H4z"/>
+        <path id="wave" d="M15.5 8.4a5 5 0 0 1 0 7.2" fill="none"
+              stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        <path id="slash" d="M16 9.5l4 5M20 9.5l-4 5" fill="none"
+              stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="display:none"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="controls">
+    <button class="ctl" onclick="prevPhase()" aria-label="Назад">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor">
+        <rect x="5" y="5.5" width="2.4" height="13" rx="1"/>
+        <path d="M19 5.5v13l-9.6-6.5z"/>
+      </svg>
+    </button>
+    <button class="ctl" id="pauseBtn" onclick="togglePause()" aria-label="Пауза">
+      <svg id="pauseIcon" width="42" height="42" viewBox="0 0 24 24" fill="currentColor">
+        <rect x="6.5" y="4.5" width="4" height="15" rx="1.5"/>
+        <rect x="13.5" y="4.5" width="4" height="15" rx="1.5"/>
+      </svg>
+    </button>
+    <button class="ctl" onclick="nextPhase()" aria-label="Дальше">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor">
+        <rect x="16.6" y="5.5" width="2.4" height="13" rx="1"/>
+        <path d="M5 5.5v13l9.6-6.5z"/>
+      </svg>
+    </button>
   </div>
 </div>
 
-<!-- ================= ФИНИШ ================= -->
+<!-- ================== ФИНИШ ================== -->
 <div id="finish" class="wk-finish">
   <div class="wk-trophy">🏆</div>
   <h2>Тренировка завершена!</h2>
@@ -424,39 +372,34 @@
     <p id="qText"></p>
     <p id="qAuthor"></p>
   </div>
-  <button class="wk-start" style="max-width: 320px;" onclick="goBackToMain()">Принять</button>
+  <button class="wk-start" style="max-width:320px;" onclick="goBackToMain()">Принять</button>
 </div>
 
 <script src="quotes.js"></script>
 <script>
 const tg = window.Telegram.WebApp;
 tg.ready(); tg.expand();
-const sb = supabase.createClient('https://qnpriwfxzuoymoudtrl.supabase.co', 'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
+
+const sb = supabase.createClient(
+  'https://qnpriwfxzuoymoumdtrl.supabase.co',
+  'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF'
+);
 
 const XP_PER_ROUND = 15;
 const XP_BONUS = 20;
 
-/* Упражнения. В photo укажите путь к картинке, например 'ex-squat.png'.
-   Если photo пустое — показывается emoji. */
-const EXERCISES = [
-  { id: 'none',   name: 'Без упражнения', reps: 'Просто таймер',  emoji: '⏱️', photo: '' },
-  { id: 'squat',  name: 'Приседания',     reps: '15 повторений',  emoji: '🏋️', photo: '' },
-  { id: 'pushup', name: 'Отжимания',      reps: '10 повторений',  emoji: '💪', photo: '' },
-  { id: 'plank',  name: 'Планка',         reps: '60 секунд',      emoji: '🧘', photo: '' },
-  { id: 'burpee', name: 'Бёрпи',          reps: '12 повторений',  emoji: '🔥', photo: '' }
-];
-
+const PREP_OPTIONS = [3, 5, 10, 15];
 const WORK_OPTIONS = [60, 120, 180, 300, 600, 900];
 const REST_OPTIONS = [15, 30, 45, 60, 90, 120];
 
-let cfg = {
-  rounds: parseInt(localStorage.getItem('wkRounds')) || 3,
-  work: parseInt(localStorage.getItem('wkWork')) || 300,
-  rest: parseInt(localStorage.getItem('wkRest')) || 60,
-  exercise: null
+const cfg = {
+  prep:   parseInt(localStorage.getItem('wkPrep'))   || 5,
+  work:   parseInt(localStorage.getItem('wkWork'))   || 300,
+  rest:   parseInt(localStorage.getItem('wkRest'))   || 60,
+  rounds: parseInt(localStorage.getItem('wkRounds')) || 3
 };
 
-let phase = 'work';
+let phase = 'prep';
 let round = 1;
 let totalMs = 0;
 let remainingMs = 0;
@@ -465,65 +408,134 @@ let running = false;
 let iv = null;
 let xpEarned = 0;
 let finished = false;
+let lastBeep = -1;
+let soundOn = localStorage.getItem('wkSound') !== 'off';
+let wakeLock = null;
 
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2, '0');
 
-/* ---------- вспомогательное ---------- */
-function fmtSec(sec) {
-  if (sec >= 60) {
-    const m = Math.round(sec / 60);
-    return m + ' мин';
-  }
+/* ==================== ЗВУК ==================== */
+let actx = null;
+
+function ac(){
+  try {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  } catch (e) { return null; }
+}
+
+function tone(freq, delay, dur, type, gain){
+  const c = ac();
+  if (!c) return;
+  const t0 = c.currentTime + delay;
+  const o = c.createOscillator();
+  const g = c.createGain();
+  o.type = type || 'sine';
+  o.frequency.setValueAtTime(freq, t0);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(gain || 0.18, t0 + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g); g.connect(c.destination);
+  o.start(t0); o.stop(t0 + dur + 0.05);
+}
+
+/* Гонг: старт тренировки */
+function playBell(){
+  if (!soundOn) return;
+  const c = ac();
+  if (!c) return;
+  const t0 = c.currentTime;
+  const parts = [
+    { f: 1180, g: 0.22, d: 2.2 },
+    { f: 1770, g: 0.11, d: 1.8 },
+    { f: 2380, g: 0.07, d: 1.4 },
+    { f: 3150, g: 0.04, d: 1.0 }
+  ];
+  parts.forEach(p => {
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(p.f, t0);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(p.g, t0 + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + p.d);
+    o.connect(g); g.connect(c.destination);
+    o.start(t0); o.stop(t0 + p.d + 0.05);
+  });
+}
+
+/* Мягкий двойной сигнал: начало отдыха */
+function playRest(){
+  if (!soundOn) return;
+  tone(620, 0, 0.26, 'sine', 0.16);
+  tone(455, 0.2, 0.34, 'sine', 0.14);
+}
+
+/* Один тон: начало подготовки */
+function playPrep(){
+  if (!soundOn) return;
+  tone(880, 0, 0.2, 'sine', 0.15);
+}
+
+/* Бип: последние 5 секунд отдыха */
+function playBeep(){
+  if (!soundOn) return;
+  tone(1040, 0, 0.1, 'triangle', 0.15);
+}
+
+/* Победа, если не нашёлся mp3 */
+function playVictory(){
+  if (!soundOn) return;
+  tone(523, 0, 0.3, 'sine', 0.16);
+  tone(659, 0.14, 0.3, 'sine', 0.16);
+  tone(784, 0.28, 0.55, 'sine', 0.18);
+}
+
+function vibrate(p){ if (navigator.vibrate) navigator.vibrate(p); }
+
+/* ==================== НАСТРОЙКА ==================== */
+function setTab(which){
+  $('tabCardio').classList.toggle('on', which === 'cardio');
+  $('tabTimer').classList.toggle('on', which === 'timer');
+  $('paneCardio').classList.toggle('on', which === 'cardio');
+  $('paneTimer').classList.toggle('on', which === 'timer');
+}
+
+function fmtSec(sec){
+  if (sec >= 60) return Math.round(sec / 60) + ' мин';
   return sec + ' сек';
 }
 
-function fmtClock(ms) {
-  const s = Math.ceil(Math.max(0, ms) / 1000);
-  return pad(Math.floor(s / 60)) + ':' + pad(s % 60);
-}
-
-/* ---------- настройка ---------- */
-function renderExerciseChips() {
-  $('exChips').innerHTML = EXERCISES.map(e =>
-    '<button class="wk-chip' + (cfg.exercise === (e.id === 'none' ? null : e.id) ? ' on' : '') +
-    '" onclick="pickExercise(\'' + e.id + '\')">' +
-    (e.id === 'none' ? '⏱️' : e.emoji) + ' ' + e.name + '</button>'
+function chipsHtml(list, current, kind){
+  return list.map(sec =>
+    '<button class="wk-chip' + (current === sec ? ' on' : '') +
+    '" onclick="pickTime(\'' + kind + '\',' + sec + ')">' + fmtSec(sec) + '</button>'
   ).join('');
 }
 
-function pickExercise(id) {
-  cfg.exercise = id === 'none' ? null : id;
-  renderExerciseChips();
-  updateSummary();
+function renderChips(){
+  $('prepChips').innerHTML = chipsHtml(PREP_OPTIONS, cfg.prep, 'prep');
+  $('workChips').innerHTML = chipsHtml(WORK_OPTIONS, cfg.work, 'work');
+  $('restChips').innerHTML = chipsHtml(REST_OPTIONS, cfg.rest, 'rest');
 }
 
-function renderTimeChips() {
-  $('workChips').innerHTML = WORK_OPTIONS.map(sec =>
-    '<button class="wk-chip' + (cfg.work === sec ? ' on' : '') +
-    '" onclick="pickTime(\'work\',' + sec + ')">' + fmtSec(sec) + '</button>'
-  ).join('');
-  $('restChips').innerHTML = REST_OPTIONS.map(sec =>
-    '<button class="wk-chip' + (cfg.rest === sec ? ' on' : '') +
-    '" onclick="pickTime(\'rest\',' + sec + ')">' + fmtSec(sec) + '</button>'
-  ).join('');
-}
-
-function pickTime(kind, sec) {
+function pickTime(kind, sec){
   cfg[kind] = sec;
-  localStorage.setItem(kind === 'work' ? 'wkWork' : 'wkRest', sec);
-  renderTimeChips();
+  localStorage.setItem('wk' + kind.charAt(0).toUpperCase() + kind.slice(1), sec);
+  renderChips();
   updateSummary();
 }
 
-function bumpRounds(delta) {
-  cfg.rounds = Math.min(30, Math.max(1, cfg.rounds + delta));
+function bumpRounds(d){
+  cfg.rounds = Math.min(30, Math.max(1, cfg.rounds + d));
   localStorage.setItem('wkRounds', cfg.rounds);
   $('roundsVal').textContent = cfg.rounds;
   updateSummary();
 }
 
-function applyCustom() {
+function applyCustom(){
   const m = parseInt($('c-min').value) || 0;
   const s = parseInt($('c-sec').value) || 0;
   const sec = m * 60 + s;
@@ -533,20 +545,23 @@ function applyCustom() {
   $('c-sec').value = '';
 }
 
-function updateSummary() {
-  const totalSec = cfg.rounds * cfg.work + (cfg.rounds - 1) * cfg.rest;
-  const mins = Math.round(totalSec / 60);
-  const ex = cfg.exercise ? EXERCISES.find(e => e.id === cfg.exercise) : null;
-  $('summary').innerHTML =
-    cfg.rounds + ' ' + (cfg.rounds === 1 ? 'раунд' : (cfg.rounds < 5 ? 'раунда' : 'раундов')) +
-    ' · тренировка ' + fmtSec(cfg.work) +
-    ' · отдых ' + fmtSec(cfg.rest) +
-    '<br>Всего ≈ ' + mins + ' мин' +
-    (ex ? ' · ' + ex.name : '');
+function word(n){
+  if (n === 1) return 'подход';
+  if (n < 5) return 'подхода';
+  return 'подходов';
 }
 
-/* ---------- XP ---------- */
-async function addXP(delta) {
+function updateSummary(){
+  const total = cfg.prep + cfg.rounds * cfg.work + (cfg.rounds - 1) * cfg.rest;
+  $('summary').innerHTML =
+    cfg.rounds + ' ' + word(cfg.rounds) +
+    ' · подготовка ' + fmtSec(cfg.prep) +
+    '<br>тренировка ' + fmtSec(cfg.work) + ' · отдых ' + fmtSec(cfg.rest) +
+    '<br>Всего ≈ ' + Math.round(total / 60) + ' мин';
+}
+
+/* ==================== XP ==================== */
+async function addXP(delta){
   const tgId = localStorage.getItem('tgId');
   const email = localStorage.getItem('currentEmail') || localStorage.getItem('linkedEmail');
   if (!tgId && !email) return false;
@@ -560,140 +575,182 @@ async function addXP(delta) {
       .update({ xp: (data[0].xp || 0) + delta })
       .eq('id', data[0].id);
     return !upErr;
-  } catch (e) {
-    return false;
-  }
+  } catch (e) { return false; }
 }
 
-function awardXP(delta) {
+function awardXP(delta){
   localStorage.setItem('cachedXP', parseInt(localStorage.getItem('cachedXP') || '0') + delta);
   addXP(delta);
 }
 
-/* ---------- запуск ---------- */
-function startSession() {
+/* ==================== ТАЙМЕР ==================== */
+function startSession(){
+  ac();                                   // разблокировать звук по нажатию
   finished = false;
   xpEarned = 0;
   round = 1;
   $('setup').style.display = 'none';
   $('finish').classList.remove('show');
   $('run').classList.add('show');
-  fillExerciseCard();
-  enterPhase('work');
+  enterPhase(cfg.prep > 0 ? 'prep' : 'work');
 }
 
-function fillExerciseCard() {
-  const ex = cfg.exercise ? EXERCISES.find(e => e.id === cfg.exercise) : null;
-  if (!ex) {
-    $('exCard').style.display = 'none';
-    return;
-  }
-  $('exCard').style.display = 'flex';
-  $('exName').textContent = ex.name;
-  $('exReps').textContent = ex.reps;
-  $('exImg').innerHTML = ex.photo
-    ? '<img src="' + ex.photo + '" alt="" onerror="this.remove()">'
-    : ex.emoji;
-}
-
-function enterPhase(p) {
+function enterPhase(p){
   phase = p;
-  totalMs = (p === 'work' ? cfg.work : cfg.rest) * 1000;
+  const sec = p === 'prep' ? cfg.prep : (p === 'work' ? cfg.work : cfg.rest);
+  totalMs = sec * 1000;
   remainingMs = totalMs;
   endAt = Date.now() + remainingMs;
   running = true;
-  $('pauseBtn').textContent = 'Пауза';
+  lastBeep = -1;
 
-  $('run').classList.toggle('work', p === 'work');
-  $('run').classList.toggle('rest', p === 'rest');
-  $('phaseLabel').textContent = p === 'work' ? 'Тренировка' : 'Отдых';
-  $('roundLabel').textContent = 'Раунд ' + round + ' / ' + cfg.rounds;
-  fillExerciseCard();
+  const run = $('run');
+  run.classList.remove('prep', 'work', 'rest');
+  run.classList.add(p);
 
-  if (p === 'work') {
-    $('hint').textContent = round < cfg.rounds
-      ? 'Дальше отдых ' + fmtSec(cfg.rest)
-      : 'Последний раунд';
-  } else {
-    $('hint').textContent = 'Дальше раунд ' + (round + 1);
-  }
+  $('phaseLabel').textContent =
+    p === 'prep' ? 'Подготовка' : (p === 'work' ? 'Тренировка' : 'Отдых');
 
-  renderClock();
+  setPauseIcon(false);
+
+  if (p === 'prep') playPrep();
+  if (p === 'work') playBell();
+  if (p === 'rest') playRest();
+
+  render();
   clearInterval(iv);
-  iv = setInterval(tick, 200);
+  iv = setInterval(tick, 100);
 }
 
-function tick() {
+function tick(){
   if (!running) return;
   const left = endAt - Date.now();
-  if (left <= 0) {
-    remainingMs = 0;
-    renderClock();
-    phaseDone();
-    return;
-  }
+  if (left <= 0){ remainingMs = 0; render(); phaseDone(); return; }
   remainingMs = left;
-  renderClock();
+
+  if (phase === 'rest'){
+    const s = Math.ceil(left / 1000);
+    if (s <= 5 && s > 0 && s !== lastBeep){ lastBeep = s; playBeep(); }
+  }
+  render();
 }
 
-function renderClock() {
-  $('clock').textContent = fmtClock(remainingMs);
-  const pct = totalMs > 0 ? (remainingMs / totalMs) * 100 : 0;
-  $('bar').style.width = Math.max(0, Math.min(100, pct)) + '%';
+function render(){
+  const s = Math.ceil(Math.max(0, remainingMs) / 1000);
+  $('clock').textContent = pad(Math.floor(s / 60)) + ':' + pad(s % 60);
+  $('totalLeft').textContent = fmtTotal(totalLeftMs());
+  $('setsVal').textContent = (phase === 'prep' ? 0 : round) + '/' + cfg.rounds;
 }
 
-async function phaseDone() {
+function fmtTotal(ms){
+  const t = Math.max(0, Math.round(ms / 1000));
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const s = t % 60;
+  if (h > 0) return pad(h) + ':' + pad(m) + ':' + pad(s);
+  return pad(m) + ':' + pad(s);
+}
+
+function totalLeftMs(){
+  const W = cfg.work * 1000;
+  const R = cfg.rest * 1000;
+  let ms = remainingMs;
+  if (phase === 'prep'){
+    ms += cfg.rounds * W + (cfg.rounds - 1) * R;
+  } else if (phase === 'work'){
+    const after = cfg.rounds - round;
+    ms += after * W + after * R;
+  } else {
+    const after = cfg.rounds - round;
+    ms += after * W + Math.max(0, after - 1) * R;
+  }
+  return ms;
+}
+
+function phaseDone(){
   clearInterval(iv);
-  if (phase === 'work') {
+
+  if (phase === 'prep'){ enterPhase('work'); return; }
+
+  if (phase === 'work'){
     xpEarned += XP_PER_ROUND;
     awardXP(XP_PER_ROUND);
-    if (navigator.vibrate) navigator.vibrate([320, 140, 320]);
-    if (round >= cfg.rounds) { finishSession(); return; }
-    round++;
+    vibrate([300, 120, 300]);
+    if (round >= cfg.rounds){ finishSession(); return; }
     enterPhase('rest');
-  } else {
-    if (navigator.vibrate) navigator.vibrate(180);
+    return;
+  }
+
+  if (phase === 'rest'){
+    round++;
     enterPhase('work');
   }
 }
 
-function togglePause() {
-  if (!running) {
+function setPauseIcon(paused){
+  $('pauseIcon').innerHTML = paused
+    ? '<path d="M8 5.2v13.6l11-6.8z"/>'
+    : '<rect x="6.5" y="4.5" width="4" height="15" rx="1.5"/>' +
+      '<rect x="13.5" y="4.5" width="4" height="15" rx="1.5"/>';
+}
+
+function togglePause(){
+  if (!running){
     endAt = Date.now() + remainingMs;
     running = true;
-    $('pauseBtn').textContent = 'Пауза';
+    setPauseIcon(false);
     clearInterval(iv);
-    iv = setInterval(tick, 200);
+    iv = setInterval(tick, 100);
     return;
   }
   remainingMs = Math.max(0, endAt - Date.now());
   running = false;
   clearInterval(iv);
-  $('pauseBtn').textContent = 'Продолжить';
-  renderClock();
+  setPauseIcon(true);
+  render();
 }
 
-function skipPhase() {
+function restartPhase(){
   if (finished) return;
   clearInterval(iv);
-  if (phase === 'work') {
-    if (round >= cfg.rounds) { finishSession(); return; }
-    round++;
-    enterPhase('rest');
-  } else {
-    enterPhase('work');
-  }
+  enterPhase(phase);
 }
 
-function stopSession() {
-  if (!confirm('Остановить тренировку? XP за завершённые раунды останется.')) return;
+/* вперёд, без начисления XP за раунд */
+function nextPhase(){
+  if (finished) return;
   clearInterval(iv);
-  running = false;
-  exitToSetup();
-  if (xpEarned > 0) tg.showAlert('Тренировка остановлена. Получено ' + xpEarned + ' XP.');
+
+  if (phase === 'prep'){ enterPhase('work'); return; }
+
+  if (phase === 'work'){
+    if (round >= cfg.rounds){ finishSession(); return; }
+    enterPhase('rest');
+    return;
+  }
+
+  round++;
+  enterPhase('work');
 }
 
-function finishSession() {
+/* назад */
+function prevPhase(){
+  if (finished) return;
+  clearInterval(iv);
+
+  if (phase === 'prep'){ enterPhase('prep'); return; }
+
+  if (phase === 'work'){
+    if (round === 1){ enterPhase('prep'); return; }
+    round--;
+    enterPhase('rest');
+    return;
+  }
+
+  enterPhase('work');
+}
+
+function finishSession(){
   if (finished) return;
   finished = true;
   clearInterval(iv);
@@ -702,18 +759,21 @@ function finishSession() {
   xpEarned += XP_BONUS;
   awardXP(XP_BONUS);
 
-  const audio = new Audio('12. Scroll Win 02.mp3');
-  audio.play().catch(() => {});
+  let played = false;
+  try {
+    const a = new Audio('12. Scroll Win 02.mp3');
+    a.addEventListener('error', () => { if (!played) { played = true; playVictory(); } });
+    a.play().catch(() => { if (!played) { played = true; playVictory(); } });
+    setTimeout(() => { if (!played && (a.readyState === 0 || a.error)) { played = true; playVictory(); } }, 900);
+  } catch (e) { playVictory(); }
 
-  const mins = Math.round((cfg.rounds * cfg.work + (cfg.rounds - 1) * cfg.rest) / 60);
+  const total = cfg.prep + cfg.rounds * cfg.work + (cfg.rounds - 1) * cfg.rest;
   $('finStats').innerHTML =
-    cfg.rounds + ' ' + (cfg.rounds === 1 ? 'раунд' : (cfg.rounds < 5 ? 'раунда' : 'раундов')) +
-    ' · ≈ ' + mins + ' мин' +
-    (cfg.exercise ? '<br>' + EXERCISES.find(e => e.id === cfg.exercise).name : '');
+    cfg.rounds + ' ' + word(cfg.rounds) + ' · ≈ ' + Math.round(total / 60) + ' мин';
   $('finXp').textContent = '+' + xpEarned + ' XP';
 
   let q = { text: 'Ты не проиграл, пока не остановился.', author: 'Майк Тайсон' };
-  if (typeof allQuotes !== 'undefined' && allQuotes.length) {
+  if (typeof allQuotes !== 'undefined' && allQuotes.length){
     q = allQuotes[Math.floor(Math.random() * allQuotes.length)];
   }
   $('qText').textContent = '«' + q.text + '»';
@@ -723,20 +783,54 @@ function finishSession() {
   $('finish').classList.add('show');
 }
 
-function exitToSetup() {
-  $('run').classList.remove('show');
-  $('setup').style.display = '';
+/* ==================== ЭКРАН / ЗВУК ==================== */
+async function toggleWake(){
+  try {
+    if (wakeLock){
+      await wakeLock.release();
+      wakeLock = null;
+    } else if ('wakeLock' in navigator){
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; updateLockIcon(); });
+    } else {
+      tg.showAlert('Этот браузер не умеет не гасить экран.');
+    }
+  } catch (e){
+    tg.showAlert('Не удалось включить. Экран может гаснуть.');
+  }
+  updateLockIcon();
 }
 
-function goBackToMain() {
+function updateLockIcon(){
+  $('lockBtn').classList.toggle('off', !wakeLock);
+  $('lockIcon').innerHTML = wakeLock
+    ? '<rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>'
+    : '<rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7a4 4 0 0 1 7.6-1.7"/>';
+}
+
+function toggleSound(){
+  soundOn = !soundOn;
+  localStorage.setItem('wkSound', soundOn ? 'on' : 'off');
+  updateSoundIcon();
+  if (soundOn) playPrep();
+}
+
+function updateSoundIcon(){
+  $('soundBtn').classList.toggle('off', !soundOn);
+  $('wave').style.display = soundOn ? '' : 'none';
+  $('slash').style.display = soundOn ? 'none' : '';
+}
+
+function goBackToMain(){
   setTimeout(() => { window.location.href = 'index.html'; }, 100);
 }
 
-/* ---------- инициализация ---------- */
+/* ==================== СТАРТ ==================== */
 $('roundsVal').textContent = cfg.rounds;
-renderExerciseChips();
-renderTimeChips();
+renderChips();
 updateSummary();
+updateSoundIcon();
+updateLockIcon();
 </script>
 </body>
 </html>
