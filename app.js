@@ -7,211 +7,1088 @@ tg.expand();
 
 let chartWaterDiary=null,chartFoodCalDiary=null,chartFoodMacroDiary=null,chartWeightDiary=null,chartGlobalWeight=null,chartGlobalCal=null,chartGlobalMacro=null,chartGlobalWater=null;
 
-function openScreen(e){document.querySelectorAll('.screen').forEach(e=>e.classList.remove('active'));const t=document.getElementById(e);t&&t.classList.add('active')}
-function closeScreen(e){document.getElementById(e).classList.remove('active');localStorage.getItem('cachedProfile')?document.getElementById('dashboard-screen').classList.add('active'):document.getElementById('auth-screen').classList.add('active')}
+function openScreen(id){document.querySelectorAll('.screen').forEach(function(e){e.classList.remove('active');});var t=document.getElementById(id);if(t)t.classList.add('active');}
+function closeScreen(id){var el=document.getElementById(id);if(el)el.classList.remove('active');if(localStorage.getItem('cachedProfile')){var d=document.getElementById('dashboard-screen');if(d)d.classList.add('active');}else{var a=document.getElementById('auth-screen');if(a)a.classList.add('active');}}
 
-async function resolveUserRecord(e,t){if(!e&&!t)return null;let n=new Map;e&&(await supabaseClient.from('user_links').select('*').eq('telegram_id',e)).data?.forEach(t=>n.set(t.id,t));t&&(await supabaseClient.from('user_links').select('*').eq('email',t)).data?.forEach(e=>n.set(e.id,e));let s=Array.from(n.values()),a=e,o=t;s.forEach(e=>{e.telegram_id&&(a=e.telegram_id),e.email&&(o=e.email)});a&&a!==e&&(await supabaseClient.from('user_links').select('*').eq('telegram_id',a)).data?.forEach(e=>n.set(e.id,e));o&&o!==t&&(await supabaseClient.from('user_links').select('*').eq('email',o)).data?.forEach(e=>n.set(e.id,e));s=Array.from(n.values());if(s.length===0)return null;if(s.length===1){const e=s[0];let t=!1,n={};return e.telegram_id||!a||(n.telegram_id=a,t=!0),e.email||!o||(n.email=o,t=!0),t&&(await supabaseClient.from('user_links').update(n).eq('id',e.id),Object.assign(e,n)),e}let r=[],l=0,c=0,d=null,i=null;s.forEach(e=>{e.food&&Array.isArray(e.food)&&(r=r.concat(e.food)),e.xp&&e.xp>l&&(l=e.xp),e.burned&&e.burned>c&&(c=e.burned),e.profile&&!d&&(d=e.profile),e.name&&!i&&(i=e.name)});const u=[],m=new Set;r.forEach(e=>{const t=JSON.stringify(e);m.has(t)||(m.add(t),u.push(e))});const p=s[0],f=s.slice(1).map(e=>e.id),g={telegram_id:a||p.telegram_id||null,email:o||p.email||null,food:u,xp:l,burned:c,profile:d||p.profile,name:i||p.name||"Атлет"};return await supabaseClient.from('user_links').update(g).eq('id',p.id),f.length>0&&await supabaseClient.from('user_links').delete().in('id',f),{...p,...g}}
-
-window.addEventListener('load',async()=>{const e=localStorage.getItem('cachedProfile');e&&renderProfile(JSON.parse(e)),await syncFoodFromCloud()});
-
-async function loginWithTelegram(){if(tg.initDataUnsafe&&tg.initDataUnsafe.user){localStorage.setItem('loginType','telegram');const e=tg.initDataUnsafe.user.id,t=tg.initDataUnsafe.user.first_name||"Атлет";localStorage.setItem('tgId',e);localStorage.setItem('userName',t);const n=await resolveUserRecord(e,null);if(n&&n.profile){localStorage.setItem('cachedProfile',JSON.stringify(n.profile));localStorage.setItem('cachedXP',n.xp||0);localStorage.setItem('cachedBurned',n.burned||0);const s=new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0')+'-'+String(new Date().getDate()).padStart(2,'0');n.profile.water&&n.profile.waterDate===s?(localStorage.setItem('todayWater',JSON.stringify(n.profile.water)),localStorage.setItem('waterListDate',s)):(localStorage.setItem('todayWater','[]'),localStorage.setItem('waterListDate',s));n.email?(localStorage.setItem('linkedEmail',n.email),localStorage.setItem('currentEmail',n.email)):(localStorage.removeItem('linkedEmail'),localStorage.removeItem('currentEmail'));n.name&&localStorage.setItem('userName',n.name);n.food&&localStorage.setItem('todayFood',JSON.stringify(n.food))}else{const s={age:25,gender:'male',weight:70,height:175,goal:'lose',custom_water_goal:2000,food_preference:''};localStorage.setItem('cachedProfile',JSON.stringify(s));localStorage.setItem('cachedXP',0);localStorage.setItem('cachedBurned',0);await saveProgressToCloud(e,null,t,s,0,0);openOnboardingModal()}renderProfile(JSON.parse(localStorage.getItem('cachedProfile')));await syncFoodFromCloud()}else tg.showAlert("Откройте через Telegram!")}
-function showEmailForm(){openScreen('email-screen')}
-async function handleEmailAuth(){const e=document.getElementById('auth-email').value,t=document.getElementById('auth-password').value,n=document.getElementById('email-submit-btn');if(!e||!t){tg.showAlert("Заполните все поля!");return}n.innerText="Загрузка...",n.disabled=!0;try{let{error:s}=await supabaseClient.auth.signInWithPassword({email:e,password:t});if(s){if(s.message.includes("Invalid login credentials")){const{data:a,error:o}=await supabaseClient.auth.signUp({email:e,password:t});if(o){tg.showAlert("Ошибка регистрации: "+o.message),n.innerText="Продолжить",n.disabled=!1;return}if(a.user&&a.user.identities&&a.user.identities.length===0){tg.showAlert("Неверный пароль. Этот аккаунт уже существует."),n.innerText="Продолжить",n.disabled=!1;return}a.session||await supabaseClient.auth.signInWithPassword({email:e,password:t}),tg.showAlert("Аккаунт успешно создан!")}else{tg.showAlert("Ошибка входа: "+s.message),n.innerText="Продолжить",n.disabled=!1;return}}else tg.showAlert("Успешный вход!");localStorage.setItem('loginType','email'),localStorage.setItem('currentEmail',e);const a=e.split('@')[0];localStorage.setItem('userName',a);const o=await resolveUserRecord(null,e);if(o&&o.profile){localStorage.setItem('cachedProfile',JSON.stringify(o.profile));localStorage.setItem('cachedXP',o.xp||0);localStorage.setItem('cachedBurned',o.burned||0);const s=new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0')+'-'+String(new Date().getDate()).padStart(2,'0');o.profile.water&&o.profile.waterDate===s?(localStorage.setItem('todayWater',JSON.stringify(o.profile.water)),localStorage.setItem('waterListDate',s)):(localStorage.setItem('todayWater','[]'),localStorage.setItem('waterListDate',s));o.telegram_id?(localStorage.setItem('tgId',o.telegram_id),localStorage.setItem('linkedEmail',e)):localStorage.removeItem('tgId');o.name&&localStorage.setItem('userName',o.name);o.food&&localStorage.setItem('todayFood',JSON.stringify(o.food))}else{const s={age:25,gender:'male',weight:70,height:175,goal:'lose',custom_water_goal:2000,food_preference:''};localStorage.setItem('cachedProfile',JSON.stringify(s));localStorage.setItem('cachedXP',0);localStorage.setItem('cachedBurned',0);await saveProgressToCloud(null,e,a,s,0,0);openOnboardingModal()}renderProfile(JSON.parse(localStorage.getItem('cachedProfile')));await syncFoodFromCloud()}catch(e){tg.showAlert("Ошибка сети.")}finally{n.innerText="Продолжить",n.disabled=!1}}
-function openOnboardingModal(){setTimeout(()=>{document.getElementById('onboarding-modal').classList.add('active')},500)}
-async function saveOnboardingData(){const e=document.getElementById('onboarding-age').value,t=document.getElementById('onboarding-weight').value,n=document.getElementById('onboarding-height').value,s=document.getElementById('onboarding-gender').value,a=document.getElementById('onboarding-goal').value,o=document.getElementById('onboarding-food-preference').value;if(!e||!t||!n){tg.showAlert("Пожалуйста, заполни возраст, вес и рост!");return}const r=t?Math.round(parseFloat(t)*30):2000,l={age:e,gender:s,weight:t,height:n,goal:a,custom_calories:'',custom_protein:'',custom_fat:'',custom_carbs:'',custom_water_goal:r,food_preference:o};localStorage.setItem('cachedProfile',JSON.stringify(l));const c=localStorage.getItem('tgId'),d=localStorage.getItem('currentEmail')||localStorage.getItem('linkedEmail'),i=localStorage.getItem('userName')||"Атлет";await saveProgressToCloud(c,d,i,l,0,0),document.getElementById('onboarding-modal').classList.remove('active'),renderProfile(l),tg.showAlert("Отлично! Твоя норма воды рассчитана автоматически.")}
-
-async function syncFoodFromCloud(){const e=localStorage.getItem('tgId'),t=localStorage.getItem('linkedEmail')||localStorage.getItem('currentEmail');if(!e&&!t)return;const n=await resolveUserRecord(e,t);let s=[];try{s=JSON.parse(localStorage.getItem('todayFood')||'[]')}catch(e){}const a=new Date(),o=a.getFullYear()+'-'+String(a.getMonth()+1).padStart(2,'0')+'-'+String(a.getDate()).padStart(2,'0'),r=localStorage.getItem('foodListDate');if(n){const e=n.food||[];r?r===o?e.length>0?localStorage.setItem('todayFood',JSON.stringify(e)):s.length>0&&await supabaseClient.from('user_links').update({food:s}).eq('id',n.id):(archiveFoodToHistory(s,r),localStorage.setItem('todayFood','[]'),localStorage.setItem('foodListDate',o),await supabaseClient.from('user_links').update({food:[]}).eq('id',n.id)):(e.length>0?localStorage.setItem('todayFood',JSON.stringify(e)):s.length>0&&await supabaseClient.from('user_links').update({food:s}).eq('id',n.id),localStorage.setItem('foodListDate',o)),updateDashboard()}}
-async function saveFoodToCloud(e){const t=localStorage.getItem('tgId'),n=localStorage.getItem('linkedEmail')||localStorage.getItem('currentEmail');if(!t&&!n)return;const s=await resolveUserRecord(t,n);s&&await supabaseClient.from('user_links').update({food:e}).eq('id',s.id)}
-async function syncWaterToProfile(){let e=[];try{e=JSON.parse(localStorage.getItem('todayWater')||'[]')}catch(e){}const t=localStorage.getItem('waterListDate');let n=JSON.parse(localStorage.getItem('cachedProfile')||'{}');n.water=e,n.waterDate=t,localStorage.setItem('cachedProfile',JSON.stringify(n));const s=localStorage.getItem('tgId'),a=localStorage.getItem('linkedEmail')||localStorage.getItem('currentEmail'),o=localStorage.getItem('userName')||"Атлет";await saveProgressToCloud(s,a,o,n,currentXP,totalBurnedCalories)}
-async function saveProgressToCloud(e,t,n,s,a,o){try{let r=e||localStorage.getItem('tgId'),l=t||localStorage.getItem('linkedEmail')||localStorage.getItem('currentEmail'),c=n||localStorage.getItem('userName')||"Атлет";if(!r&&!l)return;const d=await resolveUserRecord(r,l);d?await supabaseClient.from('user_links').update({profile:s,xp:a,burned:o,name:c,telegram_id:r||null,email:l||null}).eq('id',d.id):await supabaseClient.from('user_links').insert([{telegram_id:r,email:l,profile:s,xp:a,burned:o,name:c}])}catch(e){console.log("Ошибка сохранения:",e)}}
-
-const levelsData={male:[{xp:0,title:"Странник",video:"VID_20261028_173134_198.mp4"},{xp:100,title:"Берсерк",video:"VID_20261028_173215_440.mp4"},{xp:250,title:"Мечник",video:"VID_20261028_162626_544.mp4"},{xp:450,title:"Ветеран",video:"VID_20261028_173219_295.mp4"},{xp:700,title:"Гладиатор",video:"VID_20261028_173227_311.mp4"},{xp:1000,title:"Чемпион",video:"VID_20261028_173233_432.mp4"},{xp:1400,title:"Мастер клинка",video:"VID_20261028_173238_313.mp4"},{xp:1900,title:"Воевода",video:"VID_20261028_173251_027.mp4"},{xp:2500,title:"Легенда",video:"VID_20261028_173803_138.mp4"},{xp:3500,title:"Бессмертный",video:"VID_20261028_173808_318.mp4"}],female:[{xp:0,title:"Новичок",video:"VID_20261028_175618_746.mp4"},{xp:100,title:"Фурия",video:"VID_20261028_175631_701.mp4"},{xp:250,title:"Амазонка",video:"VID_20261028_175641_349.mp4"},{xp:450,title:"Валькирия",video:"VID_20261028_175649_029.mp4"},{xp:700,title:"Воительница",video:"VID_20261028_175659_208.mp4"},{xp:1000,title:"Победительница",video:"VID_20261028_175708_920.mp4"},{xp:1400,title:"Королева клинка",video:"VID_20261028_175726_660.mp4"},{xp:1900,title:"Владычица",video:"VID_20261028_175732_350.mp4"},{xp:2500,title:"Легенда",video:"VID_20261028_175744_681.mp4"},{xp:3500,title:"Бессмертная",video:"VID_20261028_175750_651.mp4"}]};
-let currentXP=0,totalBurnedCalories=0,userGender='male',currentProfileData=null,currentLevelIndex=-1;
-function calculateNutrition(e){if(e.custom_calories&&e.custom_calories>0)return{calories:parseInt(e.custom_calories),protein:parseInt(e.custom_protein)||0,fat:parseInt(e.custom_fat)||0,carbs:parseInt(e.custom_carbs)||0};let t=parseFloat(e.weight)||70,n=parseFloat(e.height)||175,s=parseInt(e.age)||25,a=e.gender==='male'?10*t+6.25*n-5*s+5:10*t+6.25*n-5*s-161,o=a*1.375;return e.goal==='lose'&&(o-=500),e.goal==='gain'&&(o+=500),{calories:Math.round(o),protein:Math.round(o*0.3/4),fat:Math.round(o*0.3/9),carbs:Math.round(o*0.4/4)}}
-function checkDayReset(){const e=new Date(),t=e.getFullYear()+'-'+String(e.getMonth()+1).padStart(2,'0')+'-'+String(e.getDate()).padStart(2,'0');localStorage.getItem('foodListDate')!==t&&(localStorage.setItem('todayFood','[]'),localStorage.setItem('foodListDate',t)),localStorage.getItem('waterListDate')!==t&&(localStorage.setItem('todayWater','[]'),localStorage.setItem('waterListDate',t))}
-function saveWeightToHistory(e){let t=[];try{t=JSON.parse(localStorage.getItem('weightHistory')||'[]')}catch(e){t=[]}const n=new Date(),s=n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0');t.length>0&&t[0].dateRaw===s?t[0].weight=parseFloat(e):t.unshift({dateRaw:s,dateDisplay:n.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'2-digit'}),weight:parseFloat(e)}),t.length>50&&t.pop(),localStorage.setItem('weightHistory',JSON.stringify(t))}
-
-// === ЛОГИКА СТРИКА (РУЧНОЙ ЗАБОР) ===
-function checkDailyStreak() {
-    const today = new Date().toISOString().split('T')[0];
-    let lastLogin = localStorage.getItem('lastLoginDate');
-    let streak = parseInt(localStorage.getItem('streakCount') || '0');
-    
-    if (lastLogin === today) {
-        // Уже заходили сегодня. Проверяем, забрали ли награду.
-        let isPending = localStorage.getItem('streakPendingReward') === 'true';
-        updateStreakUI(streak, isPending);
-        return; 
-    }
-    
-    let yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    let yesterdayStr = yesterday.toISOString().split('T')[0];
-
-    if (lastLogin === yesterdayStr) {
-        streak += 1; // Продолжаем стрик
-    } else {
-        streak = 1; // Стрик сгорел или это первый вход
-    }
-
-    // Сохраняем данные, но НЕ начисляем XP (ждем клика)
-    localStorage.setItem('lastLoginDate', today);
-    localStorage.setItem('streakCount', streak);
-    localStorage.setItem('streakPendingReward', 'true');
-    
-    updateStreakUI(streak, true);
+function todayStr(){
+  var d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function yesterdayStr(){
+  var d=new Date();d.setDate(d.getDate()-1);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function playerKey(){
+  var t=localStorage.getItem('tgId');
+  if(t)return 'tg:'+t;
+  var e=localStorage.getItem('linkedEmail')||localStorage.getItem('currentEmail');
+  if(e)return 'email:'+e.toLowerCase();
+  return null;
 }
 
-function claimStreakReward() {
-    if (localStorage.getItem('streakPendingReward') === 'true') {
-        let streak = parseInt(localStorage.getItem('streakCount') || '1');
-        let bonusXP = Math.min(streak * 10, 50);
-        
-        currentXP += bonusXP;
-        localStorage.setItem('cachedXP', currentXP);
-        localStorage.setItem('streakPendingReward', 'false');
-        
-        updateCharacterUI();
-        saveProgressToCloud(localStorage.getItem('tgId'), localStorage.getItem('currentEmail'), localStorage.getItem('userName'), currentProfileData, currentXP, totalBurnedCalories);
-        
-        showMotivationToast(`🔥 Награда получена!`, `Ты получаешь +${bonusXP} XP за ${streak} дней подряд!`, '🔥');
-        updateStreakUI(streak, false);
-    } else {
-        let streak = parseInt(localStorage.getItem('streakCount') || '0');
-        showMotivationToast(`🔥 Твой стрик: ${streak} дн.`, `Завтра зайди снова, чтобы получить еще больше XP!`, '🔥');
+async function resolveUserRecord(tgId,email){
+  if(!tgId&&!email)return null;
+  var map=new Map();
+  if(tgId){
+    var r1=await supabaseClient.from('user_links').select('*').eq('telegram_id',tgId);
+    if(r1.data)r1.data.forEach(function(x){map.set(x.id,x);});
+  }
+  if(email){
+    var r2=await supabaseClient.from('user_links').select('*').eq('email',email);
+    if(r2.data)r2.data.forEach(function(x){map.set(x.id,x);});
+  }
+  var list=Array.from(map.values());
+  var realTg=tgId,realEmail=email;
+  list.forEach(function(x){
+    if(x.telegram_id)realTg=x.telegram_id;
+    if(x.email)realEmail=x.email;
+  });
+  if(realTg&&realTg!==tgId){
+    var r3=await supabaseClient.from('user_links').select('*').eq('telegram_id',realTg);
+    if(r3.data)r3.data.forEach(function(x){map.set(x.id,x);});
+  }
+  if(realEmail&&realEmail!==email){
+    var r4=await supabaseClient.from('user_links').select('*').eq('email',realEmail);
+    if(r4.data)r4.data.forEach(function(x){map.set(x.id,x);});
+  }
+  list=Array.from(map.values());
+  if(list.length===0)return null;
+  if(list.length===1){
+    var one=list[0],patch={},need=false;
+    if(!one.telegram_id&&realTg){patch.telegram_id=realTg;need=true;}
+    if(!one.email&&realEmail){patch.email=realEmail;need=true;}
+    if(need){
+      await supabaseClient.from('user_links').update(patch).eq('id',one.id);
+      Object.assign(one,patch);
     }
+    return one;
+  }
+  var food=[],xp=0,burned=0,profile=null,name=null;
+  list.forEach(function(x){
+    if(x.food&&Array.isArray(x.food))food=food.concat(x.food);
+    if(x.xp&&x.xp>xp)xp=x.xp;
+    if(x.burned&&x.burned>burned)burned=x.burned;
+    if(x.profile&&!profile)profile=x.profile;
+    if(x.name&&!name)name=x.name;
+  });
+  var uniq=[],seen=new Set();
+  food.forEach(function(f){
+    var k=JSON.stringify(f);
+    if(!seen.has(k)){seen.add(k);uniq.push(f);}
+  });
+  var first=list[0];
+  var extraIds=list.slice(1).map(function(x){return x.id;});
+  var merged={telegram_id:realTg||first.telegram_id||null,email:realEmail||first.email||null,food:uniq,xp:xp,burned:burned,profile:profile||first.profile,name:name||first.name||'Атлет'};
+  await supabaseClient.from('user_links').update(merged).eq('id',first.id);
+  if(extraIds.length>0)await supabaseClient.from('user_links').delete().in('id',extraIds);
+  return Object.assign({},first,merged);
 }
 
-function updateStreakUI(streak, isPending) {
-    const el = document.getElementById('streak-display');
-    if (el) {
-        el.innerText = `🔥 ${streak}`;
-        if (isPending) {
-            el.classList.add('streak-pending');
-        } else {
-            el.classList.remove('streak-pending');
+window.addEventListener('load',async function(){
+  var p=localStorage.getItem('cachedProfile');
+  if(p)renderProfile(JSON.parse(p));
+  await syncFoodFromCloud();
+});
+
+async function loginWithTelegram(){
+  if(!(tg.initDataUnsafe&&tg.initDataUnsafe.user)){tg.showAlert('Откройте через Telegram!');return;}
+  localStorage.setItem('loginType','telegram');
+  var id=tg.initDataUnsafe.user.id;
+  var nm=tg.initDataUnsafe.user.first_name||'Атлет';
+  localStorage.setItem('tgId',id);
+  localStorage.setItem('userName',nm);
+  var rec=await resolveUserRecord(id,null);
+  if(rec&&rec.profile){
+    localStorage.setItem('cachedProfile',JSON.stringify(rec.profile));
+    localStorage.setItem('cachedXP',rec.xp||0);
+    localStorage.setItem('cachedBurned',rec.burned||0);
+    var td=todayStr();
+    if(rec.profile.water&&rec.profile.waterDate===td){
+      localStorage.setItem('todayWater',JSON.stringify(rec.profile.water));
+      localStorage.setItem('waterListDate',td);
+    }else{
+      localStorage.setItem('todayWater','[]');
+      localStorage.setItem('waterListDate',td);
+    }
+    if(rec.email){
+      localStorage.setItem('linkedEmail',rec.email);
+      localStorage.setItem('currentEmail',rec.email);
+    }else{
+      localStorage.removeItem('linkedEmail');
+      localStorage.removeItem('currentEmail');
+    }
+    if(rec.name)localStorage.setItem('userName',rec.name);
+    if(rec.food)localStorage.setItem('todayFood',JSON.stringify(rec.food));
+  }else{
+    var def={age:25,gender:'male',weight:70,height:175,goal:'lose',custom_water_goal:2000,food_preference:''};
+    localStorage.setItem('cachedProfile',JSON.stringify(def));
+    localStorage.setItem('cachedXP',0);
+    localStorage.setItem('cachedBurned',0);
+    await saveProgressToCloud(id,null,nm,def,0,0);
+    openOnboardingModal();
+  }
+  renderProfile(JSON.parse(localStorage.getItem('cachedProfile')));
+  await syncFoodFromCloud();
+}
+
+function showEmailForm(){openScreen('email-screen');}
+
+async function handleEmailAuth(){
+  var email=document.getElementById('auth-email').value;
+  var pass=document.getElementById('auth-password').value;
+  var btn=document.getElementById('email-submit-btn');
+  if(!email||!pass){tg.showAlert('Заполните все поля!');return;}
+  btn.innerText='Загрузка...';
+  btn.disabled=true;
+  try{
+    var res=await supabaseClient.auth.signInWithPassword({email:email,password:pass});
+    if(res.error){
+      if(res.error.message.indexOf('Invalid login credentials')!==-1){
+        var up=await supabaseClient.auth.signUp({email:email,password:pass});
+        if(up.error){tg.showAlert('Ошибка регистрации: '+up.error.message);btn.innerText='Продолжить';btn.disabled=false;return;}
+        if(up.data.user&&up.data.user.identities&&up.data.user.identities.length===0){
+          tg.showAlert('Неверный пароль. Этот аккаунт уже существует.');
+          btn.innerText='Продолжить';btn.disabled=false;return;
         }
+        if(!up.data.session)await supabaseClient.auth.signInWithPassword({email:email,password:pass});
+        tg.showAlert('Аккаунт успешно создан!');
+      }else{
+        tg.showAlert('Ошибка входа: '+res.error.message);
+        btn.innerText='Продолжить';btn.disabled=false;return;
+      }
+    }else{
+      tg.showAlert('Успешный вход!');
     }
-}
-// ================================
-
-function openWeightDiary(){currentProfileData&&document.getElementById('modal-weight-input')&&(document.getElementById('modal-weight-input').value=currentProfileData.weight||''),setPeriod('weight','7days'),openScreen('weight-diary-screen')}
-async function saveWeightFromDiary(){const e=parseFloat(document.getElementById('modal-weight-input').value);if(!e||e<=0){tg.showAlert("Введите корректный вес!");return}currentProfileData&&(currentProfileData.weight=e,localStorage.setItem('cachedProfile',JSON.stringify(currentProfileData)),saveWeightToHistory(e),await saveProgressToCloud(localStorage.getItem('tgId'),localStorage.getItem('currentEmail'),localStorage.getItem('userName'),currentProfileData,currentXP,totalBurnedCalories),updateDashboard(),renderWeightDiary(),tg.showAlert("Вес обновлен!"))}
-function renderWeightDiary(){const e=document.getElementById('weight-start-date').value,t=document.getElementById('weight-end-date').value;if(!e||!t)return;let n=[];try{n=JSON.parse(localStorage.getItem('weightHistory')||'[]')}catch(e){n=[]}const s=[],a=[];for(let o=new Date(e);o<=new Date(t);o.setDate(o.getDate()+1)){const e=o.toISOString().split('T')[0];s.push(e.split('-').slice(1).reverse().join('.'));const r=n.find(t=>t.dateRaw===e||t.date&&t.date.split('.').reverse().join('-')===e);if(r)a.push(r.weight);else{const e=a.filter(e=>e!==null).pop();a.push(e||null)}}chartWeightDiary&&chartWeightDiary.destroy(),chartWeightDiary=new Chart(document.getElementById('weight-diary-chart').getContext('2d'),{type:'line',data:{labels:s,datasets:[{label:'Вес',data:a,borderColor:'#ffcc00',backgroundColor:'#ffcc0033',borderWidth:2,pointBackgroundColor:'#fff',pointBorderColor:'#ffcc00',pointRadius:3,fill:!0,tension:.3}]},options:{responsive:!0,maintainAspectRatio:!1,plugins:{legend:{display:!1}},scales:{x:{ticks:{color:'#8e8e93'},grid:{color:'rgba(255,255,255,0.1)'}},y:{ticks:{color:'#8e8e93'},grid:{color:'rgba(255,255,255,0.1)'}}}}});const o=a.filter(e=>e!==null),r=document.getElementById('weight-diff'),l=document.getElementById('weight-summary');if(o.length>1){l.style.display='block';const e=(o[o.length-1]-o[0]).toFixed(1);e>0?r.innerHTML=`Набрано: <span style="color: #ff3b30;">+${e} кг</span>`:e<0?r.innerHTML=`Сброшено: <span style="color: #34c759;">${e} кг</span>`:r.innerHTML="Вес не изменился"}else l.style.display='none';const c=document.getElementById('weight-diary-list');let d='';n.filter(t=>t.dateRaw>=e&&t.dateRaw<=t).forEach(e=>{d+=`<div class="history-weight-item"> <span style="color: var(--accent-color);">${e.dateDisplay||e.date}</span> <span>${e.weight} кг</span> </div>`}),c.innerHTML=d||'<p style="text-align: center; color: #8e8e93;">Нет записей за этот период.</p>'}
-
-function updateCustomWaterBtn(){const e=document.getElementById('custom-water-quick-btn');if(!e)return;const t=localStorage.getItem('customWaterAmount');t&&parseInt(t)>0?e.innerText=`+${t}`:e.innerText="+Своя"}
-function quickAddCustomWater(){const e=localStorage.getItem('customWaterAmount');e&&parseInt(e)>0?addWater(e):openWaterDiary()}
-
-// === ВСПЛЫВАЮЩЕЕ УВЕДОМЛЕНИЕ ===
-function showMotivationToast(title, desc, icon='🏆') {
-    const toast = document.createElement('div');
-    toast.className = 'motivation-toast';
-    toast.innerHTML = `<div class="motivation-icon">${icon}</div><div class="motivation-text"><h3>${title}</h3><p>${desc}</p></div>`;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.classList.add('show'), 100);
-    setTimeout(() => {
-        toast.classList.remove('show');
-        setTimeout(() => toast.remove(), 500);
-    }, 4000);
-}
-// ===============================
-
-function addWater(e){
-    let t=[];try{t=JSON.parse(localStorage.getItem('todayWater')||'[]')}catch(e){}
-    t.push({amount:parseInt(e),time:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})});
-    localStorage.setItem('todayWater',JSON.stringify(t));
-    
-    let totalWater = 0; t.forEach(w => totalWater += parseInt(w.amount));
-    let normWater = currentProfileData ? (currentProfileData.custom_water_goal || 2000) : 2000;
-    let oldTotalWater = totalWater - parseInt(e);
-    
-    if (oldTotalWater < normWater && totalWater >= normWater) {
-        showMotivationToast("Вода в норме! 💧", "Ты выпил свою дневную норму. Отличная работа, воин!", "💧");
+    localStorage.setItem('loginType','email');
+    localStorage.setItem('currentEmail',email);
+    var nm=email.split('@')[0];
+    localStorage.setItem('userName',nm);
+    var rec=await resolveUserRecord(null,email);
+    if(rec&&rec.profile){
+      localStorage.setItem('cachedProfile',JSON.stringify(rec.profile));
+      localStorage.setItem('cachedXP',rec.xp||0);
+      localStorage.setItem('cachedBurned',rec.burned||0);
+      var td=todayStr();
+      if(rec.profile.water&&rec.profile.waterDate===td){
+        localStorage.setItem('todayWater',JSON.stringify(rec.profile.water));
+        localStorage.setItem('waterListDate',td);
+      }else{
+        localStorage.setItem('todayWater','[]');
+        localStorage.setItem('waterListDate',td);
+      }
+      if(rec.telegram_id){
+        localStorage.setItem('tgId',rec.telegram_id);
+        localStorage.setItem('linkedEmail',email);
+      }else{
+        localStorage.removeItem('tgId');
+      }
+      if(rec.name)localStorage.setItem('userName',rec.name);
+      if(rec.food)localStorage.setItem('todayFood',JSON.stringify(rec.food));
+    }else{
+      var def={age:25,gender:'male',weight:70,height:175,goal:'lose',custom_water_goal:2000,food_preference:''};
+      localStorage.setItem('cachedProfile',JSON.stringify(def));
+      localStorage.setItem('cachedXP',0);
+      localStorage.setItem('cachedBurned',0);
+      await saveProgressToCloud(null,email,nm,def,0,0);
+      openOnboardingModal();
     }
-
-    syncWaterToProfile();updateDashboard();const n=localStorage.getItem('waterListDate');archiveWaterToHistory(t,n);
+    renderProfile(JSON.parse(localStorage.getItem('cachedProfile')));
+    await syncFoodFromCloud();
+  }catch(e){
+    tg.showAlert('Ошибка сети.');
+  }finally{
+    btn.innerText='Продолжить';
+    btn.disabled=false;
+  }
 }
 
-function deleteWaterItem(e){let t=[];try{t=JSON.parse(localStorage.getItem('todayWater')||'[]')}catch(e){}t.splice(e,1),localStorage.setItem('todayWater',JSON.stringify(t)),syncWaterToProfile(),updateDashboard();const n=localStorage.getItem('waterListDate');archiveWaterToHistory(t,n),renderTodayWaterList(t)}
-function openWaterDiary(){setPeriod('water','7days'),renderTodayWaterList(JSON.parse(localStorage.getItem('todayWater')||'[]')),openScreen('water-diary-screen')}
-function addWaterFromDiary(){const e=parseInt(document.getElementById('custom-water-input').value);e&&e>0?(localStorage.setItem('customWaterAmount',e),updateCustomWaterBtn(),addWater(e),document.getElementById('custom-water-input').value=''):tg.showAlert("Введите корректный объем!")}
-function renderWaterDiary(){const e=document.getElementById('water-start-date').value,t=document.getElementById('water-end-date').value;if(!e||!t)return;let n={};try{n=JSON.parse(localStorage.getItem('waterHistory')||'{}')}catch(e){}const s=[],a=[];let o=0;for(let r=new Date(e);r<=new Date(t);r.setDate(r.getDate()+1)){const e=r.toISOString().split('T')[0];s.push(e.split('-').slice(1).reverse().join('.'));let t=0;(n[e]||[]).forEach(e=>t+=parseInt(e.amount||0)),a.push(t),o+=t}chartWaterDiary&&chartWaterDiary.destroy(),chartWaterDiary=new Chart(document.getElementById('water-diary-chart').getContext('2d'),{type:'line',data:{labels:s,datasets:[{label:'Вода',data:a,borderColor:'#5ac8fa',backgroundColor:'#5ac8fa33',borderWidth:2,pointBackgroundColor:'#fff',pointBorderColor:'#5ac8fa',pointRadius:3,fill:!0,tension:.3}]},options:{responsive:!0,maintainAspectRatio:!1,plugins:{legend:{display:!1}},scales:{x:{ticks:{color:'#8e8e93'},grid:{color:'rgba(255,255,255,0.1)'}},y:{ticks:{color:'#8e8e93'},grid:{color:'rgba(255,255,255,0.1)'},beginAtZero:!0}}}}),document.getElementById('water-summary').style.display='block',document.getElementById('water-total-ml').innerText=o;const r=document.getElementById('water-diary-list');let l='';Object.keys(n).filter(t=>t>=e&&t<=t).sort((e,t)=>new Date(t)-new Date(e)).forEach(e=>{const t=n[e]||[];if(t.length===0)return;let s=0;t.forEach(e=>s+=parseInt(e.amount)),l+=`<div class="history-card"><div class="history-date">📅${e.split('-').reverse().join('.')} <span style="float:right; font-size: 12px; color:#5ac8fa;">${s} мл</span></div>`,t.forEach(e=>{l+=`<div class="history-water-item"><span>💧 Вода</span><span style="color:#8e8e93;">${e.amount} мл (${e.time||''})</span></div>`}),l+='</div>'}),r.innerHTML=l||'<p style="text-align: center; color: #8e8e93;">Нет записей за этот период.</p>'}
-
-function openFoodDiary(){setPeriod('food','7days'),openScreen('food-diary-screen')}
-function renderFoodDiary(){const e=document.getElementById('food-start-date').value,t=document.getElementById('food-end-date').value;if(!e||!t)return;let n={};try{n=JSON.parse(localStorage.getItem('foodHistory')||'{}')}catch(e){}const s=[],a=[],o=[],r=[],l=[];let c=0,d=0,i=0,u=0;for(let m=new Date(e);m<=new Date(t);m.setDate(m.getDate()+1)){const e=m.toISOString().split('T')[0];s.push(e.split('-').slice(1).reverse().join('.'));const t=n[e]||[];let p=0,f=0,g=0,y=0;t.forEach(e=>{p+=parseFloat(e.calories_100g||0),f+=parseFloat(e.proteins_100g||0),g+=parseFloat(e.fat_100g||0),y+=parseFloat(e.carbs_100g||0)}),a.push(Math.round(p)),o.push(Math.round(f)),r.push(Math.round(g)),l.push(Math.round(y)),c+=p,d+=f,i+=g,u+=y}chartFoodCalDiary&&chartFoodCalDiary.destroy(),chartFoodCalDiary=new Chart(document.getElementById('food-diary-cal-chart').getContext('2d'),{type:'line',data:{labels:s,datasets:[{label:'Калории',data:a,borderColor:'#ff3b30',backgroundColor:'#ff3b3033',borderWidth:2,pointRadius:3,fill:!0,tension:.3}]},options:{responsive:!0,maintainAspectRatio:!1,plugins:{legend:{display:!1},title:{display:!0,text:'Калории',color:'#fff'}},scales:{x:{ticks:{color:'#8e8e93'},grid:{color:'rgba(255,255,255,0.1)'}},y:{ticks:{color:'#8e8e93'},grid:{color:'rgba(255,255,255,0.1)'},beginAtZero:!0}}}}),chartFoodMacroDiary&&chartFoodMacroDiary.destroy(),chartFoodMacroDiary=new Chart(document.getElementById('food-diary-macro-chart').getContext('2d'),{type:'line',data:{labels:s,datasets:[{label:'Белки',data:o,borderColor:'#34c759',borderWidth:2,pointRadius:2,fill:!1,tension:.3},{label:'Жиры',data:r,borderColor:'#ff9500',borderWidth:2,pointRadius:2,fill:!1,tension:.3},{label:'Углеводы',data:l,borderColor:'#af52de',borderWidth:2,pointRadius:2,fill:!1,tension:.3}]},options:{responsive:!0,maintainAspectRatio:!1,plugins:{legend:{labels:{color:'#fff'}},title:{display:!0,text:'БЖУ',color:'#fff'}},scales:{x:{ticks:{color:'#8e8e93'},grid:{color:'rgba(255,255,255,0.1)'}},y:{ticks:{color:'#8e8e93'},grid:{color:'rgba(255,255,255,0.1)'},beginAtZero:!0}}}}),document.getElementById('food-summary').style.display='block',document.getElementById('food-total-cal').innerText=Math.round(c),document.getElementById('food-total-prot').innerText=Math.round(d),document.getElementById('food-total-fat').innerText=Math.round(i),document.getElementById('food-total-carb').innerText=Math.round(u);const m=document.getElementById('food-diary-list');let p='';Object.keys(n).filter(t=>t>=e&&t<=t).sort((e,t)=>new Date(t)-new Date(e)).forEach(e=>{const t=n[e]||[];if(t.length===0)return;let s=0,a=0,o=0,r=0;t.forEach(e=>{s+=parseFloat(e.calories_100g||0),a+=parseFloat(e.proteins_100g||0),o+=parseFloat(e.fat_100g||0),r+=parseFloat(e.carbs_100g||0)}),p+=`<div class="history-card"><div class="history-date">📅${e.split('-').reverse().join('.')}</div>`,p+=`<div><span style="color: var(--accent-color); font-weight: bold;">${Math.round(s)}</span><br><span style="font-size: 10px; color: #8e8e93;">Ккал</span></div>`,p+=`<div><span style="color: #fff; font-weight: bold;">${Math.round(a)}</span><br><span style="font-size: 10px; color: #8e8e93;">Бел.</span></div>`,p+=`<div><span style="color: #fff; font-weight: bold;">${Math.round(o)}</span><br><span style="font-size: 10px; color: #8e8e93;">Жир.</span></div>`,p+=`<div><span style="color: #fff; font-weight: bold;">${Math.round(r)}</span><br><span style="font-size: 10px; color: #8e8e93;">Угл.</span></div>`,p+='</div>',t.forEach(e=>{p+=`<div class="history-food-item"><span>${e.product_name}</span><span style="color: #8e8e93;">${Math.round(e.calories_100g||0)} ккал</span></div>`}),p+='</div>'}),m.innerHTML=p||'<p style="text-align: center; color: #8e8e93;">Нет записей за этот период.</p>'}
-
-function openGlobalStatsModal(){const e=new Date(),t=new Date();t.setDate(e.getDate()-7),document.getElementById('global-start-date').value=t.toISOString().split('T')[0],document.getElementById('global-end-date').value=e.toISOString().split('T')[0],openScreen('global-stats-screen'),setTimeout(()=>{renderAllCharts()},100)}
-function renderAllCharts(){if(typeof Chart==='undefined')return;const e=document.getElementById('global-start-date').value,t=document.getElementById('global-end-date').value;if(!e||!t)return;let n={};try{n=JSON.parse(localStorage.getItem('foodHistory')||'{}')}catch(e){}let s={};try{s=JSON.parse(localStorage.getItem('waterHistory')||'{}')}catch(e){}let a=[];try{a=JSON.parse(localStorage.getItem('weightHistory')||'[]')}catch(e){}const o=[],r=[],l=[],c=[],d=[],i=[],u=[];for(let m=new Date(e);m<=new Date(t);m.setDate(m.getDate()+1)){const e=m.toISOString().split('T')[0];o.push(e.split('-').slice(1).reverse().join('.'));const t=a.find(t=>t.dateRaw===e||t.date&&t.date.split('.').reverse().join('-')===e);if(t)r.push(t.weight);else{const e=r.filter(e=>e!==null).pop();r.push(e||null)}let p=0,f=0,g=0,y=0;(n[e]||[]).forEach(e=>{p+=parseFloat(e.calories_100g||0),f+=parseFloat(e.proteins_100g||0),g+=parseFloat(e.fat_100g||0),y+=parseFloat(e.carbs_100g||0)}),l.push(Math.round(p)),c.push(Math.round(f)),d.push(Math.round(g)),i.push(Math.round(y));let b=0;(s[e]||[]).forEach(e=>b+=parseInt(e.amount||0)),u.push(b)}const m={responsive:!0,maintainAspectRatio:!1,plugins:{legend:{display:!1}},scales:{x:{ticks:{color:'#8e8e93'},grid:{color:'rgba(255,255,255,0.1)'}},y:{ticks:{color:'#8e8e93'},grid:{color:'rgba(255,255,255,0.1)'}}}};chartGlobalWeight&&chartGlobalWeight.destroy(),chartGlobalWeight=new Chart(document.getElementById('g-weight-chart').getContext('2d'),{type:'line',data:{labels:o,datasets:[{label:'Вес',data:r,borderColor:'#ffcc00',borderWidth:2,pointRadius:2,fill:!1,tension:.3}]},options:{...m,plugins:{...m.plugins,title:{display:!0,text:'Вес (кг)',color:'#fff'}}}}),chartGlobalCal&&chartGlobalCal.destroy(),chartGlobalCal=new Chart(document.getElementById('g-calories-chart').getContext('2d'),{type:'line',data:{labels:o,datasets:[{label:'Калории',data:l,borderColor:'#ff3b30',borderWidth:2,pointRadius:2,fill:!1,tension:.3}]},options:{...m,plugins:{...m.plugins,title:{display:!0,text:'Калории (ккал)',color:'#fff'}},scales:{...m.scales,y:{...m.scales.y,beginAtZero:!0}}}}),chartGlobalMacro&&chartGlobalMacro.destroy(),chartGlobalMacro=new Chart(document.getElementById('g-macros-chart').getContext('2d'),{type:'line',data:{labels:o,datasets:[{label:'Белки',data:c,borderColor:'#34c759',borderWidth:2,pointRadius:2,fill:!1,tension:.3},{label:'Жиры',data:d,borderColor:'#ff9500',borderWidth:2,pointRadius:2,fill:!1,tension:.3},{label:'Углеводы',data:i,borderColor:'#af52de',borderWidth:2,pointRadius:2,fill:!1,tension:.3}]},options:{...m,plugins:{...m.plugins,legend:{labels:{color:'#fff'}},title:{display:!0,text:'БЖУ (граммы)',color:'#fff'}},scales:{...m.scales,y:{...m.scales.y,beginAtZero:!0}}}}),chartGlobalWater&&chartGlobalWater.destroy(),chartGlobalWater=new Chart(document.getElementById('g-water-chart').getContext('2d'),{type:'line',data:{labels:o,datasets:[{label:'Вода',data:u,borderColor:'#5ac8fa',borderWidth:2,pointRadius:2,fill:!1,tension:.3}]},options:{...m,plugins:{...m.plugins,title:{display:!0,text:'Вода (мл)',color:'#fff'}},scales:{...m.scales,y:{...m.scales.y,beginAtZero:!0}}}})}
-
-function setPeriod(e,t){const n=document.getElementById(e+'-start-date'),s=document.getElementById(e+'-end-date'),a=new Date();if(s.value=a.toISOString().split('T')[0],t==='7days'){const e=new Date(a);e.setDate(a.getDate()-7),n.value=e.toISOString().split('T')[0]}else if(t==='30days'){const e=new Date(a);e.setDate(a.getDate()-30),n.value=e.toISOString().split('T')[0]}else if(t==='month'){const e=new Date(a.getFullYear(),a.getMonth(),1);n.value=e.toISOString().split('T')[0]}e==='water'&&renderWaterDiary(),e==='food'&&renderFoodDiary(),e==='weight'&&renderWeightDiary()}
-function archiveFoodToHistory(e,t){if(!e||e.length===0||!t)return;let n={};try{n=JSON.parse(localStorage.getItem('foodHistory')||'{}')}catch(e){}n[t]=e,localStorage.setItem('foodHistory',JSON.stringify(n))}
-function archiveWaterToHistory(e,t){if(!e||e.length===0||!t)return;let n={};try{n=JSON.parse(localStorage.getItem('waterHistory')||'{}')}catch(e){}n[t]=e,localStorage.setItem('waterHistory',JSON.stringify(n))}
-
-function updateDashboard(){if(!currentProfileData)return;checkDayReset(),document.getElementById('current-weight-display')&&(document.getElementById('current-weight-display').innerText=currentProfileData.weight||0),updateCustomWaterBtn();const e=calculateNutrition(currentProfileData);let t=JSON.parse(localStorage.getItem('todayFood')||'[]');const n=localStorage.getItem('foodListDate');n&&t.length>0&&archiveFoodToHistory(t,n);let s=0,a=0,o=0,r=0;t.forEach(e=>{s+=parseFloat(e.calories_100g||0),a+=parseFloat(e.proteins_100g||0),o+=parseFloat(e.fat_100g||0),r+=parseFloat(e.carbs_100g||0)}),document.getElementById('norm-cal')&&(document.getElementById('norm-cal').innerText=e.calories,document.getElementById('norm-prot').innerText=e.protein,document.getElementById('norm-fat').innerText=e.fat,document.getElementById('norm-carb').innerText=e.carbs);const l=(e,t,n)=>{const s=document.getElementById(e);s&&(s.innerText=Math.round(t),s.style.color=t>n?'#ff3b30':'#fff')};l('eaten-cal',s,e.calories),l('eaten-prot',a,e.protein),l('eaten-fat',o,e.fat),l('eaten-carb',r,e.carbs),document.getElementById('calories-norm')&&(document.getElementById('calories-norm').innerText=e.calories+" ккал"),renderTodayFoodList(t);let c=[];try{c=JSON.parse(localStorage.getItem('todayWater')||'[]')}catch(e){}const d=localStorage.getItem('waterListDate');d&&c.length>0&&archiveWaterToHistory(c,d);let i=0;c.forEach(e=>i+=parseInt(e.amount||0));const u=currentProfileData.custom_water_goal||2000;document.getElementById('eaten-water')&&(document.getElementById('eaten-water').innerText=i),document.getElementById('norm-water')&&(document.getElementById('norm-water').innerText=u),renderTodayWaterList(c)}
-function renderTodayFoodList(e){const t=document.getElementById('today-food-list');if(!t)return;if(e.length===0){t.innerHTML='<p style="text-align: center; color: #8e8e93; font-size: 10px;">Пока ничего не съедено</p>';return}let n='';e.forEach((e,t)=>{n+=`<div class="compact-food-item"><div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 85%;">${e.product_name}</div><button onclick="event.stopPropagation(); deleteFoodItem(${t})" style="background: none; border: none; color: #ff3b30; font-size: 14px; cursor: pointer; padding: 0;">✖</button></div>`}),t.innerHTML=n}
-function renderTodayWaterList(e){const t=document.getElementById('today-water-list');if(!t)return;if(e.length===0){t.innerHTML='<p style="text-align: center; color: #8e8e93; font-size: 10px;">Пока ничего не выпито</p>';return}let n='';e.forEach((e,t)=>{n+=`<div class="compact-food-item" style="border-left: 2px solid #5ac8fa;"><div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80%;">💧 ${e.amount} мл (${e.time})</div><button onclick="event.stopPropagation(); deleteWaterItem(${t})" style="background: none; border: none; color: #ff3b30; font-size: 14px; cursor: pointer; padding: 0;">✖</button></div>`}),t.innerHTML=n}
-function deleteFoodItem(e){let t=JSON.parse(localStorage.getItem('todayFood')||'[]');t.splice(e,1),localStorage.setItem('todayFood',JSON.stringify(t)),saveFoodToCloud(t),updateDashboard()}
-
-function openCustomNormModal(){currentProfileData&&(document.getElementById('modal-calories').value=currentProfileData.custom_calories||'',document.getElementById('modal-protein').value=currentProfileData.custom_protein||'',document.getElementById('modal-fat').value=currentProfileData.custom_fat||'',document.getElementById('modal-carbs').value=currentProfileData.custom_carbs||'',document.getElementById('norm-modal').classList.add('active'))}
-function closeCustomNormModal(){document.getElementById('norm-modal').classList.remove('active')}
-function saveCustomNormFromModal(){currentProfileData&&(currentProfileData.custom_calories=document.getElementById('modal-calories').value,currentProfileData.custom_protein=document.getElementById('modal-protein').value,currentProfileData.custom_fat=document.getElementById('modal-fat').value,currentProfileData.custom_carbs=document.getElementById('modal-carbs').value,localStorage.setItem('cachedProfile',JSON.stringify(currentProfileData)),saveProgressToCloud(localStorage.getItem('tgId'),localStorage.getItem('currentEmail'),localStorage.getItem('userName'),currentProfileData,currentXP,totalBurnedCalories),updateDashboard(),closeCustomNormModal())}
-
-function renderProfile(e){
-currentProfileData=e;
-userGender=e.gender||'male';
-document.body.className=userGender==='female'?'female-theme':'male-theme';
-currentXP=parseInt(localStorage.getItem('cachedXP')||0);
-totalBurnedCalories=parseInt(localStorage.getItem('cachedBurned')||0);
-document.getElementById('burned-total')&&(document.getElementById('burned-total').innerText=totalBurnedCalories+" ккал");
-updateDashboard();
-updateCharacterUI();
-openScreen('dashboard-screen');
-
-// ЗАПУСКАЕМ ПРОВЕРКУ СТРИКА ПРИ ВХОДЕ
-checkDailyStreak();
-
-setTimeout(()=>{
-const e=document.getElementById('character-video');
-if(e){
-const t=levelsData[userGender];
-let n=0;
-for(let i=0;i<t.length;i++){
-if(currentXP>=t[i].xp) n=i;
+function openOnboardingModal(){
+  setTimeout(function(){
+    var m=document.getElementById('onboarding-modal');
+    if(m)m.classList.add('active');
+  },500);
 }
-const s=t[n];
-e.src.indexOf(s.video)===-1&&(e.src=s.video,e.load(),e.play().catch(e=>console.log("Autoplay blocked")))
+
+async function saveOnboardingData(){
+  var age=document.getElementById('onboarding-age').value;
+  var weight=document.getElementById('onboarding-weight').value;
+  var height=document.getElementById('onboarding-height').value;
+  var gender=document.getElementById('onboarding-gender').value;
+  var goal=document.getElementById('onboarding-goal').value;
+  var pref=document.getElementById('onboarding-food-preference').value;
+  if(!age||!weight||!height){tg.showAlert('Пожалуйста, заполни возраст, вес и рост!');return;}
+  var water=weight?Math.round(parseFloat(weight)*30):2000;
+  var prof={age:age,gender:gender,weight:weight,height:height,goal:goal,custom_calories:'',custom_protein:'',custom_fat:'',custom_carbs:'',custom_water_goal:water,food_preference:pref};
+  localStorage.setItem('cachedProfile',JSON.stringify(prof));
+  var t=localStorage.getItem('tgId');
+  var e=localStorage.getItem('currentEmail')||localStorage.getItem('linkedEmail');
+  var n=localStorage.getItem('userName')||'Атлет';
+  await saveProgressToCloud(t,e,n,prof,0,0);
+  var m=document.getElementById('onboarding-modal');
+  if(m)m.classList.remove('active');
+  renderProfile(prof);
+  tg.showAlert('Отлично! Твоя норма воды рассчитана автоматически.');
 }
-},1000);
+
+async function syncFoodFromCloud(){
+  var t=localStorage.getItem('tgId');
+  var e=localStorage.getItem('linkedEmail')||localStorage.getItem('currentEmail');
+  if(!t&&!e)return;
+  var rec=await resolveUserRecord(t,e);
+  var local=[];
+  try{local=JSON.parse(localStorage.getItem('todayFood')||'[]');}catch(err){local=[];}
+  var td=todayStr();
+  var dateKey=localStorage.getItem('foodListDate');
+  if(!rec)return;
+  var cloud=rec.food||[];
+  if(dateKey&&dateKey===td){
+    if(cloud.length>0)localStorage.setItem('todayFood',JSON.stringify(cloud));
+    else if(local.length>0)await supabaseClient.from('user_links').update({food:local}).eq('id',rec.id);
+  }else if(dateKey){
+    archiveFoodToHistory(local,dateKey);
+    localStorage.setItem('todayFood','[]');
+    localStorage.setItem('foodListDate',td);
+    await supabaseClient.from('user_links').update({food:[]}).eq('id',rec.id);
+  }else{
+    if(cloud.length>0)localStorage.setItem('todayFood',JSON.stringify(cloud));
+    else if(local.length>0)await supabaseClient.from('user_links').update({food:local}).eq('id',rec.id);
+    localStorage.setItem('foodListDate',td);
+  }
+  updateDashboard();
+}
+
+async function saveFoodToCloud(food){
+  var t=localStorage.getItem('tgId');
+  var e=localStorage.getItem('linkedEmail')||localStorage.getItem('currentEmail');
+  if(!t&&!e)return;
+  var rec=await resolveUserRecord(t,e);
+  if(rec)await supabaseClient.from('user_links').update({food:food}).eq('id',rec.id);
+}
+
+async function syncWaterToProfile(){
+  var w=[];
+  try{w=JSON.parse(localStorage.getItem('todayWater')||'[]');}catch(err){w=[];}
+  var key=localStorage.getItem('waterListDate');
+  var prof=JSON.parse(localStorage.getItem('cachedProfile')||'{}');
+  prof.water=w;
+  prof.waterDate=key;
+  localStorage.setItem('cachedProfile',JSON.stringify(prof));
+  await saveProgressToCloud(localStorage.getItem('tgId'),localStorage.getItem('linkedEmail')||localStorage.getItem('currentEmail'),localStorage.getItem('userName')||'Атлет',prof,currentXP,totalBurnedCalories);
+}
+
+async function saveProgressToCloud(tgId,email,name,profile,xp,burned){
+  try{
+    var t=tgId||localStorage.getItem('tgId');
+    var e=email||localStorage.getItem('linkedEmail')||localStorage.getItem('currentEmail');
+    var n=name||localStorage.getItem('userName')||'Атлет';
+    if(!t&&!e)return;
+    var rec=await resolveUserRecord(t,e);
+    if(rec){
+      await supabaseClient.from('user_links').update({profile:profile,burned:burned,name:n,telegram_id:t||null,email:e||null}).eq('id',rec.id);
+    }else{
+      await supabaseClient.from('user_links').insert([{telegram_id:t,email:e,profile:profile,xp:xp,burned:burned,name:n}]);
+    }
+  }catch(err){
+    console.log('Ошибка сохранения:',err);
+  }
+}
+
+const levelsData={
+  male:[
+    {xp:0,title:'Странник',video:'VID_20261028_173134_198.mp4'},
+    {xp:100,title:'Берсерк',video:'VID_20261028_173215_440.mp4'},
+    {xp:250,title:'Мечник',video:'VID_20261028_162626_544.mp4'},
+    {xp:450,title:'Ветеран',video:'VID_20261028_173219_295.mp4'},
+    {xp:700,title:'Гладиатор',video:'VID_20261028_173227_311.mp4'},
+    {xp:1000,title:'Чемпион',video:'VID_20261028_173233_432.mp4'},
+    {xp:1400,title:'Мастер клинка',video:'VID_20261028_173238_313.mp4'},
+    {xp:1900,title:'Воевода',video:'VID_20261028_173251_027.mp4'},
+    {xp:2500,title:'Легенда',video:'VID_20261028_173803_138.mp4'},
+    {xp:3500,title:'Бессмертный',video:'VID_20261028_173808_318.mp4'}
+  ],
+  female:[
+    {xp:0,title:'Новичок',video:'VID_20261028_175618_746.mp4'},
+    {xp:100,title:'Фурия',video:'VID_20261028_175631_701.mp4'},
+    {xp:250,title:'Амазонка',video:'VID_20261028_175641_349.mp4'},
+    {xp:450,title:'Валькирия',video:'VID_20261028_175649_029.mp4'},
+    {xp:700,title:'Воительница',video:'VID_20261028_175659_208.mp4'},
+    {xp:1000,title:'Победительница',video:'VID_20261028_175708_920.mp4'},
+    {xp:1400,title:'Королева клинка',video:'VID_20261028_175726_660.mp4'},
+    {xp:1900,title:'Владычица',video:'VID_20261028_175732_350.mp4'},
+    {xp:2500,title:'Легенда',video:'VID_20261028_175744_681.mp4'},
+    {xp:3500,title:'Бессмертная',video:'VID_20261028_175750_651.mp4'}
+  ]
+};
+
+let currentXP=0,totalBurnedCalories=0,userGender='male',currentProfileData=null,currentLevelIndex=-1;
+
+function calculateNutrition(p){
+  if(p.custom_calories&&p.custom_calories>0){
+    return {calories:parseInt(p.custom_calories),protein:parseInt(p.custom_protein)||0,fat:parseInt(p.custom_fat)||0,carbs:parseInt(p.custom_carbs)||0};
+  }
+  var w=parseFloat(p.weight)||70;
+  var h=parseFloat(p.height)||175;
+  var a=parseInt(p.age)||25;
+  var bmr=p.gender==='male'?(10*w+6.25*h-5*a+5):(10*w+6.25*h-5*a-161);
+  var cal=bmr*1.375;
+  if(p.goal==='lose')cal-=500;
+  if(p.goal==='gain')cal+=500;
+  return {calories:Math.round(cal),protein:Math.round(cal*0.3/4),fat:Math.round(cal*0.3/9),carbs:Math.round(cal*0.4/4)};
+}
+
+function checkDayReset(){
+  var td=todayStr();
+  if(localStorage.getItem('foodListDate')!==td){
+    localStorage.setItem('todayFood','[]');
+    localStorage.setItem('foodListDate',td);
+  }
+  if(localStorage.getItem('waterListDate')!==td){
+    localStorage.setItem('todayWater','[]');
+    localStorage.setItem('waterListDate',td);
+  }
+}
+
+function saveWeightToHistory(w){
+  var list=[];
+  try{list=JSON.parse(localStorage.getItem('weightHistory')||'[]');}catch(err){list=[];}
+  var d=new Date();
+  var raw=todayStr();
+  if(list.length>0&&list[0].dateRaw===raw){
+    list[0].weight=parseFloat(w);
+  }else{
+    list.unshift({dateRaw:raw,dateDisplay:d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'2-digit'}),weight:parseFloat(w)});
+  }
+  if(list.length>50)list.pop();
+  localStorage.setItem('weightHistory',JSON.stringify(list));
+}
+
+/* ===== СЕРИЯ: одна, из базы (challenge_streak) ===== */
+function streakFromRecord(rec){
+  if(!rec)return {streak:0,doneToday:false};
+  var last=rec.challenge_last_date||null;
+  var streak=parseInt(rec.challenge_streak||0);
+  var today=todayStr();
+  var yest=yesterdayStr();
+  if(last!==today&&last!==yest)streak=0;
+  return {streak:streak,doneToday:last===today};
+}
+
+function updateStreakUI(streak,isPending){
+  var el=document.getElementById('streak-display');
+  if(!el)return;
+  el.innerText='🔥 '+streak;
+  if(isPending)el.classList.add('streak-pending');
+  else el.classList.remove('streak-pending');
+}
+
+async function refreshUserFromCloud(){
+  var rec=await resolveUserRecord(localStorage.getItem('tgId'),localStorage.getItem('linkedEmail')||localStorage.getItem('currentEmail'));
+  if(!rec)return;
+  var xp=parseInt(rec.xp||0);
+  if(!isNaN(xp)){
+    currentXP=xp;
+    localStorage.setItem('cachedXP',String(xp));
+  }
+  if(rec.burned!==null&&rec.burned!==undefined){
+    totalBurnedCalories=parseInt(rec.burned||0);
+    localStorage.setItem('cachedBurned',String(totalBurnedCalories));
+    var bt=document.getElementById('burned-total');
+    if(bt)bt.innerText=totalBurnedCalories+' ккал';
+  }
+  if(rec.name)localStorage.setItem('userName',rec.name);
+  var st=streakFromRecord(rec);
+  updateStreakUI(st.streak,!st.doneToday);
+  updateCharacterUI();
+}
+
+async function claimStreakReward(){
+  await refreshUserFromCloud();
+  var el=document.getElementById('streak-display');
+  var shown=el?el.innerText.replace('🔥','').trim():'0';
+  showMotivationToast('🔥 Твоя серия: '+shown+' дн.','Отметь челлендж дня, чтобы получить награду XP.','🔥');
+}
+/* ================================================== */
+
+function openWeightDiary(){
+  if(currentProfileData){
+    var i=document.getElementById('modal-weight-input');
+    if(i)i.value=currentProfileData.weight||'';
+  }
+  setPeriod('weight','7days');
+  openScreen('weight-diary-screen');
+}
+
+async function saveWeightFromDiary(){
+  var w=parseFloat(document.getElementById('modal-weight-input').value);
+  if(!w||w<=0){tg.showAlert('Введите корректный вес!');return;}
+  if(!currentProfileData)return;
+  currentProfileData.weight=w;
+  localStorage.setItem('cachedProfile',JSON.stringify(currentProfileData));
+  saveWeightToHistory(w);
+  await saveProgressToCloud(localStorage.getItem('tgId'),localStorage.getItem('currentEmail'),localStorage.getItem('userName'),currentProfileData,currentXP,totalBurnedCalories);
+  updateDashboard();
+  renderWeightDiary();
+  tg.showAlert('Вес обновлен!');
+}
+
+function renderWeightDiary(){
+  var from=document.getElementById('weight-start-date').value;
+  var to=document.getElementById('weight-end-date').value;
+  if(!from||!to)return;
+  var hist=[];
+  try{hist=JSON.parse(localStorage.getItem('weightHistory')||'[]');}catch(err){hist=[];}
+  var labels=[],data=[];
+  for(var d=new Date(from);d<=new Date(to);d.setDate(d.getDate()+1)){
+    var key=d.toISOString().split('T')[0];
+    labels.push(key.split('-').slice(1).reverse().join('.'));
+    var found=hist.find(function(x){return x.dateRaw===key||(x.date&&x.date.split('.').reverse().join('-')===key);});
+    if(found)data.push(found.weight);
+    else{
+      var last=data.filter(function(v){return v!==null;}).pop();
+      data.push(last||null);
+    }
+  }
+  if(chartWeightDiary)chartWeightDiary.destroy();
+  chartWeightDiary=new Chart(document.getElementById('weight-diary-chart').getContext('2d'),{
+    type:'line',
+    data:{labels:labels,datasets:[{label:'Вес',data:data,borderColor:'#ffcc00',backgroundColor:'#ffcc0033',borderWidth:2,pointBackgroundColor:'#fff',pointBorderColor:'#ffcc00',pointRadius:3,fill:true,tension:0.3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8e8e93'},grid:{color:'rgba(255,255,255,0.1)'}},y:{ticks:{color:'#8e8e93'},grid:{color:'rgba(255,255,255,0.1)'}}}}
+  });
+  var vals=data.filter(function(v){return v!==null;});
+  var diffEl=document.getElementById('weight-diff');
+  var sumEl=document.getElementById('weight-summary');
+  if(vals.length>1){
+    sumEl.style.display='block';
+    var diff=(vals[vals.length-1]-vals[0]).toFixed(1);
+    if(diff>0)diffEl.innerHTML='Набрано: <span style="color: #ff3b30;">+'+diff+' кг</span>';
+    else if(diff<0)diffEl.innerHTML='Сброшено: <span style="color: #34c759;">'+diff+' кг</span>';
+    else diffEl.innerHTML='Вес не изменился';
+  }else{
+    sumEl.style.display='none';
+  }
+  var html='';
+  hist.filter(function(x){return x.dateRaw>=from&&x.dateRaw<=to;}).forEach(function(x){
+    html+='<div class="history-weight-item"><span style="color: var(--accent-color);">'+(x.dateDisplay||x.date)+'</span><span>'+x.weight+' кг</span></div>';
+  });
+  document.getElementById('weight-diary-list').innerHTML=html||'<p style="text-align: center; color: #8e8e93;">Нет записей за этот период.</p>';
+}
+
+function updateCustomWaterBtn(){
+  var b=document.getElementById('custom-water-quick-btn');
+  if(!b)return;
+  var v=localStorage.getItem('customWaterAmount');
+  if(v&&parseInt(v)>0)b.innerText='+'+v;
+  else b.innerText='+Своя';
+}
+
+function quickAddCustomWater(){
+  var v=localStorage.getItem('customWaterAmount');
+  if(v&&parseInt(v)>0)addWater(v);
+  else openWaterDiary();
+}
+
+function showMotivationToast(title,desc,icon){
+  if(!icon)icon='🏆';
+  var toast=document.createElement('div');
+  toast.className='motivation-toast';
+  toast.innerHTML='<div class="motivation-icon">'+icon+'</div><div class="motivation-text"><h3>'+title+'</h3><p>'+desc+'</p></div>';
+  document.body.appendChild(toast);
+  setTimeout(function(){toast.classList.add('show');},100);
+  setTimeout(function(){
+    toast.classList.remove('show');
+    setTimeout(function(){toast.remove();},500);
+  },4000);
+}
+
+function addWater(amount){
+  var list=[];
+  try{list=JSON.parse(localStorage.getItem('todayWater')||'[]');}catch(err){list=[];}
+  list.push({amount:parseInt(amount),time:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})});
+  localStorage.setItem('todayWater',JSON.stringify(list));
+  var total=0;
+  list.forEach(function(w){total+=parseInt(w.amount);});
+  var norm=currentProfileData?(currentProfileData.custom_water_goal||2000):2000;
+  var prev=total-parseInt(amount);
+  if(prev<norm&&total>=norm){
+    showMotivationToast('Вода в норме! 💧','Ты выпил свою дневную норму. Отличная работа, воин!','💧');
+  }
+  syncWaterToProfile();
+  updateDashboard();
+  archiveWaterToHistory(list,localStorage.getItem('waterListDate'));
+}
+
+function deleteWaterItem(i){
+  var list=[];
+  try{list=JSON.parse(localStorage.getItem('todayWater')||'[]');}catch(err){list=[];}
+  list.splice(i,1);
+  localStorage.setItem('todayWater',JSON.stringify(list));
+  syncWaterToProfile();
+  updateDashboard();
+  archiveWaterToHistory(list,localStorage.getItem('waterListDate'));
+  renderTodayWaterList(list);
+}
+
+function openWaterDiary(){
+  setPeriod('water','7days');
+  var list=[];
+  try{list=JSON.parse(localStorage.getItem('todayWater')||'[]');}catch(err){list=[];}
+  renderTodayWaterList(list);
+  openScreen('water-diary-screen');
+}
+
+function addWaterFromDiary(){
+  var v=parseInt(document.getElementById('custom-water-input').value);
+  if(v&&v>0){
+    localStorage.setItem('customWaterAmount',v);
+    updateCustomWaterBtn();
+    addWater(v);
+    document.getElementById('custom-water-input').value='';
+  }else{
+    tg.showAlert('Введите корректный объем!');
+  }
+}
+
+function renderWaterDiary(){
+  var from=document.getElementById('water-start-date').value;
+  var to=document.getElementById('water-end-date').value;
+  if(!from||!to)return;
+  var hist={};
+  try{hist=JSON.parse(localStorage.getItem('waterHistory')||'{}');}catch(err){hist={};}
+  var labels=[],data=[],total=0;
+  for(var d=new Date(from);d<=new Date(to);d.setDate(d.getDate()+1)){
+    var key=d.toISOString().split('T')[0];
+    labels.push(key.split('-').slice(1).reverse().join('.'));
+    var sum=0;
+    (hist[key]||[]).forEach(function(w){sum+=parseInt(w.amount||0);});
+    data.push(sum);
+    total+=sum;
+  }
+  if(chartWaterDiary)chartWaterDiary.destroy();
+  chartWaterDiary=new Chart(document.getElementById('water-diary-chart').getContext('2d'),{
+    type:'line',
+    data:{labels:labels,datasets:[{label:'Вода',data:data,borderColor:'#5ac8fa',backgroundColor:'#5ac8fa33',borderWidth:2,pointBackgroundColor:'#fff',pointBorderColor:'#5ac8fa',pointRadius:3,fill:true,tension:0.3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8e8e93'},grid:{color:'rgba(255,255,255,0.1)'}},y:{ticks:{color:'#8e8e93'},grid:{color:'rgba(255,255,255,0.1)'},beginAtZero:true}}}
+  });
+  document.getElementById('water-summary').style.display='block';
+  document.getElementById('water-total-ml').innerText=total;
+  var html='';
+  Object.keys(hist).filter(function(k){return k>=from&&k<=to;}).sort(function(a,b){return new Date(b)-new Date(a);}).forEach(function(k){
+    var items=hist[k]||[];
+    if(items.length===0)return;
+    var s=0;
+    items.forEach(function(x){s+=parseInt(x.amount);});
+    html+='<div class="history-card"><div class="history-date">📅 '+k.split('-').reverse().join('.')+' <span style="float:right; font-size: 12px; color:#5ac8fa;">'+s+' мл</span></div>';
+    items.forEach(function(x){
+      html+='<div class="history-water-item"><span>💧 Вода</span><span style="color:#8e8e93;">'+x.amount+' мл ('+(x.time||'')+')</span></div>';
+    });
+    html+='</div>';
+  });
+  document.getElementById('water-diary-list').innerHTML=html||'<p style="text-align: center; color: #8e8e93;">Нет записей за этот период.</p>';
+}
+
+function openFoodDiary(){
+  setPeriod('food','7days');
+  openScreen('food-diary-screen');
+}
+
+function renderFoodDiary(){
+  var from=document.getElementById('food-start-date').value;
+  var to=document.getElementById('food-end-date').value;
+  if(!from||!to)return;
+  var hist={};
+  try{hist=JSON.parse(localStorage.getItem('foodHistory')||'{}');}catch(err){hist={};}
+  var labels=[],cal=[],prot=[],fat=[],carb=[];
+  var tCal=0,tProt=0,tFat=0,tCarb=0;
+  for(var d=new Date(from);d<=new Date(to);d.setDate(d.getDate()+1)){
+    var key=d.toISOString().split('T')[0];
+    labels.push(key.split('-').slice(1).reverse().join('.'));
+    var items=hist[key]||[];
+    var c=0,pr=0,f=0,cb=0;
+    items.forEach(function(x){
+      c+=parseFloat(x.calories_100g||0);
+      pr+=parseFloat(x.proteins_100g||0);
+      f+=parseFloat(x.fat_100g||0);
+      cb+=parseFloat(x.carbs_100g||0);
+    });
+    cal.push(Math.round(c));
+    prot.push(Math.round(pr));
+    fat.push(Math.round(f));
+    carb.push(Math.round(cb));
+    tCal+=c;tProt+=pr;tFat+=f;tCarb+=cb;
+  }
+  if(chartFoodCalDiary)chartFoodCalDiary.destroy();
+  chartFoodCalDiary=new Chart(document.getElementById('food-diary-cal-chart').getContext('2d'),{
+    type:'line',
+    data:{labels:labels,datasets:[{label:'Калории',data:cal,borderColor:'#ff3b30',backgroundColor:'#ff3b3033',borderWidth:2,pointRadius:3,fill:true,tension:0.3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},title:{display:true,text:'Калории',color:'#fff'}},scales:{x:{ticks:{color:'#8e8e93'},grid:{color:'rgba(255,255,255,0.1)'}},y:{ticks:{color:'#8e8e93'},grid:{color:'rgba(255,255,255,0.1)'},beginAtZero:true}}}
+  });
+  if(chartFoodMacroDiary)chartFoodMacroDiary.destroy();
+  chartFoodMacroDiary=new Chart(document.getElementById('food-diary-macro-chart').getContext('2d'),{
+    type:'line',
+    data:{labels:labels,datasets:[
+      {label:'Белки',data:prot,borderColor:'#34c759',borderWidth:2,pointRadius:2,fill:false,tension:0.3},
+      {label:'Жиры',data:fat,borderColor:'#ff9500',borderWidth:2,pointRadius:2,fill:false,tension:0.3},
+      {label:'Углеводы',data:carb,borderColor:'#af52de',borderWidth:2,pointRadius:2,fill:false,tension:0.3}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#fff'}},title:{display:true,text:'БЖУ',color:'#fff'}},scales:{x:{ticks:{color:'#8e8e93'},grid:{color:'rgba(255,255,255,0.1)'}},y:{ticks:{color:'#8e8e93'},grid:{color:'rgba(255,255,255,0.1)'},beginAtZero:true}}}
+  });
+  document.getElementById('food-summary').style.display='block';
+  document.getElementById('food-total-cal').innerText=Math.round(tCal);
+  document.getElementById('food-total-prot').innerText=Math.round(tProt);
+  document.getElementById('food-total-fat').innerText=Math.round(tFat);
+  document.getElementById('food-total-carb').innerText=Math.round(tCarb);
+  var html='';
+  Object.keys(hist).filter(function(k){return k>=from&&k<=to;}).sort(function(a,b){return new Date(b)-new Date(a);}).forEach(function(k){
+    var items=hist[k]||[];
+    if(items.length===0)return;
+    var c=0,pr=0,f=0,cb=0;
+    items.forEach(function(x){
+      c+=parseFloat(x.calories_100g||0);
+      pr+=parseFloat(x.proteins_100g||0);
+      f+=parseFloat(x.fat_100g||0);
+      cb+=parseFloat(x.carbs_100g||0);
+    });
+    html+='<div class="history-card"><div class="history-date">📅 '+k.split('-').reverse().join('.')+'</div>';
+    html+='<div class="summary-grid">';
+    html+='<div><span style="color: var(--accent-color); font-weight: bold;">'+Math.round(c)+'</span><br><span style="font-size: 10px; color: #8e8e93;">Ккал</span></div>';
+    html+='<div><span style="color: #fff; font-weight: bold;">'+Math.round(pr)+'</span><br><span style="font-size: 10px; color: #8e8e93;">Бел.</span></div>';
+    html+='<div><span style="color: #fff; font-weight: bold;">'+Math.round(f)+'</span><br><span style="font-size: 10px; color: #8e8e93;">Жир.</span></div>';
+    html+='<div><span style="color: #fff; font-weight: bold;">'+Math.round(cb)+'</span><br><span style="font-size: 10px; color: #8e8e93;">Угл.</span></div>';
+    html+='</div>';
+    items.forEach(function(x){
+      html+='<div class="history-food-item"><span>'+x.product_name+'</span><span style="color: #8e8e93;">'+Math.round(x.calories_100g||0)+' ккал</span></div>';
+    });
+    html+='</div>';
+  });
+  document.getElementById('food-diary-list').innerHTML=html||'<p style="text-align: center; color: #8e8e93;">Нет записей за этот период.</p>';
+}
+
+function openGlobalStatsModal(){
+  var to=new Date();
+  var from=new Date();
+  from.setDate(to.getDate()-7);
+  document.getElementById('global-start-date').value=from.toISOString().split('T')[0];
+  document.getElementById('global-end-date').value=to.toISOString().split('T')[0];
+  openScreen('global-stats-screen');
+  setTimeout(function(){renderAllCharts();},100);
+}
+
+function renderAllCharts(){
+  if(typeof Chart==='undefined')return;
+  var from=document.getElementById('global-start-date').value;
+  var to=document.getElementById('global-end-date').value;
+  if(!from||!to)return;
+  var foodHist={},waterHist={},weights=[];
+  try{foodHist=JSON.parse(localStorage.getItem('foodHistory')||'{}');}catch(err){foodHist={};}
+  try{waterHist=JSON.parse(localStorage.getItem('waterHistory')||'{}');}catch(err){waterHist={};}
+  try{weights=JSON.parse(localStorage.getItem('weightHistory')||'[]');}catch(err){weights=[];}
+  var labels=[],wData=[],cal=[],prot=[],fat=[],carb=[],water=[];
+  for(var d=new Date(from);d<=new Date(to);d.setDate(d.getDate()+1)){
+    var key=d.toISOString().split('T')[0];
+    labels.push(key.split('-').slice(1).reverse().join('.'));
+    var wf=weights.find(function(x){return x.dateRaw===key||(x.date&&x.date.split('.').reverse().join('-')===key);});
+    if(wf)wData.push(wf.weight);
+    else{
+      var last=wData.filter(function(v){return v!==null;}).pop();
+      wData.push(last||null);
+    }
+    var c=0,pr=0,f=0,cb=0;
+    (foodHist[key]||[]).forEach(function(x){
+      c+=parseFloat(x.calories_100g||0);
+      pr+=parseFloat(x.proteins_100g||0);
+      f+=parseFloat(x.fat_100g||0);
+      cb+=parseFloat(x.carbs_100g||0);
+    });
+    cal.push(Math.round(c));
+    prot.push(Math.round(pr));
+    fat.push(Math.round(f));
+    carb.push(Math.round(cb));
+    var wSum=0;
+    (waterHist[key]||[]).forEach(function(x){wSum+=parseInt(x.amount||0);});
+    water.push(wSum);
+  }
+  var base={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8e8e93'},grid:{color:'rgba(255,255,255,0.1)'}},y:{ticks:{color:'#8e8e93'},grid:{color:'rgba(255,255,255,0.1)'}}}};
+  if(chartGlobalWeight)chartGlobalWeight.destroy();
+  chartGlobalWeight=new Chart(document.getElementById('g-weight-chart').getContext('2d'),{
+    type:'line',
+    data:{labels:labels,datasets:[{label:'Вес',data:wData,borderColor:'#ffcc00',borderWidth:2,pointRadius:2,fill:false,tension:0.3}]},
+    options:Object.assign({},base,{plugins:{legend:{display:false},title:{display:true,text:'Вес (кг)',color:'#fff'}}})
+  });
+  if(chartGlobalCal)chartGlobalCal.destroy();
+  chartGlobalCal=new Chart(document.getElementById('g-calories-chart').getContext('2d'),{
+    type:'line',
+    data:{labels:labels,datasets:[{label:'Калории',data:cal,borderColor:'#ff3b30',borderWidth:2,pointRadius:2,fill:false,tension:0.3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},title:{display:true,text:'Калории (ккал)',color:'#fff'}},scales:{x:base.scales.x,y:{ticks:{color:'#8e8e93'},grid:{color:'rgba(255,255,255,0.1)'},beginAtZero:true}}}
+  });
+  if(chartGlobalMacro)chartGlobalMacro.destroy();
+  chartGlobalMacro=new Chart(document.getElementById('g-macros-chart').getContext('2d'),{
+    type:'line',
+    data:{labels:labels,datasets:[
+      {label:'Белки',data:prot,borderColor:'#34c759',borderWidth:2,pointRadius:2,fill:false,tension:0.3},
+      {label:'Жиры',data:fat,borderColor:'#ff9500',borderWidth:2,pointRadius:2,fill:false,tension:0.3},
+      {label:'Углеводы',data:carb,borderColor:'#af52de',borderWidth:2,pointRadius:2,fill:false,tension:0.3}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#fff'}},title:{display:true,text:'БЖУ (граммы)',color:'#fff'}},scales:{x:base.scales.x,y:{ticks:{color:'#8e8e93'},grid:{color:'rgba(255,255,255,0.1)'},beginAtZero:true}}}
+  });
+  if(chartGlobalWater)chartGlobalWater.destroy();
+  chartGlobalWater=new Chart(document.getElementById('g-water-chart').getContext('2d'),{
+    type:'line',
+    data:{labels:labels,datasets:[{label:'Вода',data:water,borderColor:'#5ac8fa',borderWidth:2,pointRadius:2,fill:false,tension:0.3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},title:{display:true,text:'Вода (мл)',color:'#fff'}},scales:{x:base.scales.x,y:{ticks:{color:'#8e8e93'},grid:{color:'rgba(255,255,255,0.1)'},beginAtZero:true}}}
+  });
+}
+
+function setPeriod(kind,range){
+  var s=document.getElementById(kind+'-start-date');
+  var e=document.getElementById(kind+'-end-date');
+  var now=new Date();
+  e.value=now.toISOString().split('T')[0];
+  if(range==='7days'){
+    var a=new Date(now);a.setDate(now.getDate()-7);s.value=a.toISOString().split('T')[0];
+  }else if(range==='30days'){
+    var b=new Date(now);b.setDate(now.getDate()-30);s.value=b.toISOString().split('T')[0];
+  }else if(range==='month'){
+    var c=new Date(now.getFullYear(),now.getMonth(),1);s.value=c.toISOString().split('T')[0];
+  }
+  if(kind==='water')renderWaterDiary();
+  if(kind==='food')renderFoodDiary();
+  if(kind==='weight')renderWeightDiary();
+}
+
+function archiveFoodToHistory(items,dateKey){
+  if(!items||items.length===0||!dateKey)return;
+  var hist={};
+  try{hist=JSON.parse(localStorage.getItem('foodHistory')||'{}');}catch(err){hist={};}
+  hist[dateKey]=items;
+  localStorage.setItem('foodHistory',JSON.stringify(hist));
+}
+
+function archiveWaterToHistory(items,dateKey){
+  if(!items||items.length===0||!dateKey)return;
+  var hist={};
+  try{hist=JSON.parse(localStorage.getItem('waterHistory')||'{}');}catch(err){hist={};}
+  hist[dateKey]=items;
+  localStorage.setItem('waterHistory',JSON.stringify(hist));
+}
+
+function updateDashboard(){
+  if(!currentProfileData)return;
+  checkDayReset();
+  var wd=document.getElementById('current-weight-display');
+  if(wd)wd.innerText=currentProfileData.weight||0;
+  updateCustomWaterBtn();
+  var norm=calculateNutrition(currentProfileData);
+  var food=[];
+  try{food=JSON.parse(localStorage.getItem('todayFood')||'[]');}catch(err){food=[];}
+  var fd=localStorage.getItem('foodListDate');
+  if(fd&&food.length>0)archiveFoodToHistory(food,fd);
+  var c=0,pr=0,f=0,cb=0;
+  food.forEach(function(x){
+    c+=parseFloat(x.calories_100g||0);
+    pr+=parseFloat(x.proteins_100g||0);
+    f+=parseFloat(x.fat_100g||0);
+    cb+=parseFloat(x.carbs_100g||0);
+  });
+  if(document.getElementById('norm-cal')){
+    document.getElementById('norm-cal').innerText=norm.calories;
+    document.getElementById('norm-prot').innerText=norm.protein;
+    document.getElementById('norm-fat').innerText=norm.fat;
+    document.getElementById('norm-carb').innerText=norm.carbs;
+  }
+  var setVal=function(id,val,limit){
+    var el=document.getElementById(id);
+    if(!el)return;
+    el.innerText=Math.round(val);
+    el.style.color=val>limit?'#ff3b30':'#fff';
+  };
+  setVal('eaten-cal',c,norm.calories);
+  setVal('eaten-prot',pr,norm.protein);
+  setVal('eaten-fat',f,norm.fat);
+  setVal('eaten-carb',cb,norm.carbs);
+  if(document.getElementById('calories-norm'))document.getElementById('calories-norm').innerText=norm.calories+' ккал';
+  renderTodayFoodList(food);
+  var water=[];
+  try{water=JSON.parse(localStorage.getItem('todayWater')||'[]');}catch(err){water=[];}
+  var wdate=localStorage.getItem('waterListDate');
+  if(wdate&&water.length>0)archiveWaterToHistory(water,wdate);
+  var wsum=0;
+  water.forEach(function(x){wsum+=parseInt(x.amount||0);});
+  var wnorm=currentProfileData.custom_water_goal||2000;
+  if(document.getElementById('eaten-water'))document.getElementById('eaten-water').innerText=wsum;
+  if(document.getElementById('norm-water'))document.getElementById('norm-water').innerText=wnorm;
+  renderTodayWaterList(water);
+}
+
+function renderTodayFoodList(items){
+  var box=document.getElementById('today-food-list');
+  if(!box)return;
+  if(items.length===0){
+    box.innerHTML='<p style="text-align: center; color: #8e8e93; font-size: 10px;">Пока ничего не съедено</p>';
+    return;
+  }
+  var html='';
+  items.forEach(function(x,i){
+    html+='<div class="compact-food-item"><div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 85%;">'+x.product_name+'</div><button onclick="event.stopPropagation(); deleteFoodItem('+i+')" style="background: none; border: none; color: #ff3b30; font-size: 14px; cursor: pointer; padding: 0;">✖</button></div>';
+  });
+  box.innerHTML=html;
+}
+
+function renderTodayWaterList(items){
+  var box=document.getElementById('today-water-list');
+  if(!box)return;
+  if(items.length===0){
+    box.innerHTML='<p style="text-align: center; color: #8e8e93; font-size: 10px;">Пока ничего не выпито</p>';
+    return;
+  }
+  var html='';
+  items.forEach(function(x,i){
+    html+='<div class="compact-food-item" style="border-left: 2px solid #5ac8fa;"><div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80%;">💧 '+x.amount+' мл ('+x.time+')</div><button onclick="event.stopPropagation(); deleteWaterItem('+i+')" style="background: none; border: none; color: #ff3b30; font-size: 14px; cursor: pointer; padding: 0;">✖</button></div>';
+  });
+  box.innerHTML=html;
+}
+
+function deleteFoodItem(i){
+  var food=[];
+  try{food=JSON.parse(localStorage.getItem('todayFood')||'[]');}catch(err){food=[];}
+  food.splice(i,1);
+  localStorage.setItem('todayFood',JSON.stringify(food));
+  saveFoodToCloud(food);
+  updateDashboard();
+}
+
+function openCustomNormModal(){
+  if(!currentProfileData)return;
+  document.getElementById('modal-calories').value=currentProfileData.custom_calories||'';
+  document.getElementById('modal-protein').value=currentProfileData.custom_protein||'';
+  document.getElementById('modal-fat').value=currentProfileData.custom_fat||'';
+  document.getElementById('modal-carbs').value=currentProfileData.custom_carbs||'';
+  document.getElementById('norm-modal').classList.add('active');
+}
+
+function closeCustomNormModal(){
+  var m=document.getElementById('norm-modal');
+  if(m)m.classList.remove('active');
+}
+
+function saveCustomNormFromModal(){
+  if(!currentProfileData)return;
+  currentProfileData.custom_calories=document.getElementById('modal-calories').value;
+  currentProfileData.custom_protein=document.getElementById('modal-protein').value;
+  currentProfileData.custom_fat=document.getElementById('modal-fat').value;
+  currentProfileData.custom_carbs=document.getElementById('modal-carbs').value;
+  localStorage.setItem('cachedProfile',JSON.stringify(currentProfileData));
+  saveProgressToCloud(localStorage.getItem('tgId'),localStorage.getItem('currentEmail'),localStorage.getItem('userName'),currentProfileData,currentXP,totalBurnedCalories);
+  updateDashboard();
+  closeCustomNormModal();
+}
+
+function renderProfile(profile){
+  currentProfileData=profile;
+  userGender=profile.gender||'male';
+  document.body.className=userGender==='female'?'female-theme':'male-theme';
+  currentXP=parseInt(localStorage.getItem('cachedXP')||0);
+  totalBurnedCalories=parseInt(localStorage.getItem('cachedBurned')||0);
+  if(document.getElementById('burned-total'))document.getElementById('burned-total').innerText=totalBurnedCalories+' ккал';
+  updateDashboard();
+  updateCharacterUI();
+  openScreen('dashboard-screen');
+
+  var st=streakFromRecord({
+    challenge_streak:parseInt(localStorage.getItem('streakCount')||0),
+    challenge_last_date:localStorage.getItem('streakLastDate')||null
+  });
+  updateStreakUI(st.streak,!st.doneToday);
+
+  refreshUserFromCloud();
+
+  setTimeout(function(){
+    var v=document.getElementById('character-video');
+    if(!v)return;
+    var levels=levelsData[userGender];
+    var idx=0;
+    for(var i=0;i<levels.length;i++){
+      if(currentXP>=levels[i].xp)idx=i;
+    }
+    var lv=levels[idx];
+    if(v.src.indexOf(lv.video)===-1){
+      v.src=lv.video;
+      v.load();
+      v.play().catch(function(){console.log('Autoplay blocked');});
+    }
+  },1000);
 }
 
 function updateCharacterUI(){
-const e=levelsData[userGender];
-let t=0;
-for(let n=0;n<e.length;n++){
-if(currentXP>=e[n].xp) t=n;
+  var levels=levelsData[userGender];
+  var idx=0;
+  for(var i=0;i<levels.length;i++){
+    if(currentXP>=levels[i].xp)idx=i;
+  }
+  var lv=levels[idx];
+  currentLevelIndex=idx;
+  if(document.getElementById('char-level'))document.getElementById('char-level').innerText='Уровень '+(idx+1)+' / '+levels.length;
+  if(document.getElementById('char-title'))document.getElementById('char-title').innerText=lv.title;
+  if(document.getElementById('xp-text'))document.getElementById('xp-text').innerText=currentXP+' XP';
+  var next=100;
+  if(idx+1<levels.length)next=levels[idx+1].xp;
+  var pct=currentXP/next*100;
+  if(pct>100)pct=100;
+  if(document.getElementById('xp-bar'))document.getElementById('xp-bar').style.width=pct+'%';
 }
-const n=e[t];
-currentLevelIndex=t;
-document.getElementById('char-level')&&(document.getElementById('char-level').innerText="Уровень "+(t+1)+" / "+e.length);
-document.getElementById('char-title')&&(document.getElementById('char-title').innerText=n.title);
-document.getElementById('xp-text')&&(document.getElementById('xp-text').innerText=currentXP+" XP");
-let s=100;
-t+1<e.length&&(s=e[t+1].xp);
-let a=currentXP/s*100;
-a>100&&(a=100);
-document.getElementById('xp-bar')&&(document.getElementById('xp-bar').style.width=a+"%");
+
+function openProfileSettings(){
+  try{
+    var type=localStorage.getItem('loginType')||'telegram';
+    if(type==='telegram'){
+      document.getElementById('link-title').innerText='Привязка Email';
+      document.getElementById('link-desc').innerText='Привяжите Email, чтобы заходить с любого устройства.';
+      var le=localStorage.getItem('linkedEmail');
+      var box=document.getElementById('link-email-form');
+      if(le){
+        box.innerHTML='<p style="color: #34c759; font-size: 14px; font-weight: bold; margin-top: 10px;">✅ Email привязан: '+le+'</p><button class="btn" style="background-color: #ff3b30; color: white; margin-top: 10px; padding: 12px; font-size: 15px;" onclick="unlinkEmail()">Отвязать Email</button>';
+      }else{
+        box.innerHTML='<div class="form-group" style="margin-bottom: 10px;"><input type="email" id="link-email" placeholder="your@email.com" style="padding: 10px;"></div><div class="form-group" style="margin-bottom: 10px;"><input type="password" id="link-password" placeholder="Пароль (мин. 6 символов)" style="padding: 10px;"></div><button class="btn" style="padding: 12px; font-size: 15px;" onclick="linkEmailToTelegram()">Привязать Email</button>';
+      }
+      box.style.display='block';
+      document.getElementById('link-tg-form').style.display='none';
+    }else{
+      document.getElementById('link-title').innerText='Привязка Telegram';
+      document.getElementById('link-desc').innerText='Ваш Telegram ID для входа с телефона.';
+      var tid=localStorage.getItem('tgId');
+      var tbox=document.getElementById('link-tg-form');
+      if(tid){
+        tbox.innerHTML='<p style="color: #34c759; font-size: 14px; font-weight: bold; margin-top: 10px;">✅ Telegram привязан: '+tid+'</p><button class="btn" style="background-color: #ff3b30; color: white; margin-top: 10px; padding: 12px; font-size: 15px;" onclick="unlinkTelegram()">Отвязать Telegram</button>';
+      }else if(tg.initDataUnsafe&&tg.initDataUnsafe.user){
+        tbox.innerHTML='<p style="font-size: 14px; color: #fff; margin-bottom: 10px;">Ваш Telegram ID: <b>'+tg.initDataUnsafe.user.id+'</b></p><button class="btn" style="padding: 12px; font-size: 15px;" onclick="linkTelegramToEmail()">Привязать Telegram</button>';
+      }
+      document.getElementById('link-email-form').style.display='none';
+      tbox.style.display='block';
+    }
+    var cached=localStorage.getItem('cachedProfile');
+    if(cached){
+      var p=JSON.parse(cached);
+      var setIf=function(id,val){var el=document.getElementById(id);if(el)el.value=val;};
+      setIf('age',p.age||'');
+      setIf('weight',p.weight||'');
+      setIf('height',p.height||'');
+      setIf('gender',p.gender||'male');
+      setIf('goal',p.goal||'lose');
+      setIf('custom-calories',p.custom_calories||'');
+      setIf('custom-protein',p.custom_protein||'');
+      setIf('custom-fat',p.custom_fat||'');
+      setIf('custom-carbs',p.custom_carbs||'');
+      setIf('custom-water-goal',p.custom_water_goal||'');
+      setIf('food-preference',p.food_preference||'');
+    }
+    openScreen('profile-settings-screen');
+  }catch(err){
+    tg.showAlert('Не удалось открыть настройки.');
+  }
 }
 
-function openProfileSettings(){try{const e=localStorage.getItem('loginType')||'telegram';if(e==='telegram'){document.getElementById('link-title').innerText="Привязка Email",document.getElementById('link-desc').innerText="Привяжите Email, чтобы заходить с любого устройства.";const e=localStorage.getItem('linkedEmail');e?document.getElementById('link-email-form').innerHTML=`<p style="color: #34c759; font-size: 14px; font-weight: bold; margin-top: 10px;">✅ Email привязан: ${e}</p><button class="btn" style="background-color: #ff3b30; color: white; margin-top: 10px; padding: 12px; font-size: 15px;" onclick="unlinkEmail()">Отвязать Email</button>`:document.getElementById('link-email-form').innerHTML=`<div class="form-group" style="margin-bottom: 10px;"><input type="email" id="link-email" placeholder="your@email.com" style="padding: 10px;"></div><div class="form-group" style="margin-bottom: 10px;"><input type="password" id="link-password" placeholder="Пароль (мин. 6 символов)" style="padding: 10px;"></div><button class="btn" style="padding: 12px; font-size: 15px;" onclick="linkEmailToTelegram()">Привязать Email</button>`,document.getElementById('link-email-form').style.display='block',document.getElementById('link-tg-form').style.display='none'}else{document.getElementById('link-title').innerText="Привязка Telegram",document.getElementById('link-desc').innerText="Ваш Telegram ID для входа с телефона.";const e=localStorage.getItem('tgId');e?document.getElementById('link-tg-form').innerHTML=`<p style="color: #34c759; font-size: 14px; font-weight: bold; margin-top: 10px;">✅ Telegram привязан: ${e}</p><button class="btn" style="background-color: #ff3b30; color: white; margin-top: 10px; padding: 12px; font-size: 15px;" onclick="unlinkTelegram()">Отвязать Telegram</button>`:tg.initDataUnsafe&&tg.initDataUnsafe.user&&(document.getElementById('link-tg-form').innerHTML=`<p style="font-size: 14px; color: #fff; margin-bottom: 10px;">Ваш Telegram ID: <b>${tg.initDataUnsafe.user.id}</b></p><button class="btn" style="padding: 12px; font-size: 15px;" onclick="linkTelegramToEmail()">Привязать Telegram</button>`),document.getElementById('link-email-form').style.display='none',document.getElementById('link-tg-form').style.display='block'}const t=localStorage.getItem('cachedProfile');if(t){const e=JSON.parse(t);document.getElementById('age')&&(document.getElementById('age').value=e.age||''),document.getElementById('weight')&&(document.getElementById('weight').value=e.weight||''),document.getElementById('height')&&(document.getElementById('height').value=e.height||''),document.getElementById('gender')&&(document.getElementById('gender').value=e.gender||'male'),document.getElementById('goal')&&(document.getElementById('goal').value=e.goal||'lose'),document.getElementById('custom-calories')&&(document.getElementById('custom-calories').value=e.custom_calories||''),document.getElementById('custom-protein')&&(document.getElementById('custom-protein').value=e.custom_protein||''),document.getElementById('custom-fat')&&(document.getElementById('custom-fat').value=e.custom_fat||''),document.getElementById('custom-carbs')&&(document.getElementById('custom-carbs').value=e.custom_carbs||''),document.getElementById('custom-water-goal')&&(document.getElementById('custom-water-goal').value=e.custom_water_goal||''),document.getElementById('food-preference')&&(document.getElementById('food-preference').value=e.food_preference||'')}openScreen('profile-settings-screen')}catch(e){tg.showAlert("Не удалось открыть настройки.")}}
+async function linkEmailToTelegram(){
+  var email=document.getElementById('link-email').value;
+  var pass=document.getElementById('link-password').value;
+  if(!email||!pass){tg.showAlert('Заполните Email и пароль!');return;}
+  var tid=tg.initDataUnsafe&&tg.initDataUnsafe.user?tg.initDataUnsafe.user.id:localStorage.getItem('tgId');
+  if(!tid){tg.showAlert('Ошибка: Telegram не найден.');return;}
+  var chk=await supabaseClient.from('user_links').select('telegram_id').eq('email',email).maybeSingle();
+  if(chk.data&&chk.data.telegram_id&&chk.data.telegram_id!=tid){
+    tg.showAlert('Эта почта уже привязана к другому аккаунту Telegram!');
+    return;
+  }
+  try{
+    var up=await supabaseClient.auth.signUp({email:email,password:pass});
+    if(up.error&&up.error.message!=='User already registered'){
+      tg.showAlert('Ошибка: '+up.error.message);
+      return;
+    }
+    var prof=JSON.parse(localStorage.getItem('cachedProfile'));
+    var xp=parseInt(localStorage.getItem('cachedXP')||0);
+    var burned=parseInt(localStorage.getItem('cachedBurned')||0);
+    var nm=localStorage.getItem('userName')||'Атлет';
+    await saveProgressToCloud(tid,email,nm,prof,xp,burned);
+    localStorage.setItem('linkedEmail',email);
+    localStorage.setItem('currentEmail',email);
+    tg.showAlert('Email успешно привязан!');
+    openProfileSettings();
+  }catch(err){
+    tg.showAlert('Ошибка сети.');
+  }
+}
 
-async function linkEmailToTelegram(){const e=document.getElementById('link-email').value,t=document.getElementById('link-password').value;if(!e||!t){tg.showAlert("Заполните Email и пароль!");return}const n=tg.initDataUnsafe&&tg.initDataUnsafe.user?tg.initDataUnsafe.user.id:localStorage.getItem('tgId');if(!n){tg.showAlert("Ошибка: Telegram не найден.");return}const{data:s}=await supabaseClient.from('user_links').select('telegram_id').eq('email',e).maybeSingle();if(s&&s.telegram_id&&s.telegram_id!=n){tg.showAlert("Эта почта уже привязана к другому аккаунту Telegram!");return}try{const{error:s}=await supabaseClient.auth.signUp({email:e,password:t});if(s&&s.message!=="User already registered")tg.showAlert("Ошибка: "+s.message);else{const t=JSON.parse(localStorage.getItem('cachedProfile')),s=parseInt(localStorage.getItem('cachedXP')||0),a=parseInt(localStorage.getItem('cachedBurned')||0),o=localStorage.getItem('userName')||"Атлет";await saveProgressToCloud(n,e,o,t,s,a),localStorage.setItem('linkedEmail',e),localStorage.setItem('currentEmail',e),tg.showAlert("Email успешно привязан!"),openProfileSettings()}}catch(e){tg.showAlert("Ошибка сети.")}}
-async function linkTelegramToEmail(){const e=tg.initDataUnsafe&&tg.initDataUnsafe.user?tg.initDataUnsafe.user.id:null,t=tg.initDataUnsafe&&tg.initDataUnsafe.user?tg.initDataUnsafe.user.first_name:"Атлет",n=localStorage.getItem('currentEmail')||localStorage.getItem('linkedEmail');if(!e||!n){tg.showAlert("Ошибка: не найден Email или Telegram ID.");return}const{data:s}=await supabaseClient.from('user_links').select('email').eq('telegram_id',e).maybeSingle();if(s&&s.email&&s.email!==n){tg.showAlert("Этот Telegram уже привязан к другой почте!");return}const a=JSON.parse(localStorage.getItem('cachedProfile')),o=parseInt(localStorage.getItem('cachedXP')||0),r=parseInt(localStorage.getItem('cachedBurned')||0);await saveProgressToCloud(e,n,t,a,o,r),localStorage.setItem('tgId',e),localStorage.setItem('userName',t),tg.showAlert("Telegram успешно привязан!"),openProfileSettings()}
-async function unlinkEmail(){if(!confirm("Отвязать Email? Прогресс останется в Telegram."))return;const e=localStorage.getItem('tgId');if(e){const t=await resolveUserRecord(e,null);t&&await supabaseClient.from('user_links').update({email:null}).eq('id',t.id)}localStorage.removeItem('linkedEmail'),localStorage.removeItem('currentEmail'),tg.showAlert("Email отвязан."),openProfileSettings()}
-async function unlinkTelegram(){if(!confirm("Отвязать Telegram? Прогресс останется в Email."))return;const e=localStorage.getItem('currentEmail');if(e){const t=await resolveUserRecord(null,e);t&&await supabaseClient.from('user_links').update({telegram_id:null}).eq('id',t.id)}localStorage.removeItem('tgId'),tg.showAlert("Telegram отвязан."),openProfileSettings()}
+async function linkTelegramToEmail(){
+  var tid=tg.initDataUnsafe&&tg.initDataUnsafe.user?tg.initDataUnsafe.user.id:null;
+  var nm=tg.initDataUnsafe&&tg.initDataUnsafe.user?tg.initDataUnsafe.user.first_name:'Атлет';
+  var email=localStorage.getItem('currentEmail')||localStorage.getItem('linkedEmail');
+  if(!tid||!email){tg.showAlert('Ошибка: не найден Email или Telegram ID.');return;}
+  var chk=await supabaseClient.from('user_links').select('email').eq('telegram_id',tid).maybeSingle();
+  if(chk.data&&chk.data.email&&chk.data.email!==email){
+    tg.showAlert('Этот Telegram уже привязан к другой почте!');
+    return;
+  }
+  var prof=JSON.parse(localStorage.getItem('cachedProfile'));
+  var xp=parseInt(localStorage.getItem('cachedXP')||0);
+  var burned=parseInt(localStorage.getItem('cachedBurned')||0);
+  await saveProgressToCloud(tid,email,nm,prof,xp,burned);
+  localStorage.setItem('tgId',tid);
+  localStorage.setItem('userName',nm);
+  tg.showAlert('Telegram успешно привязан!');
+  openProfileSettings();
+}
 
-async function saveProfile(){const e=document.getElementById('age').value,t=document.getElementById('gender').value,n=document.getElementById('weight').value,s=document.getElementById('height').value,a=document.getElementById('goal').value,o=document.getElementById('custom-calories').value,r=document.getElementById('custom-protein').value,l=document.getElementById('custom-fat').value,c=document.getElementById('custom-carbs').value,d=document.getElementById('custom-water-goal').value,i=document.getElementById('food-preference').value;if(!e||!n||!s){tg.showAlert("Заполни все поля!");return}const u=currentProfileData?parseFloat(currentProfileData.weight):null,m=parseFloat(n);u&&u!==m&&saveWeightToHistory(m);const p={age:e,gender:t,weight:n,height:s,goal:a,custom_calories:o,custom_protein:r,custom_fat:l,custom_carbs:c,custom_water_goal:parseInt(d)||2000,food_preference:i};localStorage.setItem('cachedProfile',JSON.stringify(p)),await saveProgressToCloud(localStorage.getItem('tgId'),localStorage.getItem('currentEmail'),localStorage.getItem('userName'),p,currentXP,totalBurnedCalories),renderProfile(p),tg.showAlert("Данные сохранены!")}
-async function logout(){confirm("Выйти из аккаунта? Прогресс сохранен.")&&(localStorage.clear(),sessionStorage.clear(),await supabaseClient.auth.signOut(),location.reload())}
+async function unlinkEmail(){
+  if(!confirm('Отвязать Email? Прогресс останется в Telegram.'))return;
+  var tid=localStorage.getItem('tgId');
+  if(tid){
+    var rec=await resolveUserRecord(tid,null);
+    if(rec)await supabaseClient.from('user_links').update({email:null}).eq('id',rec.id);
+  }
+  localStorage.removeItem('linkedEmail');
+  localStorage.removeItem('currentEmail');
+  tg.showAlert('Email отвязан.');
+  openProfileSettings();
+}
 
-let isShakeTesting=!1,maxShakeValue=0;
-async function startShakeTest(){if(!isShakeTesting){if(typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function')try{const e=await DeviceMotionEvent.requestPermission();if(e!=='granted'){tg.showAlert("Нет доступа.");return}}catch(e){return}isShakeTesting=!0,maxShakeValue=0,document.getElementById('test-shake-btn').style.display='none',document.getElementById('stop-shake-btn').style.display='block',window.addEventListener('devicemotion',function(e){if(!isShakeTesting)return;const t=e.accelerationIncludingGravity;if(t){const e=Math.abs(t.x||0)+Math.abs(t.y||0)+Math.abs(t.z||0);Math.round(e)>maxShakeValue&&(maxShakeValue=Math.round(e))}}),tg.showAlert("Тряси телефон!")}}
-function stopShakeTest(){isShakeTesting=!1,document.getElementById('test-shake-btn').style.display='block',document.getElementById('stop-shake-btn').style.display='none',tg.showAlert("Максимум: "+maxShakeValue)}
+async function unlinkTelegram(){
+  if(!confirm('Отвязать Telegram? Прогресс останется в Email.'))return;
+  var email=localStorage.getItem('currentEmail');
+  if(email){
+    var rec=await resolveUserRecord(null,email);
+    if(rec)await supabaseClient.from('user_links').update({telegram_id:null}).eq('id',rec.id);
+  }
+  localStorage.removeItem('tgId');
+  tg.showAlert('Telegram отвязан.');
+  openProfileSettings();
+}
+
+async function saveProfile(){
+  var age=document.getElementById('age').value;
+  var gender=document.getElementById('gender').value;
+  var weight=document.getElementById('weight').value;
+  var height=document.getElementById('height').value;
+  var goal=document.getElementById('goal').value;
+  var cc=document.getElementById('custom-calories').value;
+  var cp=document.getElementById('custom-protein').value;
+  var cf=document.getElementById('custom-fat').value;
+  var ccar=document.getElementById('custom-carbs').value;
+  var cw=document.getElementById('custom-water-goal').value;
+  var pref=document.getElementById('food-preference').value;
+  if(!age||!weight||!height){tg.showAlert('Заполни все поля!');return;}
+  var oldW=currentProfileData?parseFloat(currentProfileData.weight):null;
+  var newW=parseFloat(weight);
+  if(oldW&&oldW!==newW)saveWeightToHistory(newW);
+  var prof={age:age,gender:gender,weight:weight,height:height,goal:goal,custom_calories:cc,custom_protein:cp,custom_fat:cf,custom_carbs:ccar,custom_water_goal:parseInt(cw)||2000,food_preference:pref};
+  localStorage.setItem('cachedProfile',JSON.stringify(prof));
+  await saveProgressToCloud(localStorage.getItem('tgId'),localStorage.getItem('currentEmail'),localStorage.getItem('userName'),prof,currentXP,totalBurnedCalories);
+  renderProfile(prof);
+  tg.showAlert('Данные сохранены!');
+}
+
+async function logout(){
+  if(!confirm('Выйти из аккаунта? Прогресс сохранен.'))return;
+  localStorage.clear();
+  sessionStorage.clear();
+  await supabaseClient.auth.signOut();
+  location.reload();
+}
