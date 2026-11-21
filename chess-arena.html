@@ -149,7 +149,7 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
 </style>
 </head>
 <body data-arena="1">
-<div id="verTag">v53</div>
+<div id="verTag">v54</div>
 
 <div id="wait" class="hidden">
   <div class="wait-box">
@@ -248,8 +248,8 @@ body[data-arena="10"] .piece.theirs{color:#a01818;text-shadow:0 0 4px rgba(255,2
 <div id="toast"></div>
 
 <script src="arena.js?v=22"></script>
-<script src="friends.js?v=6"></script>
-<script src="net.js?v=37"></script>
+<script src="friends.js?v=7"></script>
+<script src="net.js?v=39"></script>
 <script src="chests.js?v=5"></script>
 <script>
 const sb = supabase.createClient('https://qnpriwfxzuoymoumdtrl.supabase.co','sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
@@ -273,6 +273,7 @@ let stateAt=Date.now();
 let handLoop=null;
 let curMode=FALLBACK_MODE;
 let turnLocal=0, turnLocalAt=0;
+let lastStallToast=0;
 
 let toastTimer=null;
 function toast(text){
@@ -595,6 +596,16 @@ Net.on('status',function(d){
   $('waitText').textContent=d.text||'Ищем соперника…';
 });
 Net.on('error',function(d){ toast(d.message); });
+
+/* Связь просела: состояние не приходило дольше 8 секунд.
+   Показываем предупреждение, но партию не прерываем. */
+Net.on('stall',function(){
+  if(!document.body.classList.contains('battle-mode')) return;
+  const now=Date.now();
+  if(now-lastStallToast<8000) return;
+  lastStallToast=now;
+  toast('Связь с соперником прервалась, ждём…');
+});
 
 Net.on('start',function(info){
   searching=false;
@@ -1007,7 +1018,10 @@ elixBuildBubbles();
   function stopAll(){
     killed=true;
     if(tick){ clearInterval(tick); tick=null; }
-    if(poll){ clearInterval(poll); poll=null; }
+    if(poll){
+      try{ if(typeof poll==='function') poll(); else clearInterval(poll); }catch(e){}
+      poll=null;
+    }
   }
   function killOverlay(){ var o=document.getElementById('frOv'); if(o) o.remove(); }
   function goBack(){
@@ -1062,11 +1076,18 @@ elixBuildBubbles();
       overlay('Вызов отправлен','Ждём, пока '+oppName+' примет вызов…');
       Net.startFriendlyHost({ matchId:chId, oppKey:oppKey, oppName:oppName, oppCups:oppCups, arena:arena, mode:mode });
       Friends.startBeat(chId);
-      poll=setInterval(async function(){
-        if(killed||started) return;
-        var st=await Friends.status(chId);
-        if(!st||st.status==='declined'){ toast('Вызов отменён'); goBack(); }
-      },2500);
+      if(Friends.watchChallenge){
+        poll=Friends.watchChallenge(chId,function(st){
+          if(killed||started) return;
+          if(!st||st.status==='declined'){ toast('Вызов отменён'); goBack(); }
+        });
+      } else {
+        poll=setInterval(async function(){
+          if(killed||started) return;
+          var st=await Friends.status(chId);
+          if(!st||st.status==='declined'){ toast('Вызов отменён'); goBack(); }
+        },2500);
+      }
     } else {
       Net.joinFriendly({ matchId:chId, oppKey:oppKey, oppName:oppName, oppCups:oppCups, arena:arena, mode:mode });
       overlay('Загружаем партию','Соединяемся с '+oppName+'…');
