@@ -49,6 +49,8 @@ const CHALLENGES = [
 
 let record = null;
 
+const $ = id => document.getElementById(id);
+
 function pad(n){ return String(n).padStart(2, '0'); }
 
 function todayStr(){
@@ -95,8 +97,6 @@ function render(){
     : '<p class="muted">Пока ничего не выполнено.</p>';
 }
 
-function $(id){ return document.getElementById(id); }
-
 async function complete(){
   const ch = todayChallenge();
   const today = todayStr();
@@ -110,7 +110,7 @@ async function complete(){
     const xp = (fresh.xp || 0) + ch.xp;
     const { error } = await sb.from('user_links').update({ challenges: list, xp: xp }).eq('id', fresh.id);
     if (error) { tg.showAlert('Не сохранилось: ' + error.message); return; }
-    record = { ...fresh, challenges: list, xp: xp };
+    record = Object.assign({}, fresh, { challenges: list, xp: xp });
     localStorage.setItem('cachedXP', String(xp));
     render();
     tg.showAlert('+' + ch.xp + ' XP начислено');
