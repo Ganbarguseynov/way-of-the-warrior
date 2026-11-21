@@ -1565,8 +1565,7 @@ Net._catchUp = function (s, awayMs, absentSide){
 };
 
 Net.checkAway = function (){
-  const now = Date.now();
-  Net.lastSeen = now;
+  Net.lastSeen = Date.now();
   if (Net.finished) return;
   if (!Net.state || !Net.host) return;
   Net._push();
