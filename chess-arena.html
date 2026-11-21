@@ -1015,14 +1015,6 @@ elixBuildBubbles();
     try{ if(window.Friends) Friends.stopBeat(); }catch(e){}
     location.href='chess-social.html';
   }
-  function drop(){
-    if(role!=='host'||started||killed) return;
-    try{ if(window.Friends) Friends.stopBeat(); }catch(e){}
-    try{ if(window.Friends) Friends.cancelBeacon(chId); }catch(e){}
-  }
-  window.addEventListener('pagehide',drop);
-  window.addEventListener('beforeunload',drop);
-  document.addEventListener('visibilitychange',function(){ if(document.hidden) drop(); });
 
   function overlay(title,sub){
     var o=document.getElementById('frOv');
