@@ -12,26 +12,31 @@
 <div class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Дистанция</h1>
-<p style="color: var(--hint-color); margin-bottom: 15px;">Введи дистанцию и время, приложение посчитает темп и калории</p>
-<p id="status" style="color: #8e8e93; font-size: 13px;">Загрузка...</p>
+<p id="mode-note" style="color: #8e8e93; font-size: 13px;"></p>
+<p id="status" style="color: #ff9500; font-size: 13px;"></p>
 
-<div style="background: #1c1c1e; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #2c2c2e;">
-<div class="form-group"><label>Активность</label>
-<select id="activity" onchange="updateHint()">
+<div id="setup" style="background: #1c1c1e; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #2c2c2e;">
+<div class="form-group"><label>Вид</label>
+<select id="sport">
 <option value="run">🏃 Бег</option>
 <option value="walk">🚶 Ходьба</option>
-<option value="bike_trainer">🚴 Велотренажёр</option>
-<option value="bike_road">🚲 Велоспорт</option>
-<option value="swim">🏊 Плавание</option>
+<option value="bike">🚴 Велоспорт</option>
+<option value="ski">⛷ Лыжи</option>
 </select></div>
-<div class="form-group"><label>Дистанция (км)</label><input type="number" id="km" step="0.01" min="0" placeholder="5" oninput="updateHint()"></div>
-<div class="form-group"><label>Время (мин)</label><input type="number" id="minutes" step="1" min="0" placeholder="30" oninput="updateHint()"></div>
-<p id="result" style="color: #5ac8fa; font-size: 14px; margin: 10px 0;"></p>
-<button id="save-btn" class="btn" onclick="saveRecord()" disabled>Сохранить</button>
+<div class="form-group"><label>Цель, км (необязательно)</label><input type="number" id="goal-km" step="0.1" min="0"></div>
+<div class="form-group"><label>Лимит времени, мин (необязательно)</label><input type="number" id="goal-min" step="1" min="0"></div>
+<button id="start-btn" class="btn" onclick="startSession()">Старт</button>
 </div>
 
-<h3>Сегодня</h3>
-<div id="today-list"></div>
+<div id="live" style="display: none; background: #1c1c1e; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #2c2c2e; text-align: center;">
+<div id="live-km" style="font-size: 34px; font-weight: bold;">0.00 км</div>
+<div id="live-time" style="color: #8e8e93; font-size: 14px;">00:00:00</div>
+<div id="live-speed" style="color: #5ac8fa; font-size: 14px; margin-top: 6px;">—</div>
+<div id="live-goal" style="color: #8e8e93; font-size: 12px; margin-top: 6px;"></div>
+<button class="btn" style="background: #ff3b30; color: #fff; margin-top: 12px;" onclick="stopSession()">Стоп</button>
+</div>
+
+<div id="result" style="display: none; background: #1c1c1e; padding: 15px; border-radius: 12px; border: 1px solid #2c2c2e; font-size: 14px; line-height: 1.6;"></div>
 </div>
 
 <script>
@@ -39,137 +44,274 @@ const tg = window.Telegram.WebApp;
 tg.ready(); tg.expand();
 const sb = supabase.createClient('https://qnpriwfxzuoymoumdtrl.supabase.co', 'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
 
-const ACTIVITIES = {
-  run:          { name: 'Бег',          met: 9.8, unit: 'pace' },
-  walk:         { name: 'Ходьба',       met: 3.5, unit: 'pace' },
-  bike_trainer: { name: 'Велотренажёр', met: 7.0, unit: 'speed' },
-  bike_road:    { name: 'Велоспорт',    met: 8.0, unit: 'speed' },
-  swim:         { name: 'Плавание',     met: 7.0, unit: 'pace' }
+const SPORTS = {
+  run:  { name: 'Бег',       met: 9.8, maxMs: 9,  pace: true },
+  walk: { name: 'Ходьба',    met: 3.5, maxMs: 3.5, pace: true },
+  bike: { name: 'Велоспорт', met: 8.0, maxMs: 25, pace: false },
+  ski:  { name: 'Лыжи',      met: 7.0, maxMs: 15, pace: true }
 };
+const MAX_ACCURACY_M = 25;
+const SPEED_TOLERANCE = 1.2;
+const MAX_ROUTE_POINTS = 600;
+const NATIVE = !!(window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.BackgroundGeolocation);
+const BG = NATIVE ? Capacitor.Plugins.BackgroundGeolocation : null;
 
-let record = null;
+let session = null;
 
-function pad(n){ return String(n).padStart(2, '0'); }
+const $ = id => document.getElementById(id);
 
-function todayStr(){
-  const d = new Date();
-  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
-}
-
-function getWeight(){
-  const w = parseFloat(record && record.profile && record.profile.weight);
-  return w > 0 ? w : 70;
-}
-
-async function findRecord(){
-  const tgId = localStorage.getItem('tgId') || (tg.initDataUnsafe && tg.initDataUnsafe.user ? String(tg.initDataUnsafe.user.id) : null);
+function playerKey(){
+  const tgId = localStorage.getItem('tgId');
+  if (tgId) return 'tg:' + tgId;
   const email = localStorage.getItem('currentEmail') || localStorage.getItem('linkedEmail');
-  if (tgId) {
-    const { data } = await sb.from('user_links').select('*').eq('telegram_id', tgId);
-    if (data && data.length) return data[0];
+  if (email) return 'email:' + email.toLowerCase();
+  let anon = localStorage.getItem('arenaAnonId');
+  if (!anon) {
+    anon = 'anon:' + Math.random().toString(36).slice(2, 10);
+    localStorage.setItem('arenaAnonId', anon);
   }
-  if (email) {
-    const { data } = await sb.from('user_links').select('*').eq('email', email);
-    if (data && data.length) return data[0];
-  }
-  return null;
+  return anon;
 }
 
-function cloudList(){
-  return record && Array.isArray(record.cardio) ? record.cardio : [];
+function weight(){
+  try {
+    const w = parseFloat(JSON.parse(localStorage.getItem('cachedProfile') || '{}').weight);
+    return w > 0 ? w : 70;
+  } catch (e) { return 70; }
 }
 
-function calc(){
-  const act = ACTIVITIES[document.getElementById('activity').value];
-  const km = parseFloat(document.getElementById('km').value);
-  const min = parseFloat(document.getElementById('minutes').value);
-  if (!(km > 0) || !(min > 0)) return null;
+function haversine(a, b){
+  const R = 6371000, toRad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * toRad, dLon = (b.lon - a.lon) * toRad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * toRad) * Math.cos(b.lat * toRad) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
 
-  const hours = min / 60;
-  const kcal = Math.round(act.met * getWeight() * hours);
-  let pace;
-  if (act.unit === 'speed') {
-    pace = (km / hours).toFixed(1) + ' км/ч';
-  } else {
-    const p = min / km;
+function fmtTime(sec){
+  const s = Math.floor(sec);
+  return [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60].map(v => String(v).padStart(2, '0')).join(':');
+}
+
+function paceText(sport, distM, durS){
+  if (!(distM > 0) || !(durS > 0)) return '—';
+  const km = distM / 1000;
+  if (sport.pace) {
+    const p = durS / 60 / km;
     let m = Math.floor(p), s = Math.round((p - m) * 60);
     if (s === 60) { m++; s = 0; }
-    pace = m + ':' + pad(s) + ' мин/км';
+    return m + ':' + String(s).padStart(2, '0') + ' мин/км';
   }
-  return { kcal, pace, km, min };
+  return (km / (durS / 3600)).toFixed(1) + ' км/ч';
 }
 
-function updateHint(){
-  const r = calc();
-  document.getElementById('result').textContent = r
-    ? 'Темп: ' + r.pace + ' · примерно ' + r.kcal + ' ккал'
-    : '';
+function accept(p){
+  if (!session) return;
+  if (p.time < session.startedAt - 2000) return;
+  if (p.mock) { session.flagged++; return; }
+  if (!(p.acc <= MAX_ACCURACY_M)) return;
+
+  const last = session.last;
+  if (!last) {
+    session.last = p; session.points.push(p);
+    return;
+  }
+  const dt = (p.time - last.time) / 1000;
+  if (!(dt > 0)) return;
+  const d = haversine(last, p);
+  const v = d / dt;
+  if (v > SPORTS[session.sport].maxMs * SPEED_TOLERANCE || (d > 100 && dt < 5)) {
+    session.flagged++;
+    return;
+  }
+  session.distanceM += d;
+  session.last = p;
+  session.points.push(p);
 }
 
-async function saveRecord(){
-  const r = calc();
-  if (!r) { tg.showAlert('Введи дистанцию и время'); return; }
-
-  const btn = document.getElementById('save-btn');
-  btn.disabled = true;
-  try {
-    const fresh = await findRecord();
-    if (!fresh) { tg.showAlert('Аккаунт не найден. Войдите на главной.'); return; }
-
-    const list = Array.isArray(fresh.cardio) ? fresh.cardio.slice() : [];
-    list.push({
-      date: todayStr(),
-      activity: document.getElementById('activity').value,
-      km: r.km,
-      minutes: r.min,
-      kcal: r.kcal
+function startWatch(onPoint, onError){
+  if (NATIVE) {
+    return BG.addWatcher({
+      backgroundMessage: 'Запись тренировки идёт',
+      backgroundTitle: 'Дистанция',
+      requestPermissions: true,
+      stale: false,
+      distanceFilter: 3
+    }, (loc, err) => {
+      if (err) { onError(err.message || 'Ошибка GPS'); return; }
+      if (!loc) return;
+      onPoint({
+        lat: loc.latitude, lon: loc.longitude, acc: loc.accuracy, time: loc.time,
+        mock: !!(loc.isFromMockProvider || loc.simulated)
+      });
     });
-    const burned = (fresh.burned || 0) + r.kcal;
+  }
+  return Promise.resolve(navigator.geolocation.watchPosition(
+    pos => onPoint({
+      lat: pos.coords.latitude, lon: pos.coords.longitude, acc: pos.coords.accuracy,
+      time: pos.timestamp, mock: false
+    }),
+    err => onError(err.message || 'Нет доступа к GPS'),
+    { enableHighAccuracy: true, maximumAge: 0 }
+  ));
+}
 
-    const { error } = await sb.from('user_links').update({ cardio: list, burned: burned }).eq('id', fresh.id);
-    if (error) { tg.showAlert('Не сохранилось: ' + error.message); return; }
+async function stopWatch(id){
+  if (id === null || id === undefined) return;
+  if (NATIVE) await BG.removeWatcher({ id: id });
+  else navigator.geolocation.clearWatch(id);
+}
 
-    record = { ...fresh, cardio: list, burned: burned };
-    localStorage.setItem('cachedBurned', String(burned));
-    document.getElementById('km').value = '';
-    document.getElementById('minutes').value = '';
-    updateHint();
-    renderToday();
-    tg.showAlert('Записано: ' + r.km + ' км, ' + r.kcal + ' ккал');
+async function startSession(){
+  if (session) return;
+  const tgId = localStorage.getItem('tgId');
+  const email = localStorage.getItem('currentEmail') || localStorage.getItem('linkedEmail');
+  if (!tgId && !email) {
+    $('status').textContent = 'Войдите на главной, чтобы результаты сохранялись в аккаунт.';
+  }
+  const goalKm = parseFloat($('goal-km').value);
+  const goalMin = parseFloat($('goal-min').value);
+  session = {
+    sport: $('sport').value,
+    key: playerKey(),
+    startedAt: Date.now(),
+    goalM: goalKm > 0 ? goalKm * 1000 : 0,
+    limitS: goalMin > 0 ? goalMin * 60 : 0,
+    goalDone: false,
+    points: [], last: null, distanceM: 0, flagged: 0,
+    watcher: null, timer: null
+  };
+  $('result').style.display = 'none';
+  try {
+    session.watcher = await startWatch(accept, msg => { $('status').textContent = msg; });
   } catch (e) {
-    tg.showAlert('Ошибка сети. Запись не сохранена.');
-  } finally {
-    btn.disabled = !record;
-  }
-}
-
-function renderToday(){
-  const box = document.getElementById('today-list');
-  const today = todayStr();
-  const items = cloudList().filter(x => x.date === today);
-  if (!items.length) {
-    box.innerHTML = '<p style="color: #8e8e93; font-size: 13px;">Пока нет записей</p>';
+    session = null;
+    $('status').textContent = 'Не удалось включить GPS: ' + (e.message || e);
     return;
   }
-  box.innerHTML = items.map(x => {
-    const act = ACTIVITIES[x.activity] || { name: x.activity };
-    return '<div style="background: #1c1c1e; padding: 12px; border-radius: 12px; margin-bottom: 8px; border: 1px solid #2c2c2e;">' +
-      '<b>' + act.name + '</b><br>' +
-      '<span style="color: #8e8e93; font-size: 13px;">' + x.km + ' км · ' + x.minutes + ' мин · ' + x.kcal + ' ккал</span>' +
-      '</div>';
-  }).join('');
+  $('setup').style.display = 'none';
+  $('live').style.display = 'block';
+  session.timer = setInterval(tick, 1000);
+  tick();
 }
 
-async function init(){
-  try { record = await findRecord(); } catch (e) { record = null; }
-  const status = document.getElementById('status');
-  if (!record) {
-    status.textContent = 'Нет входа в аккаунт. Откройте приложение с главной и войдите.';
+function tick(){
+  if (!session) return;
+  const el = (Date.now() - session.startedAt) / 1000;
+  $('live-km').textContent = (session.distanceM / 1000).toFixed(2) + ' км';
+  $('live-time').textContent = fmtTime(el);
+  $('live-speed').textContent = paceText(SPORTS[session.sport], session.distanceM, el);
+  let goalText = '';
+  if (session.goalM) goalText += 'Цель: ' + (session.goalM / 1000) + ' км';
+  if (session.limitS) goalText += (goalText ? ' · ' : '') + 'лимит ' + Math.round(session.limitS / 60) + ' мин';
+  if (session.goalDone) goalText += ' · цель выполнена, можно продолжать';
+  $('live-goal').textContent = goalText;
+  if (session.limitS && el >= session.limitS) { stopSession(); return; }
+  if (session.goalM && !session.goalDone && session.distanceM >= session.goalM) session.goalDone = true;
+}
+
+function downsample(points){
+  const step = Math.max(1, Math.ceil(points.length / MAX_ROUTE_POINTS));
+  const out = [];
+  for (let i = 0; i < points.length; i += step) out.push([points[i].lat, points[i].lon, points[i].time]);
+  const last = points[points.length - 1];
+  if (last && (!out.length || out[out.length - 1][2] !== last.time)) out.push([last.lat, last.lon, last.time]);
+  return out;
+}
+
+function routeSvg(route){
+  if (route.length < 2) return '';
+  const lat0 = route.reduce((a, r) => a + r[0], 0) / route.length;
+  const kx = Math.cos(lat0 * Math.PI / 180);
+  const xs = route.map(r => r[1] * kx), ys = route.map(r => r[0]);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const span = Math.max(maxX - minX, maxY - minY) || 1e-9;
+  const k = 260 / span;
+  const pts = route.map((r, i) => (10 + (xs[i] - minX) * k).toFixed(1) + ',' + (10 + (maxY - ys[i]) * k).toFixed(1)).join(' ');
+  return '<svg viewBox="0 0 280 280" width="100%" style="margin-top: 10px; background: #0f0f10; border-radius: 8px;">' +
+    '<polyline fill="none" stroke="#5ac8fa" stroke-width="3" points="' + pts + '"/></svg>';
+}
+
+function showResult(rec){
+  const sport = SPORTS[rec.activity];
+  const goalLine = rec.goal_m
+    ? (rec.goal_reached ? 'Цель выполнена' : 'Цель не выполнена: ' + (rec.distance_m / 1000).toFixed(2) + ' из ' + (rec.goal_m / 1000) + ' км')
+    : '';
+  $('result').style.display = 'block';
+  $('result').innerHTML =
+    '<b>' + sport.name + '</b><br>' +
+    'Дистанция: ' + (rec.distance_m / 1000).toFixed(2) + ' км<br>' +
+    'Время: ' + fmtTime(rec.duration_s) + '<br>' +
+    'Темп / скорость: ' + paceText(sport, rec.distance_m, rec.duration_s) + '<br>' +
+    'Калории: около ' + rec.kcal + '<br>' +
+    (goalLine ? goalLine + '<br>' : '') +
+    (rec.flagged ? '<span style="color: #8e8e93; font-size: 12px;">Не засчитано точек: ' + rec.flagged + '</span><br>' : '') +
+    routeSvg(rec.route);
+}
+
+async function stopSession(){
+  if (!session) return;
+  const s = session;
+  session = null;
+  clearInterval(s.timer);
+  const durS = (Date.now() - s.startedAt) / 1000;
+  try { await stopWatch(s.watcher); } catch (e) {}
+  $('live').style.display = 'none';
+  $('setup').style.display = 'block';
+
+  if (s.points.length === 0 || s.distanceM <= 0) {
+    $('status').textContent = 'GPS не получил точек. Запись не сохранена.';
     return;
   }
-  status.textContent = '';
-  document.getElementById('save-btn').disabled = false;
-  renderToday();
+  const rec = {
+    player_key: s.key,
+    activity: s.sport,
+    distance_m: Math.round(s.distanceM),
+    duration_s: Math.round(durS),
+    kcal: Math.round(SPORTS[s.sport].met * weight() * durS / 3600),
+    flagged: s.flagged,
+    goal_m: s.goalM ? Math.round(s.goalM) : null,
+    goal_s: s.limitS ? Math.round(s.limitS) : null,
+    goal_reached: !!(s.goalM && s.distanceM >= s.goalM),
+    route: downsample(s.points),
+    recorded_at: new Date(s.startedAt).toISOString()
+  };
+  showResult(rec);
+  saveRecord(rec);
+}
+
+function saveRecord(rec){
+  let log = [];
+  try { log = JSON.parse(localStorage.getItem('cardioLog') || '[]'); } catch (e) {}
+  log.push(Object.assign({ sent: false }, rec));
+  localStorage.setItem('cardioLog', JSON.stringify(log));
+  flushLog();
+}
+
+async function flushLog(){
+  let log = [];
+  try { log = JSON.parse(localStorage.getItem('cardioLog') || '[]'); } catch (e) { return; }
+  const todo = log.filter(x => !x.sent);
+  if (!todo.length) return;
+  const rows = todo.map(x => {
+    const row = Object.assign({}, x);
+    delete row.sent;
+    return row;
+  });
+  const { error } = await sb.from('cardio_sessions').insert(rows);
+  if (error) {
+    $('status').textContent = 'Не отправлено, повторю позже: ' + error.message;
+    return;
+  }
+  todo.forEach(x => { x.sent = true; });
+  localStorage.setItem('cardioLog', JSON.stringify(log));
+  $('status').textContent = '';
+}
+
+function init(){
+  $('mode-note').textContent = NATIVE
+    ? 'Фоновая запись включена: можно выключить экран, запись продолжится.'
+    : 'Вы в браузере или Telegram: запись останавливается, когда приложение свёрнуто или экран выключен. Для фоновой записи нужна установка приложения.';
+  flushLog();
 }
 
 init();
