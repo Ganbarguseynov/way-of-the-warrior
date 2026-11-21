@@ -2148,7 +2148,7 @@ Net._finish = function (payload){
 
   const wasFriendly = !!Net.friendly;
 
-  if (!wasFriendly && !wasBot && payload.winner === Net.mySide && Math.random() < UNIT_CHANCE){
+  if (!wasFriendly && payload.winner === Net.mySide && Math.random() < UNIT_CHANCE){
     addUnits(1);
   }
 
