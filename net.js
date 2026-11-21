@@ -1,6 +1,6 @@
 /* ============================================================
    net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 36)
-   VER 36: подробный лог испытаний, событие trialProgress для счётчиков.
+   VER 37: эликсир показывает значение сразу, ошибки испытаний выводятся на экран результата.
    ============================================================ */
 (function (global) {
 'use strict';
@@ -1185,11 +1185,11 @@ Net._reportTrial = function (winner){
     if (res.error) throw res.error;
     const sess = res.data && res.data.session;
     if (!sess || !sess.id){
-      console.error('[net] trial: активной сессии нет', res.data);
+      Net.emit('trialError', { message: 'Активного испытания не найдено' });
       return null;
     }
     if (winner === 'draw'){
-      console.error('[net] trial: ничья не засчитывается');
+      Net.emit('trialError', { message: 'Ничья не засчитывается' });
       return null;
     }
     const fn = (winner === side) ? 'trial_win' : 'trial_loss';
@@ -1206,7 +1206,7 @@ Net._reportTrial = function (winner){
       });
     });
   }).catch(function (e){
-    console.error('[net] trial report failed', e);
+    Net.emit('trialError', { message: (e && e.message) || String(e) });
   });
 };
 
