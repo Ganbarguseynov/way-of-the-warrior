@@ -1,6 +1,6 @@
 /* ============================================================
-   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 33)
-   VER 33: исправлена отправка результата испытания (trial_win/trial_loss).
+   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 34)
+   VER 34: ошибка записи кубков бота логируется, профиль обновляется после записи.
    ============================================================ */
 (function (global) {
 'use strict';
@@ -1790,9 +1790,8 @@ Net._localCups = async function (winner){
   const cups = Net._estimateCups(winner);
   const after = cups[Net.mySide + '_after'];
 
-  try {
-    await Net.sb.from('arena_players').update({ cups: after }).eq('player_key', Net.key);
-  } catch (e){}
+  const res = await Net.sb.from('arena_players').update({ cups: after }).eq('player_key', Net.key);
+  if (res.error) console.error('[net] cups update failed', res.error);
 
   return cups;
 };
@@ -1868,7 +1867,9 @@ Net._hostFinish = function (){
   if (isFriendly) return;
 
   if (isBot){
-    Net._localCups(s.winner).catch(function(){});
+    Net._localCups(s.winner)
+      .then(function(){ return Net.refresh(); })
+      .catch(function(e){ console.error('[net] local cups failed', e); });
   } else if (winnerKey){
     Net.sb.rpc('arena_report_match', {
       p_match:  payload.matchId,
