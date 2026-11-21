@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Дистанция</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="inner-screen">
+<button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
+<h1>Дистанция</h1>
+<p style="color: var(--hint-color); margin-bottom: 15px;">Введи дистанцию и время, приложение посчитает темп и калории</p>
+
+<div style="background: #1c1c1e; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #2c2c2e;">
+<div class="form-group"><label>Активность</label>
+<select id="activity" onchange="updateHint()">
+<option value="run">🏃 Бег</option>
+<option value="walk">🚶 Ходьба</option>
+<option value="bike_trainer">🚴 Велотренажёр</option>
+<option value="bike_road">🚲 Велоспорт</option>
+<option value="swim">🏊 Плавание</option>
+</select></div>
+<div class="form-group"><label>Дистанция (км)</label><input type="number" id="km" step="0.01" min="0" placeholder="5" oninput="updateHint()"></div>
+<div class="form-group"><label>Время (мин)</label><input type="number" id="minutes" step="1" min="0" placeholder="30" oninput="updateHint()"></div>
+<p id="result" style="color: #5ac8fa; font-size: 14px; margin: 10px 0;"></p>
+<button class="btn" onclick="saveRecord()">Сохранить</button>
+</div>
+
+<h3>Сегодня</h3>
+<div id="today-list"></div>
+</div>
+
+<script>
+const tg = window.Telegram.WebApp;
+tg.ready(); tg.expand();
+
+const ACTIVITIES = {
+  run:          { name: 'Бег',          met: 9.8, unit: 'pace' },
+  walk:         { name: 'Ходьба',       met: 3.5, unit: 'pace' },
+  bike_trainer: { name: 'Велотренажёр', met: 7.0, unit: 'speed' },
+  bike_road:    { name: 'Велоспорт',    met: 8.0, unit: 'speed' },
+  swim:         { name: 'Плавание',     met: 7.0, unit: 'pace' }
+};
+
+function pad(n){ return String(n).padStart(2, '0'); }
+
+function todayStr(){
+  const d = new Date();
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+}
+
+function getWeight(){
+  try {
+    const w = parseFloat(JSON.parse(localStorage.getItem('cachedProfile') || '{}').weight);
+    return w > 0 ? w : 70;
+  } catch (e) { return 70; }
+}
+
+function loadHistory(){
+  try { return JSON.parse(localStorage.getItem('cardioHistory') || '[]'); }
+  catch (e) { return []; }
+}
+
+function calc(){
+  const act = ACTIVITIES[document.getElementById('activity').value];
+  const km = parseFloat(document.getElementById('km').value);
+  const min = parseFloat(document.getElementById('minutes').value);
+  if (!(km > 0) || !(min > 0)) return null;
+
+  const hours = min / 60;
+  const kcal = Math.round(act.met * getWeight() * hours);
+  let pace;
+  if (act.unit === 'speed') {
+    pace = (km / hours).toFixed(1) + ' км/ч';
+  } else {
+    const p = min / km;
+    let m = Math.floor(p), s = Math.round((p - m) * 60);
+    if (s === 60) { m++; s = 0; }
+    pace = m + ':' + pad(s) + ' мин/км';
+  }
+  return { kcal, pace, km, min };
+}
+
+function updateHint(){
+  const r = calc();
+  document.getElementById('result').textContent = r
+    ? 'Темп: ' + r.pace + ' · примерно ' + r.kcal + ' ккал'
+    : '';
+}
+
+function saveRecord(){
+  const r = calc();
+  if (!r) { tg.showAlert('Введи дистанцию и время'); return; }
+
+  const list = loadHistory();
+  list.push({
+    date: todayStr(),
+    activity: document.getElementById('activity').value,
+    km: r.km,
+    minutes: r.min,
+    kcal: r.kcal
+  });
+  localStorage.setItem('cardioHistory', JSON.stringify(list));
+
+  const burned = parseInt(localStorage.getItem('cachedBurned') || '0', 10) || 0;
+  localStorage.setItem('cachedBurned', String(burned + r.kcal));
+
+  document.getElementById('km').value = '';
+  document.getElementById('minutes').value = '';
+  updateHint();
+  renderToday();
+  tg.showAlert('Записано: ' + r.km + ' км, ' + r.kcal + ' ккал');
+}
+
+function renderToday(){
+  const box = document.getElementById('today-list');
+  const today = todayStr();
+  const items = loadHistory().filter(x => x.date === today);
+  if (!items.length) {
+    box.innerHTML = '<p style="color: #8e8e93; font-size: 13px;">Пока нет записей</p>';
+    return;
+  }
+  box.innerHTML = items.map(x => {
+    const act = ACTIVITIES[x.activity] || { name: x.activity };
+    return '<div style="background: #1c1c1e; padding: 12px; border-radius: 12px; margin-bottom: 8px; border: 1px solid #2c2c2e;">' +
+      '<b>' + act.name + '</b><br>' +
+      '<span style="color: #8e8e93; font-size: 13px;">' + x.km + ' км · ' + x.minutes + ' мин · ' + x.kcal + ' ккал</span>' +
+      '</div>';
+  }).join('');
+}
+
+renderToday();
+</script>
+</body>
+</html>
