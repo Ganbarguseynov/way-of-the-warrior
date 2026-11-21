@@ -2,7 +2,10 @@
    net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 42)
    Бой с ботом идёт через тот же отчёт, что и с игроком.
    Бот — реальная строка arena_players с ключом bot:NNN.
-   Турнирная партия сохраняется и переживает выход из приложения.
+   Турнирная партия получает серверный дедлайн; результат пишется
+   в tour_results и виден в истории.
+   Состояние уходит только при изменении доски + пульс раз в 2 с.
+   Проверка конца партии — не чаще раза в 0.9 с.
    ============================================================ */
 (function (global) {
 'use strict';
@@ -33,10 +36,8 @@ const SEARCH_LIMIT_MS = 3000;
 const RESUME_LIMIT_MS = 6 * 60 * 60 * 1000;
 const FRIENDLY_WAIT_MS = 90000;
 
-/* Дольше этого турнирная партия без игрока не висит — поражение. */
-const TOUR_AWAY_MAX = 30 * 60 * 1000;
-
 const TOUR_BOT_MS = 5000;
+const TOUR_LIVE_MIN = 15;
 
 const BOT_PREFIX = 'bot:';
 const BOT_CUPS_RANGE = 150;
@@ -435,43 +436,6 @@ Net._applyModeTick = function (s, dt){
   Net._checkEnd(s);
 };
 
-/* ---------------- время без игрока (турниры) ---------------- */
-
-/* Возврат в турнирную партию: пока приложения не было, часы шли.
-   Выходит за рамки — партия закрывается поражением. */
-Net._applyAway = function (s, awayMs){
-  if (!s || s.over) return s;
-  if (!(awayMs > 500)) return s;
-
-  const def = MODE_BY_ID[s.mode] || MODE_BY_ID[Net.matchMode] || MODES[0];
-  const dt = awayMs / 1000;
-  const mySide = Net.mySide || 'a';
-
-  if (def.turn){
-    if (!s.clocks) s.clocks = { a: def.time, b: def.time };
-    const who = s.turn || 'a';
-    s.clocks[who] = Math.max(0, (s.clocks[who] || 0) - dt);
-    if (s.clocks[who] <= 0){
-      const winner = (who === 'a') ? 'b' : 'a';
-      Arena.finish(s, cannotMate(s, winner) ? 'draw' : winner);
-    }
-    return s;
-  }
-
-  let left = (typeof s.timeLeft === 'number') ? s.timeLeft : def.time;
-  left -= dt;
-
-  if (left <= 0){
-    s.timeLeft = 0;
-    const other = (mySide === 'a') ? 'b' : 'a';
-    Arena.finish(s, cannotMate(s, other) ? 'draw' : other);
-  } else {
-    s.timeLeft = left;
-  }
-
-  return s;
-};
-
 /* ---------------- журнал ходов ---------------- */
 
 function logAt(s){
@@ -637,18 +601,18 @@ Net._writeRecord = function (){
   if (Net.friendly && !Net.tour) return;
   try {
     localStorage.setItem(RECORD_KEY, JSON.stringify({
-      matchId:   Net.matchId,
-      side:      Net.mySide,
-      arena:     Net.arena,
-      mode:      Net.matchMode,
-      players:   Net.players,
-      decks:     Net.decks,
-      levels:    Net.levels,
-      bot:       !!Net.botMode,
-      tour:      !!Net.tour,
-      trial:     !!Net.tourTrial,
+      matchId: Net.matchId,
+      side:    Net.mySide,
+      arena:   Net.arena,
+      mode:    Net.matchMode,
+      players: Net.players,
+      decks:   Net.decks,
+      levels:  Net.levels,
+      bot:     !!Net.botMode,
+      tour:    !!Net.tour,
+      tourTrial: !!Net.tourTrial,
       trialType: Net.trialType || null,
-      at:        Date.now()
+      at:      Date.now()
     }));
   } catch (e){}
 };
@@ -1251,7 +1215,6 @@ Net.startTour = async function (t){
   Net._lastResyncAt = 0;
   Net._logReset();
 
-  try { localStorage.removeItem(RECORD_KEY); } catch (e){}
   try { localStorage.removeItem(STATE_KEY); } catch (e){}
 
   const meP = { key: Net.key, name: Net.name, cups: myCups };
@@ -1261,6 +1224,9 @@ Net.startTour = async function (t){
   Net.setups = null;
   Net.decks  = decksFor(t.side, Net.myDeck(), null);
   Net.levels = levelsFor(t.side, Net.myLevels(), null);
+
+  Net._writeRecord();
+  Net._tourLiveStart();
 
   if (t.bot){
     Net.arena = Arena.arenaOf(myCups);
@@ -1304,6 +1270,42 @@ Net.startTour = async function (t){
   }
 };
 
+/* Серверный дедлайн турнирной партии: пока приложение закрыто,
+   партия не «исчезает», а закрывается по времени как поражение. */
+Net._tourLiveStart = function (){
+  if (!Net.tour || !Net.sb || !Net.matchId) return;
+  const opp = Net.players ? (Net.mySide === 'a' ? Net.players.b : Net.players.a) : null;
+  Net.sb.rpc('tour_live_start', {
+    p_match: Net.matchId,
+    p_key:   Net.key,
+    p_opp:   (opp && opp.key) || null,
+    p_mode:  Net.matchMode || 'classic',
+    p_minutes: TOUR_LIVE_MIN
+  }).then(function (res){
+    if (res.error) console.error('[net] tour live start failed', res.error);
+  });
+};
+
+Net._tourResult = function (winner, seconds){
+  if (!Net.tour || !Net.sb || !Net.matchId) return;
+
+  const opp = Net.players ? (Net.mySide === 'a' ? Net.players.b : Net.players.a) : null;
+  const result = (winner === 'draw') ? 'draw' : (winner === Net.mySide ? 'win' : 'loss');
+
+  Net.sb.rpc('tour_result', {
+    p_match:    Net.matchId,
+    p_key:      Net.key,
+    p_opponent: (opp && opp.name) || 'Соперник',
+    p_mode:     Net.matchMode || 'classic',
+    p_result:   result,
+    p_seconds:  Math.round(seconds || 0)
+  }).then(function (r){
+    if (r.error) console.error('[net] tour result failed', r.error);
+  });
+
+  Net.sb.rpc('tour_live_finish', { p_match: Net.matchId }).then(function (){});
+};
+
 Net._tourBotStart = function (){
   if (!Net.tour || Net.state || Net.finished) return;
 
@@ -1328,6 +1330,7 @@ Net._tourBotStart = function (){
 
   Net.botMode = true;
 
+  Net._writeRecord();
   Net._hostStart();
   Net._startBotBrain();
 };
@@ -1773,8 +1776,6 @@ Net._hostStart = function (){
   Net._lastSentAt = 0;
   Net._endCheckAt = 0;
 
-  Net._writeRecord();
-  Net._saveState(true);
   Net._push(true);
   Net._startLoop();
   Net._watchForfeit();
@@ -2067,8 +2068,35 @@ Net.tryResume = async function (){
     return false;
   }
 
+  /* Турнир: сначала спрашиваем сервер, не истекло ли время.
+     Если истекло — закрываем как поражение и пишем в историю. */
+  if (rec.tour){
+    let st = 'none';
+    try {
+      const r0 = await Net.sb.rpc('tour_live_check', { p_match: rec.matchId, p_key: Net.key });
+      if (r0 && !r0.error) st = r0.data || 'none';
+    } catch (e){}
+
+    if (st === 'lost'){
+      const opp0 = rec.players ? (rec.side === 'a' ? rec.players.b : rec.players.a) : null;
+      try {
+        await Net.sb.rpc('tour_result', {
+          p_match:    rec.matchId,
+          p_key:      Net.key,
+          p_opponent: (opp0 && opp0.name) || 'Соперник',
+          p_mode:     MODE_BY_ID[rec.mode] ? rec.mode : 'classic',
+          p_result:   'loss',
+          p_seconds:  0
+        });
+      } catch (e){}
+      try { await Net.sb.rpc('tour_live_finish', { p_match: rec.matchId }); } catch (e){}
+      Net._clearMatch();
+      Net.emit('tourLost', {});
+      return true;
+    }
+  }
+
   const isBot = !!rec.bot;
-  const isTour = !!rec.tour;
 
   Net.matchId = rec.matchId;
   Net.matchMode = MODE_BY_ID[rec.mode] ? rec.mode : 'classic';
@@ -2081,11 +2109,11 @@ Net.tryResume = async function (){
   Net.finished = false;
   Net.finishing = false;
   Net.botMode = isBot;
-  Net.friendly = isTour;
-  Net.friendlyHost = false;
-  Net.tour = isTour;
-  Net.tourTrial = !!rec.trial;
+  Net.tour = !!rec.tour;
+  Net.tourTrial = !!rec.tourTrial;
   Net.trialType = rec.trialType || null;
+  Net.friendly = !!(rec.tour || rec.friendly);
+  Net.friendlyHost = false;
   Net.state = null;
   Net.lastSeen = Date.now();
   Net._seq = 0;
@@ -2118,20 +2146,9 @@ Net.tryResume = async function (){
     Net.botMode = true;
     Net.host = true;
 
-    /* Турнир: пока приложения не было, часы шли. */
-    if (isTour){
-      const awayMs = Date.now() - (saved.savedAt || rec.at || Date.now());
-      if (awayMs > TOUR_AWAY_MAX){
-        const other = (Net.mySide === 'a') ? 'b' : 'a';
-        Arena.finish(saved, other);
-      } else {
-        Net._applyAway(saved, awayMs);
-      }
-    }
-
     Net.emit('start', {
       side:'a', arena:Net.arena, opponent:Net.players.b,
-      state:saved, mode: Net.matchMode, tour: isTour
+      state:saved, mode: Net.matchMode, tour: !!Net.tour
     });
 
     Net.saveMark = 0;
@@ -2154,7 +2171,7 @@ Net.tryResume = async function (){
 
     Net.emit('start', {
       side:'a', arena:Net.arena, opponent:Net.players.b,
-      state:saved, mode: Net.matchMode, tour: isTour
+      state:saved, mode: Net.matchMode, tour: !!Net.tour
     });
 
     Net.saveMark = 0;
@@ -2170,7 +2187,7 @@ Net.tryResume = async function (){
 
   Net.emit('start', {
     side:'b', arena:Net.arena, opponent:Net.players.a,
-    state:null, mode: Net.matchMode, tour: isTour
+    state:null, mode: Net.matchMode, tour: !!Net.tour
   });
 
   if (Net.matchCh) Net.matchCh.send({ type:'broadcast', event:'hello', payload:{ from: Net.key } });
@@ -2197,8 +2214,9 @@ Net._finish = function (payload){
   Net.finished = true;
   Net.finishing = false;
 
-  if (wasTour) Net._reportTour(payload.winner);
+  if (wasTour && !wasBot) Net._reportTour(payload.winner);
   if (wasTour && wasTrial) Net._reportTrial(payload.winner);
+  if (wasTour) Net._tourResult(payload.winner, payload.seconds);
 
   if (Net.botTimer){ clearTimeout(Net.botTimer); Net.botTimer = null; }
 
