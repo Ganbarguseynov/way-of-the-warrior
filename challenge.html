@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Челлендж дня</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="style.css">
+<style>
+.card { background: #1c1c1e; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #2c2c2e; }
+.muted { color: #8e8e93; font-size: 13px; }
+.done { color: #34c759; font-weight: bold; }
+.item { background: #1c1c1e; padding: 12px; border-radius: 12px; margin-bottom: 8px; border: 1px solid #2c2c2e; font-size: 14px; }
+.streak { font-size: 30px; font-weight: bold; color: #ff5722; text-align: center; }
+.reward { color: #ffcc00; font-size: 14px; text-align: center; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="inner-screen">
+<button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
+<h1>Челлендж дня</h1>
+<p id="status" class="muted"></p>
+
+<div class="card">
+<div id="ch-title" style="font-size: 20px; font-weight: bold; margin-bottom: 6px; text-align: center;">—</div>
+<div id="ch-desc" class="muted" style="font-size: 14px; margin-bottom: 12px; text-align: center;"></div>
+<div class="streak" id="streak">🔥 0</div>
+<div class="reward" id="reward"></div>
+<div class="muted" id="next" style="text-align: center; margin-top: 8px;"></div>
+<button id="ch-btn" class="btn" style="margin-top: 12px;" onclick="complete()" disabled>Выполнено</button>
+</div>
+
+<h3>Последние выполненные</h3>
+<div id="ch-history"></div>
+</div>
+
+<script>
+const tg = window.Telegram.WebApp;
+tg.ready(); tg.expand();
+const sb = supabase.createClient('https://qnpriwfxzuoymoumdtrl.supabase.co', 'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
+
+const EXERCISES = [
+  { title: '30 приседаний', desc: 'Сделайте 30 приседаний подряд' },
+  { title: '20 отжиманий', desc: 'Сделайте 20 отжиманий, можно с отдыхом' },
+  { title: 'Планка 1 минута', desc: 'Удержите планку 60 секунд' },
+  { title: '50 прыжков', desc: 'Сделайте 50 прыжков на месте' },
+  { title: 'Выпады 10 на каждую ногу', desc: 'Сделайте 10 выпадов на каждую ногу' },
+  { title: '30 скручиваний', desc: 'Сделайте 30 скручиваний пресса' },
+  { title: '10 бёрпи', desc: 'Сделайте 10 бёрпи в спокойном темпе' },
+  { title: 'Скакалка 2 минуты', desc: 'Прыгайте со скакалкой 2 минуты' },
+  { title: 'Растяжка 10 минут', desc: 'Потянитесь 10 минут без спешки' },
+  { title: 'Зарядка 10 минут', desc: 'Любые упражнения 10 минут подряд' }
+];
+
+const REWARDS = [10, 15, 20, 25, 30];
+
+let record = null;
+
+const $ = id => document.getElementById(id);
+
+function pad(n){ return String(n).padStart(2, '0'); }
+
+function dateStr(d){
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+}
+
+function todayStr(){ return dateStr(new Date()); }
+
+function yesterdayStr(){ return dateStr(new Date(Date.now() - 86400000)); }
+
+function dayNumber(){
+  const d = new Date();
+  return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
+}
+
+function todayExercise(){
+  return EXERCISES[(dayNumber() * 7 + 3) % EXERCISES.length];
+}
+
+function rewardFor(streak){
+  return REWARDS[Math.min(streak, REWARDS.length) - 1] || 10;
+}
+
+function currentStreak(rec){
+  if (!rec) return 0;
+  const last = rec.challenge_last_date;
+  if (last === todayStr() || last === yesterdayStr()) return rec.challenge_streak || 0;
+  return 0;
+}
+
+async function findRecord(){
+  const tgId = localStorage.getItem('tgId') || (tg.initDataUnsafe && tg.initDataUnsafe.user ? String(tg.initDataUnsafe.user.id) : null);
+  const email = localStorage.getItem('currentEmail') || localStorage.getItem('linkedEmail');
+  if (tgId) {
+    const { data } = await sb.from('user_links').select('*').eq('telegram_id', tgId);
+    if (data && data.length) return data[0];
+  }
+  if (email) {
+    const { data } = await sb.from('user_links').select('*').eq('email', email);
+    if (data && data.length) return data[0];
+  }
+  return null;
+}
+
+function doneList(){
+  return record && Array.isArray(record.challenges) ? record.challenges : [];
+}
+
+function doneToday(){
+  return !!record && record.challenge_last_date === todayStr();
+}
+
+function render(){
+  const ex = todayExercise();
+  const streak = currentStreak(record);
+  $('ch-title').textContent = ex.title;
+  $('ch-desc').textContent = ex.desc;
+  $('streak').textContent = '🔥 ' + streak;
+
+  const nextStreak = doneToday() ? streak : streak + 1;
+  const nextReward = rewardFor(nextStreak);
+  if (doneToday()) {
+    $('reward').textContent = 'Сегодня уже получено';
+    $('next').textContent = 'Завтра за выполнение: +' + rewardFor(streak + 1) + ' XP';
+  } else {
+    $('reward').textContent = 'Награда за сегодня: +' + nextReward + ' XP';
+    $('next').textContent = streak === 0 && record && record.challenge_last_date
+      ? 'Серия прервалась. Начните заново с +10 XP'
+      : 'Выполняйте каждый день: награда растёт до +30 XP';
+  }
+
+  $('ch-btn').disabled = !record || doneToday();
+  $('ch-btn').textContent = doneToday() ? 'Сегодня уже выполнено' : 'Выполнено';
+
+  const items = doneList().slice().reverse().slice(0, 20);
+  $('ch-history').innerHTML = items.length
+    ? items.map(x => '<div class="item"><span class="done">✓</span> ' + x.date.split('-').reverse().join('.') + ' · ' + x.title + ' · +' + x.xp + ' XP</div>').join('')
+    : '<p class="muted">Пока ничего не выполнено.</p>';
+}
+
+async function complete(){
+  const ex = todayExercise();
+  const today = todayStr();
+  $('ch-btn').disabled = true;
+  try {
+    const fresh = await findRecord();
+    if (!fresh) { tg.showAlert('Аккаунт не найден. Войдите на главной.'); return; }
+    if (fresh.challenge_last_date === today) { record = fresh; render(); return; }
+
+    const base = fresh.challenge_last_date === yesterdayStr() ? (fresh.challenge_streak || 0) : 0;
+    const streak = base + 1;
+    const reward = rewardFor(streak);
+    const list = Array.isArray(fresh.challenges) ? fresh.challenges.slice() : [];
+    list.push({ date: today, title: ex.title, xp: reward, streak: streak });
+    const xp = (fresh.xp || 0) + reward;
+
+    const { error } = await sb.from('user_links').update({
+      challenges: list,
+      xp: xp,
+      challenge_streak: streak,
+      challenge_last_date: today
+    }).eq('id', fresh.id);
+    if (error) { tg.showAlert('Не сохранилось: ' + error.message); return; }
+
+    record = Object.assign({}, fresh, { challenges: list, xp: xp, challenge_streak: streak, challenge_last_date: today });
+    localStorage.setItem('cachedXP', String(xp));
+    render();
+    tg.showAlert('+' + reward + ' XP. Серия: ' + streak + ' дн.');
+  } catch (e) {
+    tg.showAlert('Ошибка сети. Попробуйте ещё раз.');
+  } finally {
+    $('ch-btn').disabled = !record || doneToday();
+  }
+}
+
+async function init(){
+  try { record = await findRecord(); } catch (e) { record = null; }
+  if (!record) {
+    $('status').textContent = 'Нет входа в аккаунт. Откройте приложение с главной и войдите.';
+  }
+  render();
+}
+
+init();
+</script>
+</body>
+</html>
