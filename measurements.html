@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Замеры тела</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="stylesheet" href="style.css">
+<style>
+.card { background: #1c1c1e; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #2c2c2e; }
+.muted { color: #8e8e93; font-size: 13px; }
+.chart-box { background: #2c2c2e; border-radius: 12px; padding: 10px; height: 240px; position: relative; margin-bottom: 10px; }
+.hist-item { background: #1c1c1e; padding: 12px; border-radius: 12px; margin-bottom: 8px; border: 1px solid #2c2c2e; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="inner-screen">
+<button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
+<h1>Замеры тела</h1>
+<p id="status" style="color: #ff9500; font-size: 13px;"></p>
+
+<div class="card">
+<div class="form-group"><label>Дата</label><input type="date" id="m-date"></div>
+<div class="form-group"><label>Грудь, см</label><input type="number" id="m-chest" step="0.1" min="0"></div>
+<div class="form-group"><label>Талия, см</label><input type="number" id="m-waist" step="0.1" min="0"></div>
+<div class="form-group"><label>Бёдра, см</label><input type="number" id="m-hips" step="0.1" min="0"></div>
+<div class="form-group"><label>Рука, см</label><input type="number" id="m-arm" step="0.1" min="0"></div>
+<div class="form-group"><label>Бедро, см</label><input type="number" id="m-thigh" step="0.1" min="0"></div>
+<p class="muted">Заполните любые поля. Пустые не сохраняются.</p>
+<button id="save-btn" class="btn" onclick="save()" disabled>Сохранить замер</button>
+</div>
+
+<div class="card">
+<div class="form-group"><label>Показатель на графике</label>
+<select id="metric" onchange="render()">
+<option value="waist">Талия</option>
+<option value="chest">Грудь</option>
+<option value="hips">Бёдра</option>
+<option value="arm">Рука</option>
+<option value="thigh">Бедро</option>
+</select></div>
+<div class="chart-box"><canvas id="chart"></canvas></div>
+</div>
+
+<h3>История</h3>
+<div id="list"></div>
+</div>
+
+<script>
+const tg = window.Telegram.WebApp;
+tg.ready(); tg.expand();
+const sb = supabase.createClient('https://qnpriwfxzuoymoumdtrl.supabase.co', 'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
+
+const FIELDS = ['chest', 'waist', 'hips', 'arm', 'thigh'];
+const NAMES = { chest: 'Грудь', waist: 'Талия', hips: 'Бёдра', arm: 'Рука', thigh: 'Бедро' };
+
+const $ = id => document.getElementById(id);
+let rows = [], chart = null, key = null;
+
+function playerKey(){
+  const tgId = localStorage.getItem('tgId');
+  if (tgId) return 'tg:' + tgId;
+  const email = localStorage.getItem('currentEmail') || localStorage.getItem('linkedEmail');
+  if (email) return 'email:' + email.toLowerCase();
+  let anon = localStorage.getItem('arenaAnonId');
+  if (!anon) {
+    anon = 'anon:' + Math.random().toString(36).slice(2, 10);
+    localStorage.setItem('arenaAnonId', anon);
+  }
+  return anon;
+}
+
+function todayStr(){
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+
+function fmtDate(s){
+  return String(s).slice(0, 10).split('-').reverse().join('.');
+}
+
+async function save(){
+  const vals = {};
+  for (const f of FIELDS) {
+    const v = parseFloat($('m-' + f).value);
+    vals[f] = v > 0 ? v : null;
+  }
+  if (!FIELDS.some(f => vals[f] !== null)) { $('status').textContent = 'Введите хотя бы один замер.'; return; }
+  const date = $('m-date').value;
+  if (!date) { $('status').textContent = 'Укажите дату.'; return; }
+
+  $('save-btn').disabled = true;
+  const row = Object.assign({ player_key: key, measured_on: date }, vals);
+  const { error } = await sb.from('body_measurements').insert([row]);
+  $('save-btn').disabled = false;
+  if (error) { $('status').textContent = 'Не сохранилось: ' + error.message; return; }
+
+  FIELDS.forEach(f => { $('m-' + f).value = ''; });
+  $('status').textContent = '';
+  load();
+}
+
+async function load(){
+  const { data, error } = await sb.from('body_measurements')
+    .select('*').eq('player_key', key).order('measured_on', { ascending: true });
+  if (error) { $('status').textContent = 'Не удалось загрузить: ' + error.message; return; }
+  rows = data || [];
+  render();
+}
+
+function render(){
+  const f = $('metric').value;
+  const pts = rows.filter(r => r[f] !== null && r[f] !== undefined);
+  if (chart) chart.destroy();
+  chart = new Chart($('chart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: pts.map(r => fmtDate(r.measured_on)),
+      datasets: [{
+        label: NAMES[f] + ', см',
+        data: pts.map(r => Number(r[f])),
+        borderColor: '#5ac8fa', backgroundColor: '#5ac8fa33',
+        borderWidth: 2, pointRadius: 3, fill: true, tension: 0.3
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#8e8e93' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+        y: { ticks: { color: '#8e8e93' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+      }
+    }
+  });
+
+  const list = rows.slice().reverse();
+  $('list').innerHTML = list.length
+    ? list.map(r => {
+        const parts = FIELDS.filter(x => r[x] !== null && r[x] !== undefined)
+          .map(x => NAMES[x] + ' ' + Number(r[x]) + ' см');
+        return '<div class="hist-item"><b>' + fmtDate(r.measured_on) + '</b><br>' + parts.join(' · ') + '</div>';
+      }).join('')
+    : '<p class="muted">Замеров пока нет.</p>';
+}
+
+async function init(){
+  key = playerKey();
+  $('m-date').value = todayStr();
+  $('save-btn').disabled = false;
+  await load();
+}
+
+init();
+</script>
+</body>
+</html>
