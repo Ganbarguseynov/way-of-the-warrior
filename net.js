@@ -1,5 +1,7 @@
 /* ============================================================
-   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 38)
+   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 39)
+   Кубки без потолка. Автопоражение по лагам убрано.
+   Переподключение канала, реже рассылка, реже запись состояния.
    ============================================================ */
 (function (global) {
 'use strict';
@@ -18,9 +20,6 @@ const PIECE_LV_KEY = 'chessPieceLv';
 const UNITS_KEY    = 'chessUnits';
 const UNIT_CHANCE  = 0.03;
 
-const CUPS_CAP = 140;
-const CAP_KEY  = 'arenaCupsCap';
-
 const PUSH_MS = 400;
 const STATE_SAVE_MS = 5000;
 const STALL_MS = 8000;
@@ -32,15 +31,11 @@ const FRIENDLY_WAIT_MS = 90000;
 
 const TOUR_BOT_MS = 5000;
 
-const AWAY_GRACE_MS = 60000;
-
 const CATCHUP_STEP = 1.2;
 const CATCHUP_MAX  = 600;
 
 const LOG_MAX = 700;
-
 const DRAW_OFFER_MAX = 2;
-
 const TURN_CLOCK_GUARD = 50000;
 
 const SPELL_TYPES = ['f','s','c','u','g','x','z','l','b','e'];
@@ -514,8 +509,6 @@ Net.init = async function (opts){
   if (res.error) throw res.error;
   Net.me = res.data;
 
-  await Net._enforceCap();
-
   return res.data;
 };
 
@@ -526,18 +519,15 @@ Net.refresh = async function (){
 
   if (res.data) Net.me = res.data;
 
-  await Net._enforceCap();
-
   return Net.me;
 };
 
-/* ---------------- потолок кубков ---------------- */
-
+/* Потолка больше нет. Метод оставлен пустым: его вызывают другие файлы. */
 Net._enforceCap = async function (){
-  try { localStorage.removeItem(CAP_KEY); } catch (e){}
+  try { localStorage.removeItem('arenaCupsCap'); } catch (e){}
 };
 
-Net.cupsCap = CUPS_CAP;
+Net.cupsCap = Number.POSITIVE_INFINITY;
 
 Net.rename = async function (raw){
   const name = String(raw || '').trim().slice(0, 16);
@@ -802,7 +792,7 @@ Net._attach = async function (){
     Net.emit('state', Net.state);
 
     if (Net.state && Net.state.over && !Net.finished){
-      Net._finish({ winner: Net.state.winner, matchId: Net.matchId, cups: null, mode: Net.matchMode });
+      Net._finish({ winner: Net.state.winner, matchId: Net.matchId, mode: Net.matchMode });
     }
   });
 
@@ -843,6 +833,7 @@ Net._attach = async function (){
 
   await ch.subscribe(async function (status){
     if (Net.matchCh !== ch) return;
+
     if (status === 'SUBSCRIBED'){
       Net._lastStateAt = Date.now();
       await ch.track({
@@ -1210,7 +1201,6 @@ Net._reportTrial = function (winner){
     return sb.rpc(fn, { p_session: sess.id, p_key: key }).then(function (r2){
       if (r2.error) throw r2.error;
       const st = r2.data || {};
-      console.log('[net] trial result', fn, st);
       Net.emit('trialProgress', { wins: st.wins || 0, losses: st.losses || 0, state: st.state || null });
       try { localStorage.setItem('trialWins', String(st.wins || 0)); } catch (e){}
       if (st.state !== 'complete') return null;
@@ -1564,45 +1554,22 @@ Net._botMove = function (){
   return moved;
 };
 
-/* ---------------- догон времени ---------------- */
+/* ---------------- возврат в игру ---------------- */
 
+/* Раньше здесь было автопоражение через 15 секунд отсутствия.
+   Именно из-за этого лаг превращался в проигрыш.
+   Теперь отсутствие никогда не засчитывается как поражение. */
 Net._catchUp = function (s, awayMs, absentSide){
   if (!s || s.over) return;
-
-  const foe = (absentSide === 'a') ? 'b' : 'a';
-
-  let left = Math.min(awayMs / 1000, CATCHUP_MAX);
-  let guard = 0;
-
-  while (left > 0 && !s.over && guard < CATCHUP_MAX){
-    guard++;
-
-    const dt = Math.min(CATCHUP_STEP, left);
-    left -= dt;
-
-    Arena.tick(s, dt);
-    Net._applyModeTick(s, dt);
-    if (s.over) break;
-
-    Net._autoMove(s, foe);
-  }
-
-  if (!s.over && awayMs > AWAY_GRACE_MS && !matchDef().turn) Arena.finish(s, foe);
+  return;
 };
 
 Net.checkAway = function (){
   const now = Date.now();
-  const away = now - (Net.lastSeen || now);
   Net.lastSeen = now;
-
   if (Net.finished) return;
   if (!Net.state || !Net.host) return;
-  if (away < 2500) return;
-
-  Net._catchUp(Net.state, away, Net.mySide);
-
-  if (Net.state.over) Net._hostFinish();
-  else Net._push();
+  Net._push();
 };
 
 /* ---------------- запуск боя ---------------- */
@@ -1775,6 +1742,7 @@ Net._applyIntent = function (msg, side){
 
 /* ---------------- конец боя ---------------- */
 
+/* Потолка 140 больше нет: кубки растут и падают без ограничения сверху. */
 Net._estimateCups = function (winner){
   const myCups = Net.me ? Net.me.cups : 0;
   const oppCups = Net.players
@@ -1787,11 +1755,15 @@ Net._estimateCups = function (winner){
   }
 
   let delta = 0;
+
   if (winner === Net.mySide) delta = Arena.deltaFor(myCups, oppCups);
   else if (winner === 'draw') delta = 0;
   else delta = -Arena.lossFor(myCups, Arena.deltaFor(oppCups, myCups));
 
-  let after = Math.max(Arena.floorOf(myCups), myCups + delta);
+  let after = myCups + delta;
+
+  const floor = Arena.floorOf(myCups);
+  if (after < floor) after = floor;
   if (after < 0) after = 0;
 
   if (Net.mySide === 'a') return { a_before:myCups, a_after:after, b_before:oppCups, b_after:oppCups };
@@ -1959,8 +1931,6 @@ Net.tryResume = async function (){
       return false;
     }
 
-    const away = saved.savedAt ? (Date.now() - saved.savedAt) : 0;
-
     Net.state = saved;
     Net.botMode = true;
     Net.host = true;
@@ -1969,8 +1939,6 @@ Net.tryResume = async function (){
       side:'a', arena:Net.arena, opponent:Net.players.b,
       state:saved, mode: Net.matchMode
     });
-
-    if (away > 2500) Net._catchUp(saved, away, Net.mySide);
 
     Net.saveMark = 0;
     Net.lastSeen = Date.now();
@@ -1988,15 +1956,12 @@ Net.tryResume = async function (){
   if (Net.host){
     if (!saved){ Net._clearMatch(); return false; }
 
-    const away = saved.savedAt ? (Date.now() - saved.savedAt) : 0;
     Net.state = saved;
 
     Net.emit('start', {
       side:'a', arena:Net.arena, opponent:Net.players.b,
       state:saved, mode: Net.matchMode
     });
-
-    if (away > 2500) Net._catchUp(saved, away, Net.mySide);
 
     Net.saveMark = 0;
     Net.lastSeen = Date.now();
@@ -2019,7 +1984,7 @@ Net.tryResume = async function (){
   Net.resumeTimer = setTimeout(function (){
     Net.resumeTimer = null;
     if (!Net.state && !Net.finished) Net.emit('resumeFailed', {});
-  }, 8000);
+  }, 15000);
 
   return true;
 };
@@ -2120,6 +2085,7 @@ Net.leaveMatch = async function (){
 Net.DRAW_OFFER_MAX = DRAW_OFFER_MAX;
 Net.SPELL_TYPES = SPELL_TYPES;
 Net.HAND_SIZE = HAND_SIZE;
+Net.VER = 39;
 
 global.Net = Net;
 
