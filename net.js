@@ -1,6 +1,6 @@
 /* ============================================================
-   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 35)
-   VER 35: приз испытания (trial_reward), флаг trial в результате.
+   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 36)
+   VER 36: подробный лог испытаний, событие trialProgress для счётчиков.
    ============================================================ */
 (function (global) {
 'use strict';
@@ -1182,12 +1182,22 @@ Net._reportTrial = function (winner){
   const sb = Net.sb, key = Net.key, side = Net.mySide, type = Net.trialType;
 
   sb.rpc('trial_active', { p_key: key, p_type: type }).then(function (res){
-    const sess = res && res.data && res.data.session;
-    if (!sess || !sess.id || winner === 'draw') return null;
+    if (res.error) throw res.error;
+    const sess = res.data && res.data.session;
+    if (!sess || !sess.id){
+      console.error('[net] trial: активной сессии нет', res.data);
+      return null;
+    }
+    if (winner === 'draw'){
+      console.error('[net] trial: ничья не засчитывается');
+      return null;
+    }
     const fn = (winner === side) ? 'trial_win' : 'trial_loss';
     return sb.rpc(fn, { p_session: sess.id, p_key: key }).then(function (r2){
       if (r2.error) throw r2.error;
       const st = r2.data || {};
+      console.log('[net] trial result', fn, st);
+      Net.emit('trialProgress', { wins: st.wins || 0, losses: st.losses || 0, state: st.state || null });
       try { localStorage.setItem('trialWins', String(st.wins || 0)); } catch (e){}
       if (st.state !== 'complete') return null;
       return sb.rpc('trial_reward', { p_session: sess.id, p_key: key }).then(function (r3){
