@@ -1,14 +1,12 @@
 /* ============================================================
-   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 29)
+   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 30)
    Четыре режима:
      classic  — карты + эликсир, общие 5 минут
      nocards  — без карт, эликсир, общие 5 минут
      noelixir — карты, без эликсира, по очереди, по 3 минуты
      pure     — без карт и эликсира, по очереди, по 3 минуты
-   В режимах с очередью тикают только часы того, чей ход.
-   Кончились — он проиграл, если у соперника есть материал для мата,
-   иначе ничья.
-   Потолок кубков: 140.
+   VER 30: партия турнира (tour) — канал arena_tour_<id>,
+   результат уходит в tour_report, кубки не меняются.
    ============================================================ */
 (function (global) {
 'use strict';
@@ -128,6 +126,7 @@ const Net = {
   botMode: false, botTimer: null, fallbackTimer: null, botThinkUntil: 0,
 
   friendly: false, friendlyHost: false,
+  tour: false,
 
   lastSeen: 0,
   replayLog: [], logMark: 0
@@ -790,6 +789,7 @@ Net._onAccept = function (p){
 /* ---------------- канал матча ---------------- */
 
 function matchChannelName(){
+  if (Net.tour) return 'arena_tour_' + Net.matchId;
   if (Net.friendly) return 'arena_friendly_' + Net.matchId;
   return 'arena_match_' + (Net.matchMode || 'classic') + '_' + Net.matchId;
 }
@@ -880,6 +880,7 @@ Net._beginMatch = async function (m){
   Net.botMode = false;
   Net.friendly = false;
   Net.friendlyHost = false;
+  Net.tour = false;
   Net.matchId = m.matchId;
   Net.matchMode = m.mode || Net.mode;
   Net.mySide = m.side;
@@ -928,6 +929,7 @@ Net.startFriendlyHost = async function (o){
   Net.botMode = false;
   Net.friendly = true;
   Net.friendlyHost = true;
+  Net.tour = false;
   Net.matchId = o.matchId;
   Net.matchMode = (o.mode && MODE_BY_ID[o.mode]) ? o.mode : Net.mode;
   Net.mySide = 'a';
@@ -998,6 +1000,7 @@ Net.joinFriendly = async function (o){
   Net.botMode = false;
   Net.friendly = true;
   Net.friendlyHost = false;
+  Net.tour = false;
   Net.matchId = o.matchId;
   Net.matchMode = (o.mode && MODE_BY_ID[o.mode]) ? o.mode : Net.mode;
   Net.mySide = 'b';
@@ -1049,6 +1052,81 @@ Net.cancelFriendly = async function (){
   await Net.leaveMatch();
 };
 
+/* ---------------- партия турнира ---------------- */
+
+Net.startTour = async function (t){
+  await Net.cancelQueue();
+  Net._clearFallback();
+
+  const myCups = Net.me ? Net.me.cups : 0;
+  const oppCups = t.oppCups || 0;
+
+  Net.botMode = false;
+  Net.friendly = true;
+  Net.friendlyHost = false;
+  Net.tour = true;
+  Net.matchId = t.matchId;
+  Net.matchMode = (t.mode && MODE_BY_ID[t.mode]) ? t.mode : Net.mode;
+  Net.mySide = t.side;
+  Net.host = (t.side === 'a');
+  Net.arena = Math.min(Arena.arenaOf(myCups), Arena.arenaOf(oppCups));
+  Net.finished = false;
+  Net.finishing = false;
+  Net.state = null;
+  Net.lastSeen = Date.now();
+  Net._logReset();
+
+  try { localStorage.removeItem(RECORD_KEY); } catch (e){}
+  try { localStorage.removeItem(STATE_KEY); } catch (e){}
+
+  const meP = { key: Net.key, name: Net.name, cups: myCups };
+  const oppP = { key: t.oppKey, name: t.oppName || 'Игрок', cups: oppCups };
+
+  Net.players = Net.host ? { a: meP, b: oppP } : { a: oppP, b: meP };
+  Net.setups = null;
+  Net.decks  = decksFor(t.side, Net.myDeck(), null);
+  Net.levels = levelsFor(t.side, Net.myLevels(), null);
+
+  await Net._attach();
+
+  Net.emit('start', {
+    side: t.side, arena: Net.arena,
+    opponent: Net.host ? Net.players.b : Net.players.a,
+    state: null, friendly: true, waiting: Net.host,
+    mode: Net.matchMode, tour: true
+  });
+
+  if (!Net.host){
+    if (Net.matchCh){
+      Net.matchCh.send({
+        type: 'broadcast', event: 'hello',
+        payload: {
+          from: Net.key, name: Net.name, cups: myCups,
+          setup: Net.mySetup(), deck: Net.myDeck(), levels: Net.myLevels()
+        }
+      });
+    }
+    if (Net.resumeTimer) clearTimeout(Net.resumeTimer);
+    Net.resumeTimer = setTimeout(function (){
+      Net.resumeTimer = null;
+      if (!Net.state && !Net.finished) Net.emit('resumeFailed', {});
+    }, FRIENDLY_WAIT_MS);
+  }
+};
+
+Net._reportTour = function (winner){
+  const key = winner === 'a' ? Net.players.a.key
+            : (winner === 'b' ? Net.players.b.key : null);
+
+  Net.sb.rpc('tour_report', {
+    p_match:  Net.matchId,
+    p_key:    Net.key,
+    p_winner: key
+  }).then(function (res){
+    if (res.error) console.error('[net] tour report failed', res.error);
+  });
+};
+
 /* ---------------- бой с подставным соперником ---------------- */
 
 function botNickname(){
@@ -1086,6 +1164,7 @@ Net._startBotMatch = async function (){
   Net.botMode = true;
   Net.friendly = false;
   Net.friendlyHost = false;
+  Net.tour = false;
   Net.arena = Math.min(Arena.arenaOf(myCups), Arena.arenaOf(rivalCups));
   Net.finished = false;
   Net.finishing = false;
@@ -1408,7 +1487,8 @@ Net._hostStart = function (){
   Net.emit('start', {
     side: 'a', arena: Net.arena,
     opponent: Net.players.b, state: Net.state,
-    friendly: Net.friendly, mode: def.id
+    friendly: Net.friendly, mode: def.id,
+    tour: !!Net.tour
   });
 
   Net.saveMark = 0;
@@ -1638,6 +1718,7 @@ Net._hostFinish = function (){
 
   const isBot = Net.botMode;
   const isFriendly = Net.friendly;
+  const isTour = Net.tour;
 
   const winnerKey =
     s.winner === 'a' ? Net.players.a.key :
@@ -1655,7 +1736,8 @@ Net._hostFinish = function (){
     setup_a: Net.setups ? Net.setups.a : null,
     setup_b: Net.setups ? Net.setups.b : null,
     moves:   Net.replayLog || [],
-    friendly: isFriendly
+    friendly: isFriendly,
+    tour:     isTour
   };
 
   Net._saveReplay(payload);
@@ -1721,6 +1803,7 @@ Net.tryResume = async function (){
   Net.botMode = isBot;
   Net.friendly = false;
   Net.friendlyHost = false;
+  Net.tour = false;
   Net.state = null;
   Net.lastSeen = Date.now();
 
@@ -1814,9 +1897,12 @@ Net._finish = function (payload){
   if (!payload || Net.finished) return;
 
   const wasBot = !!Net.botMode;
+  const wasTour = !!Net.tour;
 
   Net.finished = true;
   Net.finishing = false;
+
+  if (wasTour) Net._reportTour(payload.winner);
 
   if (Net.botTimer){ clearTimeout(Net.botTimer); Net.botTimer = null; }
 
@@ -1848,6 +1934,7 @@ Net._finish = function (payload){
   const outMode = payload.mode || Net.matchMode;
 
   Net.botMode = false;
+  Net.tour = false;
 
   Net.emit('result', {
     winner: payload.winner,
@@ -1858,6 +1945,7 @@ Net._finish = function (payload){
     floor: Arena.floorOf(after),
     opponent: opp,
     friendly: wasFriendly,
+    tour: wasTour,
     mode: outMode,
     unitWon: false
   });
@@ -1887,6 +1975,7 @@ Net.leaveMatch = async function (){
   Net.botMode = false;
   Net.friendly = false;
   Net.friendlyHost = false;
+  Net.tour = false;
   Net.botThinkUntil = 0;
 };
 
