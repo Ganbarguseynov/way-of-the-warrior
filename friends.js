@@ -1,6 +1,6 @@
 /* ============================================================
-   friends.js — друзья и вызовы на дружескую партию (VER 7)
-   Входящий вызов: Realtime + опрос 5 с как запасной путь.
+   friends.js — друзья и вызовы на дружескую партию (VER 8)
+   Входящий вызов: Realtime + опрос раз в 3 с как запасной путь.
    Отправитель ждёт ответ через watchChallenge (Realtime + опрос 2 с).
    Вызов живёт без пульса 90 секунд.
    ============================================================ */
@@ -12,7 +12,7 @@ const SB_KEY = 'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF';
 
 const ALIVE_MS = 90000;
 const BEAT_MS  = 3000;
-const POLL_MS  = 5000;
+const POLL_MS  = 3000;
 const POLL_ONE_MS = 2000;
 
 const MODE_KEY = 'arenaMode';
@@ -27,7 +27,7 @@ const Friends = {
   _rt: null
 };
 
-Friends.VER = 7;
+Friends.VER = 8;
 
 Friends.client = function (){
   if (!Friends.sb) Friends.sb = global.supabase.createClient(SB_URL, SB_KEY);
