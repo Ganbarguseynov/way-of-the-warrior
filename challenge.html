@@ -38,6 +38,7 @@
 <script>
 const tg = window.Telegram.WebApp;
 tg.ready(); tg.expand();
+if (new URLSearchParams(location.search).get('embed')) document.querySelector('.back-btn').style.display = 'none';
 const sb = supabase.createClient('https://qnpriwfxzuoymoumdtrl.supabase.co', 'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
 
 const EXERCISES = [
