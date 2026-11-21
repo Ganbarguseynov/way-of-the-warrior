@@ -1,9 +1,9 @@
 /* ============================================================
-   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 42)
+   net.js — сеть: очередь, матч, бот, ничья, дружеский вызов (VER 43)
    Бой с ботом идёт через тот же отчёт, что и с игроком.
    Бот — реальная строка arena_players с ключом bot:NNN.
-   Турнирная партия получает серверный дедлайн; результат пишется
-   в tour_results и виден в истории.
+   Турнирная партия получает серверный дедлайн, который продлевается
+   пока приложение открыто; результат пишется в tour_results.
    Состояние уходит только при изменении доски + пульс раз в 2 с.
    Проверка конца партии — не чаще раза в 0.9 с.
    ============================================================ */
@@ -38,6 +38,7 @@ const FRIENDLY_WAIT_MS = 90000;
 
 const TOUR_BOT_MS = 5000;
 const TOUR_LIVE_MIN = 15;
+const TOUR_TOUCH_MS = 60000;
 
 const BOT_PREFIX = 'bot:';
 const BOT_CUPS_RANGE = 150;
@@ -128,7 +129,7 @@ const Net = {
   botSkill: 0.25,
 
   friendly: false, friendlyHost: false,
-  tour: false, tourTrial: false, trialType: null, tourBotTimer: null,
+  tour: false, tourTrial: false, trialType: null, tourBotTimer: null, tourTouchTimer: null,
 
   lastSeen: 0,
   replayLog: [], logMark: 0,
@@ -640,6 +641,7 @@ Net._clearMatch = function (){
   if (Net.botTimer){ clearTimeout(Net.botTimer); Net.botTimer = null; }
   if (Net.resumeTimer){ clearTimeout(Net.resumeTimer); Net.resumeTimer = null; }
   if (Net.tourBotTimer){ clearTimeout(Net.tourBotTimer); Net.tourBotTimer = null; }
+  if (Net.tourTouchTimer){ clearInterval(Net.tourTouchTimer); Net.tourTouchTimer = null; }
   if (Net._stallTimer){ clearInterval(Net._stallTimer); Net._stallTimer = null; }
   if (Net._forfeitTimer){ clearInterval(Net._forfeitTimer); Net._forfeitTimer = null; }
   if (Net._reattachTimer){ clearTimeout(Net._reattachTimer); Net._reattachTimer = null; }
@@ -1227,6 +1229,7 @@ Net.startTour = async function (t){
 
   Net._writeRecord();
   Net._tourLiveStart();
+  Net._startTourTouch();
 
   if (t.bot){
     Net.arena = Arena.arenaOf(myCups);
@@ -1270,8 +1273,9 @@ Net.startTour = async function (t){
   }
 };
 
-/* Серверный дедлайн турнирной партии: пока приложение закрыто,
-   партия не «исчезает», а закрывается по времени как поражение. */
+/* Серверный дедлайн турнирной партии. Пока приложение открыто,
+   дедлайн продлевается; если приложение закрыто — истекает
+   и партия закрывается поражением. */
 Net._tourLiveStart = function (){
   if (!Net.tour || !Net.sb || !Net.matchId) return;
   const opp = Net.players ? (Net.mySide === 'a' ? Net.players.b : Net.players.a) : null;
@@ -1284,6 +1288,18 @@ Net._tourLiveStart = function (){
   }).then(function (res){
     if (res.error) console.error('[net] tour live start failed', res.error);
   });
+};
+
+Net._startTourTouch = function (){
+  if (Net.tourTouchTimer) return;
+  Net.tourTouchTimer = setInterval(function (){
+    if (!Net.tour || Net.finished || !Net.sb || !Net.matchId) return;
+    Net.sb.rpc('tour_live_touch', {
+      p_match: Net.matchId,
+      p_key:   Net.key,
+      p_minutes: TOUR_LIVE_MIN
+    }).then(function (){});
+  }, TOUR_TOUCH_MS);
 };
 
 Net._tourResult = function (winner, seconds){
@@ -2068,8 +2084,8 @@ Net.tryResume = async function (){
     return false;
   }
 
-  /* Турнир: сначала спрашиваем сервер, не истекло ли время.
-     Если истекло — закрываем как поражение и пишем в историю. */
+  /* Турнир: сначала спрашиваем сервер. 'lost' и 'done' значат, что
+     серверный дедлайн уже закрыл партию — показываем поражение, доску не восстанавливаем. */
   if (rec.tour){
     let st = 'none';
     try {
@@ -2077,7 +2093,7 @@ Net.tryResume = async function (){
       if (r0 && !r0.error) st = r0.data || 'none';
     } catch (e){}
 
-    if (st === 'lost'){
+    if (st === 'lost' || st === 'done'){
       const opp0 = rec.players ? (rec.side === 'a' ? rec.players.b : rec.players.a) : null;
       try {
         await Net.sb.rpc('tour_result', {
@@ -2123,6 +2139,8 @@ Net.tryResume = async function (){
   Net._foeSeenAt = 0;
   Net._endCheckAt = 0;
   Net._lastResyncAt = 0;
+
+  if (Net.tour) Net._startTourTouch();
 
   try {
     const savedLog = JSON.parse(localStorage.getItem(LOG_KEY) || '[]');
@@ -2298,7 +2316,7 @@ Net.leaveMatch = async function (){
 Net.DRAW_OFFER_MAX = DRAW_OFFER_MAX;
 Net.SPELL_TYPES = SPELL_TYPES;
 Net.HAND_SIZE = HAND_SIZE;
-Net.VER = 42;
+Net.VER = 43;
 
 global.Net = Net;
 
