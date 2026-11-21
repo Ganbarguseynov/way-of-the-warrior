@@ -14,7 +14,7 @@
 .tab.on { background: #5ac8fa; color: #000; border-color: #5ac8fa; }
 .card { background: #1c1c1e; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #2c2c2e; }
 #map { height: 280px; border-radius: 12px; margin-bottom: 10px; background: #0f0f10; }
-.map-missing { height: 280px; border-radius: 12px; margin-bottom: 10px; background: #0f0f10; display: flex; align-items: center; justify-content: center; text-align: center; padding: 20px; box-sizing: border-box; }
+#map-msg { height: 280px; border-radius: 12px; margin-bottom: 10px; background: #0f0f10; display: none; align-items: center; justify-content: center; text-align: center; padding: 20px; box-sizing: border-box; }
 .big { font-size: 34px; font-weight: bold; text-align: center; }
 .muted { color: #8e8e93; font-size: 13px; }
 .chart-box { background: #2c2c2e; border-radius: 12px; padding: 10px; height: 240px; position: relative; margin-bottom: 10px; }
@@ -57,7 +57,10 @@
 <button class="btn" style="background: #ff3b30; color: #fff; margin-top: 12px;" onclick="stopSession()">Стоп</button>
 </div>
 
-<div id="map-box" style="display: none;"><div id="map"></div></div>
+<div id="map-box" style="display: none;">
+<div id="map"></div>
+<div id="map-msg" class="muted"></div>
+</div>
 
 <div id="result" class="card" style="display: none; font-size: 14px; line-height: 1.6;"></div>
 </div>
@@ -87,9 +90,9 @@
 </div>
 
 <script>
-/* ===== ВСТАВЬТЕ КЛЮЧ GOOGLE MAPS В ЭТУ СТРОКУ ===== */
-const GOOGLE_MAPS_KEY = '';
-/* ================================================== */
+/* ===== ВСТАВЬТЕ КЛЮЧ ЯНДЕКС КАРТ В ЭТУ СТРОКУ ===== */
+const YANDEX_MAPS_KEY = '';
+/* ================================================= */
 
 const tg = window.Telegram.WebApp;
 tg.ready(); tg.expand();
@@ -169,69 +172,65 @@ function showTab(name){
   if (name === 'hist') loadHistory();
 }
 
-function loadGoogleMaps(){
+function loadYandexMaps(){
   return new Promise((resolve, reject) => {
-    if (!GOOGLE_MAPS_KEY) { reject(new Error('no-key')); return; }
-    if (window.google && window.google.maps) { resolve(); return; }
-    window.__gmapsReady = () => resolve();
+    if (!YANDEX_MAPS_KEY) { reject(new Error('no-key')); return; }
+    if (window.ymaps) { ymaps.ready(resolve); return; }
     const s = document.createElement('script');
-    s.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(GOOGLE_MAPS_KEY) + '&loading=async&callback=__gmapsReady';
-    s.async = true;
+    s.src = 'https://api-maps.yandex.ru/2.1/?apikey=' + encodeURIComponent(YANDEX_MAPS_KEY) + '&lang=ru_RU';
+    s.onload = () => ymaps.ready(resolve);
     s.onerror = () => reject(new Error('load-error'));
     document.head.appendChild(s);
   });
 }
 
-function mapPlaceholder(text){
-  $('map-box').style.display = 'block';
-  $('map-box').innerHTML = '<div class="map-missing"><span class="muted">' + text + '</span></div>';
+function showMapMessage(text){
+  $('map').style.display = 'none';
+  $('map-msg').style.display = 'flex';
+  $('map-msg').textContent = text;
 }
 
 async function showMap(){
   $('map-box').style.display = 'block';
+  $('map').style.display = 'block';
+  $('map-msg').style.display = 'none';
   try {
-    await loadGoogleMaps();
+    await loadYandexMaps();
   } catch (e) {
-    mapPlaceholder('Карта Google не подключена: нужен ключ API. Запись дистанции при этом работает.');
+    showMapMessage('Карта не подключена: нужен ключ Яндекс Карт. Запись дистанции при этом работает.');
     return;
   }
   if (!map) {
-    map = new google.maps.Map($('map'), {
-      zoom: 17,
-      center: { lat: 55.75, lng: 37.62 },
-      mapTypeControl: false,
-      fullscreenControl: false,
-      streetViewControl: false
-    });
+    map = new ymaps.Map('map', { center: [55.75, 37.62], zoom: 17, controls: ['zoomControl'] });
   }
 }
 
 function resetMap(){
-  if (polyline) { polyline.setMap(null); polyline = null; }
-  if (marker) { marker.setMap(null); marker = null; }
+  if (!map) return;
+  map.geoObjects.removeAll();
+  polyline = null;
+  marker = null;
 }
 
 function drawLive(){
   const s = session;
   if (!s || !map) return;
-  const path = s.points.map(p => ({ lat: p.lat, lng: p.lon }));
-  if (path.length > 1) {
+  const coords = s.points.map(p => [p.lat, p.lon]);
+  const last = coords[coords.length - 1];
+  if (coords.length > 1) {
     if (!polyline) {
-      polyline = new google.maps.Polyline({
-        map: map, path: path, strokeColor: '#5ac8fa', strokeWeight: 4, strokeOpacity: 0.85
-      });
+      polyline = new ymaps.Polyline(coords, {}, { strokeColor: '#5ac8fa', strokeWidth: 4, strokeOpacity: 0.85 });
+      map.geoObjects.add(polyline);
     } else {
-      polyline.setPath(path);
+      polyline.geometry.setCoordinates(coords);
     }
-    const bounds = new google.maps.LatLngBounds();
-    path.forEach(p => bounds.extend(p));
-    map.fitBounds(bounds);
+    map.setBounds(polyline.geometry.getBounds(), { checkZoomRange: true, zoomMargin: 30 });
   }
-  const last = path[path.length - 1];
   if (!marker) {
-    marker = new google.maps.Marker({ map: map, position: last });
+    marker = new ymaps.Placemark(last, {}, { preset: 'islands#circleIcon', iconColor: '#5ac8fa' });
+    map.geoObjects.add(marker);
   } else {
-    marker.setPosition(last);
+    marker.geometry.setCoordinates(last);
   }
 }
 
@@ -370,7 +369,7 @@ function showResult(rec){
     'Темп / скорость: ' + paceText(sport, rec.distance_m, rec.duration_s) + '<br>' +
     'Калории: около ' + rec.kcal + '<br>' +
     (goalLine ? goalLine + '<br>' : '') +
-    (rec.flagged ? '<span class="muted">Не засчитано точек с подменой GPS: ' + rec.flagged + '</span><br>' : '');
+    (rec.flagged ? '<span class="muted">Не засчитано точек с подменой GPS: ' + rec.flagged + '</span>' : '');
 }
 
 async function stopSession(){
@@ -388,7 +387,7 @@ async function stopSession(){
     $('status').textContent = 'Недостаточно точек GPS, запись не сохранена.';
     return;
   }
-  if (map && polyline) map.fitBounds(polyline.getBounds ? new google.maps.LatLngBounds(s.points.map(p => ({ lat: p.lat, lng: p.lon }))) : null);
+  if (map && polyline) map.setBounds(polyline.geometry.getBounds(), { checkZoomRange: true, zoomMargin: 30 });
 
   const rec = {
     player_key: s.key,
