@@ -241,13 +241,18 @@
   color:rgba(255,255,255,.85); display:flex;
 }
 
-/* Замок всегда поверх блокирующего слоя и меняет вид:
-   открыт — экран свободен, закрыт и жёлтый — экран заблокирован. */
+/* Замок всегда поверх блокирующего слоя.
+   Открыт — просто значок. Закрыт — жёлтый залитый кружок. */
 #lockBtn{
   position:relative; z-index:8;
-  transition:color .15s;
+  border-radius:50%;
+  transition:background .15s, color .15s, box-shadow .15s;
 }
-#lockBtn.locked{ color:#ffcc00; }
+#lockBtn.locked{
+  color:#000;
+  background:#ffcc00;
+  box-shadow:0 0 0 2px rgba(255,204,0,.35), 0 0 18px rgba(255,204,0,.6);
+}
 
 .controls{
   display:grid; grid-template-columns:1fr auto 1fr;
@@ -262,7 +267,7 @@
 .ctl:active{ opacity:.6; }
 
 /* ================= БЛОКИРОВКА =================
-   Прозрачный слой. Экран выглядит как обычно, ни надписей, ни затемнения.
+   Прозрачный слой. Экран выглядит как обычно: ни надписей, ни затемнения.
    Перехватывает все касания, кроме кнопки замка (она выше по z-index). */
 .lock-ov{
   position:absolute; inset:0; z-index:5;
@@ -309,7 +314,7 @@
 <div id="setup" class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Тренировка</h1>
-<div class="wk-ver">ВЕРСИЯ ЗВУКА 23</div>
+<div class="wk-ver">ВЕРСИЯ ЗВУКА 24</div>
 
 <div class="tabs">
   <button id="tabCardio" class="tab" onclick="setTab('cardio')">Кардио</button>
@@ -512,7 +517,9 @@ const SOUND = {
   workAfterRest: { f: 'restEnd',   from: 0, to: 3.57, gain: 2.5 }
 };
 
-/* Сдвиг в секундах: плюс — позже, минус — раньше. */
+/* Сдвиг в секундах: плюс — позже, минус — раньше.
+   prepShift 1.5 = звук подготовки стартует на 1 секунду позже,
+   чем при 0.5: при подготовке 5 с это секунда 3 вместо секунды 2. */
 const TIMING = {
   prepShift: 1.5,
   restEndShift: 1
@@ -526,10 +533,10 @@ const ICON_LOCK_OPEN =
   '</svg>';
 
 const ICON_LOCK_CLOSED =
-  '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" ' +
-  'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+  '<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" ' +
+  'stroke="currentColor" stroke-width="1.4" stroke-linejoin="round">' +
+  '<path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" fill="none"/>' +
   '<rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/>' +
-  '<path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>' +
   '</svg>';
 
 const cfg = {
@@ -895,7 +902,8 @@ function releaseWake(){
   }
 }
 
-/* Вид замка: открытый — экран свободен, закрытый и жёлтый — заблокирован. */
+/* Вид замка: открытый значок — экран свободен,
+   жёлтый залитый кружок с закрытым замком — экран заблокирован. */
 function updateLockIcon(){
   const btn = $('lockBtn');
   btn.innerHTML = locked ? ICON_LOCK_CLOSED : ICON_LOCK_OPEN;
