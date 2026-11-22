@@ -122,6 +122,15 @@
 }
 .wk-start:active{ transform:scale(.98); }
 
+.wk-test{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
+.wk-test button{
+  padding:10px 4px; border-radius:10px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.06);
+  color:#fff; font-size:11px; font-weight:700; cursor:pointer;
+}
+.wk-test button:active{ background:rgba(255,204,0,.2); border-color:#ffcc00; }
+
 .pl-empty{ font-size:12px; color:#8e8e93; line-height:1.5; margin-bottom:10px; }
 .pl-item{
   display:flex; align-items:center; gap:8px;
@@ -289,7 +298,7 @@
 <div id="setup" class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Тренировка</h1>
-<div class="wk-ver">звук v5</div>
+<div class="wk-ver">звук v6</div>
 
 <div class="tabs">
   <button id="tabCardio" class="tab" onclick="setTab('cardio')">Кардио</button>
@@ -305,6 +314,15 @@
 </div>
 
 <div id="paneTimer" class="pane on">
+  <div class="wk-sec">
+    <div class="wk-sec-title">Проверить звуки</div>
+    <div class="wk-test">
+      <button onclick="testCue('prep')">Подготовка</button>
+      <button onclick="testCue('rest')">Начало отдыха</button>
+      <button onclick="testCue('workAfterRest')">Конец отдыха</button>
+    </div>
+  </div>
+
   <div class="wk-sec">
     <div class="wk-sec-title">Мои таймеры</div>
     <div id="presetList"></div>
@@ -466,18 +484,22 @@ const PREP_OPTIONS = [3, 5, 6, 10, 15];
 const WORK_OPTIONS = [60, 120, 180, 300, 600, 900];
 const REST_OPTIONS = [15, 30, 45, 60, 90, 120];
 
-const CLIP_MAIN = 'XRecorder_20261122_01.mp4';
-const CLIP_REST_START = 'XRecorder_20261122_01_2.mp4';
-const CLIP_REST_END = 'XRecorder_20261122_01_1.mp4';
+/* ============================================================
+   ЗВУКИ
+   ============================================================ */
+const FILES = {
+  main:      'XRecorder_20261122_01.mp4',    /* подготовка + переход в тренировку */
+  restEnd:   'XRecorder_20261122_01_1.mp4',  /* конец отдыха + старт тренировки */
+  restStart: 'XRecorder_20261122_01_2.mp4'   /* начало отдыха */
+};
 
-/* ===== РАСКЛАДКА ЗВУКОВ =====
-   Если звук играет не там — меняются только эти четыре строки.
-   from и to — секунды внутри клипа. */
+/* Что и где играть. from / to — секунды внутри файла.
+   Если звук стоит не на своём месте — меняются только эти строки. */
 const SOUND = {
-  prep:          { file: CLIP_MAIN,       from: 0, to: 6 },  // подготовка: весь клип, 6 сек
-  workAfterPrep: { file: CLIP_REST_END,   from: 2, to: 3 },  // старт тренировки
-  rest:          { file: CLIP_REST_START, from: 0, to: 1 },  // начало отдыха
-  workAfterRest: { file: CLIP_REST_END,   from: 0, to: 3 }   // конец отдыха + старт
+  prep:          { f: 'main',      from: 0, to: 6 },   /* вся подготовка, 6 секунд */
+  workAfterPrep: null,                                 /* старт уже внутри клипа подготовки */
+  workAfterRest: { f: 'restEnd',   from: 0, to: 3 },   /* конец отдыха + старт тренировки */
+  rest:          { f: 'restStart', from: 0, to: 1 }    /* начало отдыха */
 };
 
 const cfg = {
@@ -506,148 +528,92 @@ let wakeLock = null;
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2, '0');
 
-/* ==================== ЗВУК ==================== */
-let actx = null;
-let out = null;
-const clipBuf = {};
+/* ==================== ПЛЕЕР (как в sound-test) ==================== */
+const players = {};
+Object.keys(FILES).forEach(function(k){
+  const a = new Audio();
+  a.preload = 'auto';
+  a.src = FILES[k];
+  players[k] = a;
+});
 
-function ac(){
-  try {
-    if (!actx){
-      actx = new (window.AudioContext || window.webkitAudioContext)();
-      const shaper = actx.createWaveShaper();
-      const n = 2048, k = 8, curve = new Float32Array(n);
-      for (let i = 0; i < n; i++){
-        const x = i * 2 / n - 1;
-        curve[i] = Math.tanh(k * x) / Math.tanh(k);
-      }
-      shaper.curve = curve;
-      shaper.oversample = '4x';
-      const comp = actx.createDynamicsCompressor();
-      comp.threshold.value = -8;
-      comp.ratio.value = 12;
-      comp.attack.value = 0.002;
-      comp.release.value = 0.15;
-      out = actx.createGain();
-      out.gain.value = 0.85;
-      out.connect(shaper);
-      shaper.connect(comp);
-      comp.connect(actx.destination);
-    }
-    if (actx.state === 'suspended') actx.resume();
-    return actx;
-  } catch (e) { return null; }
-}
+let stopTimers = [];
 
-function loadClips(){
-  const c = ac();
-  if (!c) return;
-  [CLIP_MAIN, CLIP_REST_START, CLIP_REST_END].forEach(name => {
-    if (clipBuf[name]) return;
-    fetch(name)
-      .then(r => { if (!r.ok) throw new Error(); return r.arrayBuffer(); })
-      .then(b => c.decodeAudioData(b))
-      .then(d => { clipBuf[name] = d; })
-      .catch(() => {});
+function stopAllClips(){
+  stopTimers.forEach(clearTimeout);
+  stopTimers = [];
+  Object.keys(players).forEach(function(k){
+    try { players[k].pause(); } catch (e) {}
   });
 }
 
-/* Проиграть кусок клипа [from, to) в секундах. false — если клип не готов */
-function clip(name, from, to){
-  if (!soundOn) return true;
-  const c = ac();
-  const b = clipBuf[name];
-  if (!c || !b || to <= from) return false;
-  const s = c.createBufferSource();
-  s.buffer = b;
-  s.connect(out);
-  s.start(c.currentTime, from, to - from);
-  return true;
+function playSeg(key, from, to){
+  const a = players[key];
+  if (!a) return;
+  const dur = Math.max(0.05, to - from);
+  const go = function(){
+    try { a.currentTime = from; } catch (e) {}
+    const p = a.play();
+    if (p && p.catch) p.catch(function(){});
+    stopTimers.push(setTimeout(function(){
+      try { a.pause(); } catch (e) {}
+    }, dur * 1000));
+  };
+  if (a.readyState >= 1) go();
+  else a.addEventListener('loadedmetadata', go, { once: true });
 }
 
 function cue(name){
   if (!soundOn) return;
   const s = SOUND[name];
   if (!s) return;
-  if (!clip(s.file, s.from, s.to)) synth(name);
+  stopAllClips();
+  playSeg(s.f, s.from, s.to);
 }
 
-/* Простой тон */
-function hit(type, f0, f1, t0, dur, gain){
-  const c = ac(); if (!c) return;
+function testCue(name){
+  stopAllClips();
+  const s = SOUND[name];
+  if (!s) return;
+  playSeg(s.f, s.from, s.to);
+}
+
+/* ==================== КОРОТКИЕ СИГНАЛЫ ==================== */
+let actx = null;
+
+function ac(){
+  try {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  } catch (e) { return null; }
+}
+
+function beep(freq, dur, gain, delay){
+  const c = ac();
+  if (!c) return;
+  const t0 = c.currentTime + (delay || 0);
   const o = c.createOscillator();
   const g = c.createGain();
-  o.type = type;
-  o.frequency.setValueAtTime(f0, t0);
-  if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+  o.type = 'square';
+  o.frequency.setValueAtTime(freq, t0);
   g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(gain, t0 + 0.005);
+  g.gain.exponentialRampToValueAtTime(gain, t0 + 0.008);
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  o.connect(g); g.connect(out);
+  o.connect(g); g.connect(c.destination);
   o.start(t0); o.stop(t0 + dur + 0.05);
 }
 
-/* Шум */
-function noiseHit(t0, dur, gain, type, freq, q){
-  const c = ac(); if (!c) return;
-  const len = Math.max(1, Math.floor(c.sampleRate * dur));
-  const buf = c.createBuffer(1, len, c.sampleRate);
-  const d = buf.getChannelData(0);
-  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-  const s = c.createBufferSource();
-  s.buffer = buf;
-  const f = c.createBiquadFilter();
-  f.type = type || 'bandpass';
-  f.frequency.value = freq || 1800;
-  f.Q.value = q || 1;
-  const g = c.createGain();
-  g.gain.setValueAtTime(gain, t0);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  s.connect(f); f.connect(g); g.connect(out);
-  s.start(t0); s.stop(t0 + dur + 0.02);
-}
-
-/* Запасные сигналы, если клипы не загрузились */
-function synth(name){
-  const c = ac(); if (!c) return;
-  const t = c.currentTime;
-  if (name === 'prep'){
-    hit('square', 880, 880, t, 0.2, 0.9);
-    hit('square', 880, 880, t + 0.3, 0.2, 0.9);
-    hit('square', 1320, 1320, t + 0.6, 0.4, 0.9);
-    return;
-  }
-  if (name === 'rest'){
-    hit('sine', 90, 36, t, 0.6, 1.0);
-    noiseHit(t, 0.05, 0.8, 'highpass', 1200, 0.6);
-    return;
-  }
-  noiseHit(t, 0.06, 1.0, 'highpass', 900, 0.7);
-  hit('sine', 70, 38, t, 0.9, 1.0);
-  hit('sawtooth', 330, 330, t, 0.55, 0.55);
-  hit('sawtooth', 415, 415, t, 0.55, 0.55);
-  hit('square', 660, 880, t + 0.05, 0.5, 0.45);
-  hit('sawtooth', 495, 495, t + 0.55, 0.45, 0.6);
-  hit('sawtooth', 660, 660, t + 0.55, 0.45, 0.6);
-  hit('square', 990, 990, t + 0.6, 0.6, 0.5);
-}
-
-/* Последние 5 секунд отдыха */
 function playBeep(last){
   if (!soundOn) return;
-  const c = ac(); if (!c) return;
-  const t = c.currentTime;
-  hit('square', last ? 1700 : 1100, null, t, last ? 0.22 : 0.12, 1.0);
+  beep(last ? 1700 : 1100, last ? 0.22 : 0.12, 0.32, 0);
 }
 
-/* Запасной звук победы */
 function playVictory(){
   if (!soundOn) return;
-  const c = ac(); if (!c) return;
-  const t = c.currentTime;
-  [392, 523, 659, 784].forEach((f, i) => hit('sawtooth', f, f, t + i * 0.13, 0.22, 0.7));
-  [523, 659, 784].forEach(f => hit('sawtooth', f, f, t + 0.6, 1.4, 0.45));
-  noiseHit(t + 0.6, 0.15, 0.6, 'highpass', 2000, 0.7);
+  beep(523, 0.3, 0.28, 0);
+  beep(659, 0.3, 0.28, 0.14);
+  beep(784, 0.55, 0.3, 0.28);
 }
 
 function vibrate(p){ if (navigator.vibrate) navigator.vibrate(p); }
@@ -666,10 +632,10 @@ function fmtSec(sec){
 }
 
 function chipsHtml(list, current, kind){
-  return list.map(sec =>
-    '<button class="wk-chip' + (current === sec ? ' on' : '') +
-    '" onclick="pickTime(\'' + kind + '\',' + sec + ')">' + fmtSec(sec) + '</button>'
-  ).join('');
+  return list.map(function(sec){
+    return '<button class="wk-chip' + (current === sec ? ' on' : '') +
+      '" onclick="pickTime(\'' + kind + '\',' + sec + ')">' + fmtSec(sec) + '</button>';
+  }).join('');
 }
 
 function renderChips(){
@@ -740,13 +706,13 @@ function renderPresets(){
     box.appendChild(e);
     return;
   }
-  presets.forEach((p, i) => {
+  presets.forEach(function(p, i){
     const row = document.createElement('div');
     row.className = 'pl-item';
 
     const main = document.createElement('button');
     main.className = 'pl-main';
-    main.onclick = () => loadPreset(i);
+    main.onclick = function(){ loadPreset(i); };
     const title = document.createElement('b');
     title.textContent = p.name;
     const info = document.createElement('span');
@@ -758,7 +724,7 @@ function renderPresets(){
     del.className = 'pl-del';
     del.textContent = '✕';
     del.setAttribute('aria-label', 'Удалить');
-    del.onclick = () => deletePreset(i);
+    del.onclick = function(){ deletePreset(i); };
 
     row.appendChild(main);
     row.appendChild(del);
@@ -845,7 +811,6 @@ function renderExercise(){
 
 function startSession(){
   ac();
-  loadClips();
   finished = false;
   xpEarned = 0;
   round = 1;
@@ -1024,12 +989,13 @@ function finishSession(){
   finished = true;
   clearInterval(iv);
   running = false;
+  stopAllClips();
 
   xpEarned += XP_BONUS;
   awardXP(XP_BONUS);
 
   let played = false;
-  const fallback = () => { if (!played){ played = true; playVictory(); } };
+  const fallback = function(){ if (!played){ played = true; playVictory(); } };
   try {
     const a = new Audio('12. Scroll Win 02.mp3');
     a.volume = 1;
@@ -1061,7 +1027,7 @@ async function toggleWake(){
       wakeLock = null;
     } else if ('wakeLock' in navigator){
       wakeLock = await navigator.wakeLock.request('screen');
-      wakeLock.addEventListener('release', () => { wakeLock = null; updateLockIcon(); });
+      wakeLock.addEventListener('release', function(){ wakeLock = null; updateLockIcon(); });
     } else {
       tg.showAlert('Этот браузер не умеет не гасить экран.');
     }
@@ -1092,7 +1058,7 @@ function updateSoundIcon(){
 }
 
 function goBackToMain(){
-  setTimeout(() => { window.location.href = 'index.html'; }, 100);
+  setTimeout(function(){ window.location.href = 'index.html'; }, 100);
 }
 
 /* ==================== СТАРТ ==================== */
@@ -1102,7 +1068,6 @@ renderChips();
 updateSummary();
 updateSoundIcon();
 updateLockIcon();
-loadClips();
 </script>
 </body>
 </html>
