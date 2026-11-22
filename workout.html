@@ -306,7 +306,7 @@
 <div id="setup" class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Тренировка</h1>
-<div class="wk-ver">ВЕРСИЯ ЗВУКА 8</div>
+<div class="wk-ver">ВЕРСИЯ ЗВУКА 9</div>
 
 <div class="tabs">
   <button id="tabCardio" class="tab" onclick="setTab('cardio')">Кардио</button>
@@ -511,23 +511,26 @@ const FILES = {
   restEnd:   'XRecorder_20261122_01_1.mp4'
 };
 
-/* Какой кусок файла играет в какой момент. from / to — секунды. */
+/* Какой кусок файла играет в какой момент. from / to — секунды.
+   main:      1-5 с подготовка, 5-6 с старт тренировки
+   restEnd:   1-2 с конец отдыха, 2-3 с старт тренировки
+   restStart: весь файл, 1 секунда */
 const SOUND = {
-  prep:          { f: 'main',      from: 0, to: 6 },
-  workAfterPrep: null,
+  prep:          { f: 'main',      from: 1, to: 5 },
+  workAfterPrep: { f: 'main',      from: 5, to: 6 },
   rest:          { f: 'restStart', from: 0, to: 1 },
-  workAfterRest: { f: 'restEnd',   from: 0, to: 3 }
+  workAfterRest: { f: 'restEnd',   from: 1, to: 3 }
 };
 
 const cfg = {
-  prep:   parseInt(localStorage.getItem('wkPrep'))   || 6,
-  work:   parseInt(localStorage.getItem('wkWork'))   || 300,
-  rest:   parseInt(localStorage.getItem('wkRest'))   || 60,
-  rounds: parseInt(localStorage.getItem('wkRounds')) || 3
+  prep:   parseInt(localStorage.getItem('wkPrep9'))   || 5,
+  work:   parseInt(localStorage.getItem('wkWork9'))   || 300,
+  rest:   parseInt(localStorage.getItem('wkRest9'))   || 60,
+  rounds: parseInt(localStorage.getItem('wkRounds9')) || 3
 };
 
 let presets = [];
-try { presets = JSON.parse(localStorage.getItem('wkPresets') || '[]'); } catch (e) { presets = []; }
+try { presets = JSON.parse(localStorage.getItem('wkPresets9') || '[]'); } catch (e) { presets = []; }
 
 let phase = 'prep';
 let round = 1;
@@ -672,10 +675,10 @@ function renderChips(){
 }
 
 function saveCfg(){
-  localStorage.setItem('wkPrep', cfg.prep);
-  localStorage.setItem('wkWork', cfg.work);
-  localStorage.setItem('wkRest', cfg.rest);
-  localStorage.setItem('wkRounds', cfg.rounds);
+  localStorage.setItem('wkPrep9', cfg.prep);
+  localStorage.setItem('wkWork9', cfg.work);
+  localStorage.setItem('wkRest9', cfg.rest);
+  localStorage.setItem('wkRounds9', cfg.rounds);
 }
 
 function pickTime(kind, sec){
@@ -773,7 +776,7 @@ function savePreset(){
     work: cfg.work,
     rest: cfg.rest
   });
-  localStorage.setItem('wkPresets', JSON.stringify(presets));
+  localStorage.setItem('wkPresets9', JSON.stringify(presets));
   $('presetName').value = '';
   setPresetStatus('');
   renderPresets();
@@ -798,7 +801,7 @@ function deletePreset(i){
   if (!p) return;
   if (!confirm('Удалить таймер «' + p.name + '»?')) return;
   presets.splice(i, 1);
-  localStorage.setItem('wkPresets', JSON.stringify(presets));
+  localStorage.setItem('wkPresets9', JSON.stringify(presets));
   renderPresets();
 }
 
