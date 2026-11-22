@@ -14,6 +14,9 @@ function todayStr(){
   var d=new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
+function localKey(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
 function yesterdayStr(){
   var d=new Date();d.setDate(d.getDate()-1);
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
@@ -110,6 +113,9 @@ async function loginWithTelegram(){
       localStorage.setItem('todayWater','[]');
       localStorage.setItem('waterListDate',td);
     }
+    if(rec.profile.weightHistory&&Array.isArray(rec.profile.weightHistory)){
+      localStorage.setItem('weightHistory',JSON.stringify(rec.profile.weightHistory));
+    }
     if(rec.email){
       localStorage.setItem('linkedEmail',rec.email);
       localStorage.setItem('currentEmail',rec.email);
@@ -176,6 +182,9 @@ async function handleEmailAuth(){
         localStorage.setItem('todayWater','[]');
         localStorage.setItem('waterListDate',td);
       }
+      if(rec.profile.weightHistory&&Array.isArray(rec.profile.weightHistory)){
+        localStorage.setItem('weightHistory',JSON.stringify(rec.profile.weightHistory));
+      }
       if(rec.telegram_id){
         localStorage.setItem('tgId',rec.telegram_id);
         localStorage.setItem('linkedEmail',email);
@@ -219,6 +228,8 @@ async function saveOnboardingData(){
   if(!age||!weight||!height){tg.showAlert('Пожалуйста, заполни возраст, вес и рост!');return;}
   var water=weight?Math.round(parseFloat(weight)*30):2000;
   var prof={age:age,gender:gender,weight:weight,height:height,goal:goal,custom_calories:'',custom_protein:'',custom_fat:'',custom_carbs:'',custom_water_goal:water,food_preference:pref};
+  saveWeightToHistory(parseFloat(weight));
+  try{prof.weightHistory=JSON.parse(localStorage.getItem('weightHistory')||'[]');}catch(err){}
   localStorage.setItem('cachedProfile',JSON.stringify(prof));
   var t=localStorage.getItem('tgId');
   var e=localStorage.getItem('currentEmail')||localStorage.getItem('linkedEmail');
@@ -423,8 +434,11 @@ async function saveWeightFromDiary(){
   if(!w||w<=0){tg.showAlert('Введите корректный вес!');return;}
   if(!currentProfileData)return;
   currentProfileData.weight=w;
-  localStorage.setItem('cachedProfile',JSON.stringify(currentProfileData));
   saveWeightToHistory(w);
+  var wl=[];
+  try{wl=JSON.parse(localStorage.getItem('weightHistory')||'[]');}catch(err){wl=[];}
+  currentProfileData.weightHistory=wl;
+  localStorage.setItem('cachedProfile',JSON.stringify(currentProfileData));
   await saveProgressToCloud(localStorage.getItem('tgId'),localStorage.getItem('currentEmail'),localStorage.getItem('userName'),currentProfileData,currentXP,totalBurnedCalories);
   updateDashboard();
   renderWeightDiary();
@@ -437,9 +451,15 @@ function renderWeightDiary(){
   if(!from||!to)return;
   var hist=[];
   try{hist=JSON.parse(localStorage.getItem('weightHistory')||'[]');}catch(err){hist=[];}
+  if(hist.length===0&&currentProfileData&&Array.isArray(currentProfileData.weightHistory)){
+    hist=currentProfileData.weightHistory;
+    localStorage.setItem('weightHistory',JSON.stringify(hist));
+  }
   var labels=[],data=[];
-  for(var d=new Date(from);d<=new Date(to);d.setDate(d.getDate()+1)){
-    var key=d.toISOString().split('T')[0];
+  var startD=new Date(from+'T00:00:00');
+  var endD=new Date(to+'T00:00:00');
+  for(var d=new Date(startD);d<=endD;d.setDate(d.getDate()+1)){
+    var key=localKey(d);
     labels.push(key.split('-').slice(1).reverse().join('.'));
     var found=hist.find(function(x){return x.dateRaw===key||(x.date&&x.date.split('.').reverse().join('-')===key);});
     if(found)data.push(found.weight);
@@ -555,8 +575,10 @@ function renderWaterDiary(){
   var hist={};
   try{hist=JSON.parse(localStorage.getItem('waterHistory')||'{}');}catch(err){hist={};}
   var labels=[],data=[],total=0;
-  for(var d=new Date(from);d<=new Date(to);d.setDate(d.getDate()+1)){
-    var key=d.toISOString().split('T')[0];
+  var startD=new Date(from+'T00:00:00');
+  var endD=new Date(to+'T00:00:00');
+  for(var d=new Date(startD);d<=endD;d.setDate(d.getDate()+1)){
+    var key=localKey(d);
     labels.push(key.split('-').slice(1).reverse().join('.'));
     var sum=0;
     (hist[key]||[]).forEach(function(w){sum+=parseInt(w.amount||0);});
@@ -599,8 +621,10 @@ function renderFoodDiary(){
   try{hist=JSON.parse(localStorage.getItem('foodHistory')||'{}');}catch(err){hist={};}
   var labels=[],cal=[],prot=[],fat=[],carb=[];
   var tCal=0,tProt=0,tFat=0,tCarb=0;
-  for(var d=new Date(from);d<=new Date(to);d.setDate(d.getDate()+1)){
-    var key=d.toISOString().split('T')[0];
+  var startD=new Date(from+'T00:00:00');
+  var endD=new Date(to+'T00:00:00');
+  for(var d=new Date(startD);d<=endD;d.setDate(d.getDate()+1)){
+    var key=localKey(d);
     labels.push(key.split('-').slice(1).reverse().join('.'));
     var items=hist[key]||[];
     var c=0,pr=0,f=0,cb=0;
@@ -667,8 +691,8 @@ function openGlobalStatsModal(){
   var to=new Date();
   var from=new Date();
   from.setDate(to.getDate()-7);
-  document.getElementById('global-start-date').value=from.toISOString().split('T')[0];
-  document.getElementById('global-end-date').value=to.toISOString().split('T')[0];
+  document.getElementById('global-start-date').value=localKey(from);
+  document.getElementById('global-end-date').value=localKey(to);
   openScreen('global-stats-screen');
   setTimeout(function(){renderAllCharts();},100);
 }
@@ -682,9 +706,15 @@ function renderAllCharts(){
   try{foodHist=JSON.parse(localStorage.getItem('foodHistory')||'{}');}catch(err){foodHist={};}
   try{waterHist=JSON.parse(localStorage.getItem('waterHistory')||'{}');}catch(err){waterHist={};}
   try{weights=JSON.parse(localStorage.getItem('weightHistory')||'[]');}catch(err){weights=[];}
+  if(weights.length===0&&currentProfileData&&Array.isArray(currentProfileData.weightHistory)){
+    weights=currentProfileData.weightHistory;
+    localStorage.setItem('weightHistory',JSON.stringify(weights));
+  }
   var labels=[],wData=[],cal=[],prot=[],fat=[],carb=[],water=[];
-  for(var d=new Date(from);d<=new Date(to);d.setDate(d.getDate()+1)){
-    var key=d.toISOString().split('T')[0];
+  var startD=new Date(from+'T00:00:00');
+  var endD=new Date(to+'T00:00:00');
+  for(var d=new Date(startD);d<=endD;d.setDate(d.getDate()+1)){
+    var key=localKey(d);
     labels.push(key.split('-').slice(1).reverse().join('.'));
     var wf=weights.find(function(x){return x.dateRaw===key||(x.date&&x.date.split('.').reverse().join('-')===key);});
     if(wf)wData.push(wf.weight);
@@ -742,13 +772,13 @@ function setPeriod(kind,range){
   var s=document.getElementById(kind+'-start-date');
   var e=document.getElementById(kind+'-end-date');
   var now=new Date();
-  e.value=now.toISOString().split('T')[0];
+  e.value=localKey(now);
   if(range==='7days'){
-    var a=new Date(now);a.setDate(now.getDate()-7);s.value=a.toISOString().split('T')[0];
+    var a=new Date(now);a.setDate(now.getDate()-7);s.value=localKey(a);
   }else if(range==='30days'){
-    var b=new Date(now);b.setDate(now.getDate()-30);s.value=b.toISOString().split('T')[0];
+    var b=new Date(now);b.setDate(now.getDate()-30);s.value=localKey(b);
   }else if(range==='month'){
-    var c=new Date(now.getFullYear(),now.getMonth(),1);s.value=c.toISOString().split('T')[0];
+    var c=new Date(now.getFullYear(),now.getMonth(),1);s.value=localKey(c);
   }
   if(kind==='water')renderWaterDiary();
   if(kind==='food')renderFoodDiary();
@@ -1079,6 +1109,10 @@ async function saveProfile(){
   var newW=parseFloat(weight);
   if(oldW&&oldW!==newW)saveWeightToHistory(newW);
   var prof={age:age,gender:gender,weight:weight,height:height,goal:goal,custom_calories:cc,custom_protein:cp,custom_fat:cf,custom_carbs:ccar,custom_water_goal:parseInt(cw)||2000,food_preference:pref};
+  if(currentProfileData&&Array.isArray(currentProfileData.weightHistory))prof.weightHistory=currentProfileData.weightHistory;
+  var wl=[];
+  try{wl=JSON.parse(localStorage.getItem('weightHistory')||'[]');}catch(err){wl=[];}
+  if(wl.length>0)prof.weightHistory=wl;
   localStorage.setItem('cachedProfile',JSON.stringify(prof));
   await saveProgressToCloud(localStorage.getItem('tgId'),localStorage.getItem('currentEmail'),localStorage.getItem('userName'),prof,currentXP,totalBurnedCalories);
   renderProfile(prof);
