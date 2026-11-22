@@ -306,7 +306,7 @@
 <div id="setup" class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Тренировка</h1>
-<div class="wk-ver">ВЕРСИЯ ЗВУКА 9</div>
+<div class="wk-ver">ВЕРСИЯ ЗВУКА 10</div>
 
 <div class="tabs">
   <button id="tabCardio" class="tab" onclick="setTab('cardio')">Кардио</button>
@@ -504,17 +504,20 @@ const REST_OPTIONS = [15, 30, 45, 60, 90, 120];
 
 /* ============================================================
    ЗВУКИ. Файлы лежат в одной папке с workout.html.
+   prep:    XRecorder_20261122_01_1.mp4  (6.38 с)
+   restEnd: XRecorder_20261122_01.mp4    (3.57 с)
+   restStart: XRecorder_20261122_01_2.mp4 (2.17 с)
    ============================================================ */
 const FILES = {
-  main:      'XRecorder_20261122_01.mp4',
+  main:      'XRecorder_20261122_01_1.mp4',
   restStart: 'XRecorder_20261122_01_2.mp4',
-  restEnd:   'XRecorder_20261122_01_1.mp4'
+  restEnd:   'XRecorder_20261122_01.mp4'
 };
 
 /* Какой кусок файла играет в какой момент. from / to — секунды.
    main:      1-5 с подготовка, 5-6 с старт тренировки
    restEnd:   1-2 с конец отдыха, 2-3 с старт тренировки
-   restStart: весь файл, 1 секунда */
+   restStart: 0-1 с начало отдыха */
 const SOUND = {
   prep:          { f: 'main',      from: 1, to: 5 },
   workAfterPrep: { f: 'main',      from: 5, to: 6 },
