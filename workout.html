@@ -306,7 +306,7 @@
 <div id="setup" class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Тренировка</h1>
-<div class="wk-ver">ВЕРСИЯ ЗВУКА 12</div>
+<div class="wk-ver">ВЕРСИЯ ЗВУКА 13</div>
 
 <div class="tabs">
   <button id="tabCardio" class="tab" onclick="setTab('cardio')">Кардио</button>
@@ -506,8 +506,10 @@ const REST_OPTIONS = [15, 30, 45, 60, 90, 120];
    ЗВУКИ. Файлы лежат в одной папке с workout.html.
 
    XRecorder_20261122_01_1.mp4   6.38 с  — подготовка (1-5) + старт (5-6)
-   XRecorder_20261122_01.mp4     3.57 с  — конец отдыха (1-2)
-   XRecorder_20261122_01_2.mp4   2.17 с  — начало отдыха
+   XRecorder_20261122_01.mp4     3.57 с  — конец отдыха (0-3)
+   XRecorder_20261122_01_2.mp4   2.17 с  — начало отдыха (0-1)
+
+   gain — усиление громкости. 1 = как в файле.
    ============================================================ */
 const FILES = {
   main:      'XRecorder_20261122_01_1.mp4',
@@ -515,12 +517,11 @@ const FILES = {
   restEnd:   'XRecorder_20261122_01.mp4'
 };
 
-/* Какой кусок файла играет в какой момент. from / to — секунды, gain — громкость. */
 const SOUND = {
-  prep:          { f: 'main',      from: 1, to: 5, gain: 2 },
-  workAfterPrep: { f: 'main',      from: 5, to: 6, gain: 1 },
-  rest:          { f: 'restStart', from: 0, to: 1, gain: 1 },
-  workAfterRest: { f: 'restEnd',   from: 1, to: 2, gain: 1 }
+  prep:          { f: 'main',      from: 1, to: 5, gain: 3 },
+  workAfterPrep: { f: 'main',      from: 5, to: 6, gain: 1.8 },
+  rest:          { f: 'restStart', from: 0, to: 1, gain: 1.8 },
+  workAfterRest: { f: 'restEnd',   from: 0, to: 3, gain: 2.5 }
 };
 
 const cfg = {
@@ -549,35 +550,6 @@ let wakeLock = null;
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2, '0');
 
-/* ==================== АУДИО-ГРАФ ==================== */
-let actx = null;
-let mixGain = null;
-
-function ac(){
-  try {
-    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
-    if (actx.state === 'suspended') actx.resume();
-    return actx;
-  } catch (e) { return null; }
-}
-
-function graph(){
-  if (mixGain) return true;
-  const c = ac();
-  if (!c) return false;
-  try {
-    mixGain = c.createGain();
-    mixGain.connect(c.destination);
-    Object.keys(players).forEach(function(k){
-      c.createMediaElementSource(players[k]).connect(mixGain);
-    });
-    return true;
-  } catch (e) {
-    mixGain = null;
-    return false;
-  }
-}
-
 /* ==================== ПЛЕЕР ==================== */
 const players = {};
 const statusEl = { main: 'stMain', restStart: 'stRestStart', restEnd: 'stRestEnd' };
@@ -601,6 +573,42 @@ Object.keys(FILES).forEach(function(k){
 
 let stopTimers = [];
 
+let masterGain = null;
+const routed = {};
+
+function masterChain(){
+  const c = ac();
+  if (!c) return null;
+  if (masterGain) return masterGain;
+  const comp = c.createDynamicsCompressor();
+  comp.threshold.value = -12;
+  comp.knee.value = 8;
+  comp.ratio.value = 12;
+  comp.attack.value = 0.003;
+  comp.release.value = 0.25;
+  masterGain = c.createGain();
+  masterGain.gain.value = 1;
+  masterGain.connect(comp);
+  comp.connect(c.destination);
+  return masterGain;
+}
+
+function routePlayer(k){
+  const c = ac();
+  if (!c) return null;
+  if (routed[k]) return routed[k];
+  try {
+    const m = masterChain();
+    if (!m) return null;
+    const g = c.createGain();
+    g.gain.value = 1;
+    c.createMediaElementSource(players[k]).connect(g);
+    g.connect(m);
+    routed[k] = g;
+    return g;
+  } catch (e) { return null; }
+}
+
 function stopAllClips(){
   stopTimers.forEach(clearTimeout);
   stopTimers = [];
@@ -612,19 +620,31 @@ function stopAllClips(){
 function playSeg(key, from, to, gain){
   const a = players[key];
   if (!a) return;
-  graph();
-  if (mixGain && actx) mixGain.gain.setValueAtTime(gain || 1, actx.currentTime);
+
+  const g = routePlayer(key);
+  if (g && actx) g.gain.setValueAtTime(Math.max(0.01, gain || 1), actx.currentTime);
+
   const dur = Math.max(0.05, to - from);
-  const go = function(){
-    try { a.currentTime = from; } catch (e) {}
+  let started = false;
+
+  const start = function(){
+    if (started) return;
+    started = true;
     const p = a.play();
     if (p && p.catch) p.catch(function(){});
     stopTimers.push(setTimeout(function(){
       try { a.pause(); } catch (e) {}
     }, dur * 1000));
   };
-  if (a.readyState >= 1) go();
-  else a.addEventListener('loadedmetadata', go, { once: true });
+
+  const seek = function(){
+    try { a.currentTime = from; } catch (e) {}
+    a.addEventListener('seeked', start, { once: true });
+    stopTimers.push(setTimeout(start, 300));
+  };
+
+  if (a.readyState >= 1) seek();
+  else a.addEventListener('loadedmetadata', seek, { once: true });
 }
 
 function cue(name){
@@ -643,6 +663,16 @@ function testCue(name){
 }
 
 /* ==================== КОРОТКИЕ СИГНАЛЫ ==================== */
+let actx = null;
+
+function ac(){
+  try {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  } catch (e) { return null; }
+}
+
 function beep(freq, dur, gain, delay){
   const c = ac();
   if (!c) return;
@@ -865,7 +895,6 @@ function renderExercise(){
 
 function startSession(){
   ac();
-  graph();
   finished = false;
   xpEarned = 0;
   round = 1;
