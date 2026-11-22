@@ -314,7 +314,7 @@
 <div id="setup" class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Тренировка</h1>
-<div class="wk-ver">ВЕРСИЯ ЗВУКА 24</div>
+<div class="wk-ver">ВЕРСИЯ ЗВУКА 25</div>
 
 <div class="tabs">
   <button id="tabCardio" class="tab" onclick="setTab('cardio')">Кардио</button>
@@ -518,11 +518,11 @@ const SOUND = {
 };
 
 /* Сдвиг в секундах: плюс — позже, минус — раньше.
-   prepShift 1.5 = звук подготовки стартует на 1 секунду позже,
-   чем при 0.5: при подготовке 5 с это секунда 3 вместо секунды 2. */
+   prepShift 1.5 — звук подготовки стартует на 3-й секунде при подготовке 5 с.
+   restEndShift 1.5 — звук конца отдыха звучит на полсекунды позже, чем при 1. */
 const TIMING = {
   prepShift: 1.5,
-  restEndShift: 1
+  restEndShift: 1.5
 };
 
 const ICON_LOCK_OPEN =
@@ -988,7 +988,9 @@ function enterPhase(p){
   renderExercise();
 
   clearCueTimers();
-  if (!(p === 'work' && prev === 'rest')) stopAllClips();
+  /* Вход в тренировку не рубит звук: хвост подготовки и хвост конца отдыха
+     доигрывают полностью, как и было записано в файле. */
+  if (p !== 'work') stopAllClips();
 
   if (p === 'prep'){
     scheduleEndingAt('prep', sec * 1000, TIMING.prepShift, 'prep');
