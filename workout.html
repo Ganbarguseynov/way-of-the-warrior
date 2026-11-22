@@ -306,7 +306,7 @@
 <div id="setup" class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Тренировка</h1>
-<div class="wk-ver">ВЕРСИЯ ЗВУКА 11</div>
+<div class="wk-ver">ВЕРСИЯ ЗВУКА 12</div>
 
 <div class="tabs">
   <button id="tabCardio" class="tab" onclick="setTab('cardio')">Кардио</button>
@@ -506,7 +506,7 @@ const REST_OPTIONS = [15, 30, 45, 60, 90, 120];
    ЗВУКИ. Файлы лежат в одной папке с workout.html.
 
    XRecorder_20261122_01_1.mp4   6.38 с  — подготовка (1-5) + старт (5-6)
-   XRecorder_20261122_01.mp4     3.57 с  — конец отдыха (1-2) + старт (2-3)
+   XRecorder_20261122_01.mp4     3.57 с  — конец отдыха (1-2)
    XRecorder_20261122_01_2.mp4   2.17 с  — начало отдыха
    ============================================================ */
 const FILES = {
@@ -515,12 +515,12 @@ const FILES = {
   restEnd:   'XRecorder_20261122_01.mp4'
 };
 
-/* Какой кусок файла играет в какой момент. from / to — секунды. */
+/* Какой кусок файла играет в какой момент. from / to — секунды, gain — громкость. */
 const SOUND = {
-  prep:          { f: 'main',      from: 1, to: 5 },
-  workAfterPrep: { f: 'main',      from: 5, to: 6 },
-  rest:          { f: 'restStart', from: 0, to: 1 },
-  workAfterRest: { f: 'restEnd',   from: 1, to: 3 }
+  prep:          { f: 'main',      from: 1, to: 5, gain: 2 },
+  workAfterPrep: { f: 'main',      from: 5, to: 6, gain: 1 },
+  rest:          { f: 'restStart', from: 0, to: 1, gain: 1 },
+  workAfterRest: { f: 'restEnd',   from: 1, to: 2, gain: 1 }
 };
 
 const cfg = {
@@ -548,6 +548,35 @@ let wakeLock = null;
 
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2, '0');
+
+/* ==================== АУДИО-ГРАФ ==================== */
+let actx = null;
+let mixGain = null;
+
+function ac(){
+  try {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  } catch (e) { return null; }
+}
+
+function graph(){
+  if (mixGain) return true;
+  const c = ac();
+  if (!c) return false;
+  try {
+    mixGain = c.createGain();
+    mixGain.connect(c.destination);
+    Object.keys(players).forEach(function(k){
+      c.createMediaElementSource(players[k]).connect(mixGain);
+    });
+    return true;
+  } catch (e) {
+    mixGain = null;
+    return false;
+  }
+}
 
 /* ==================== ПЛЕЕР ==================== */
 const players = {};
@@ -580,9 +609,11 @@ function stopAllClips(){
   });
 }
 
-function playSeg(key, from, to){
+function playSeg(key, from, to, gain){
   const a = players[key];
   if (!a) return;
+  graph();
+  if (mixGain && actx) mixGain.gain.setValueAtTime(gain || 1, actx.currentTime);
   const dur = Math.max(0.05, to - from);
   const go = function(){
     try { a.currentTime = from; } catch (e) {}
@@ -601,27 +632,17 @@ function cue(name){
   const s = SOUND[name];
   if (!s) return;
   stopAllClips();
-  playSeg(s.f, s.from, s.to);
+  playSeg(s.f, s.from, s.to, s.gain);
 }
 
 function testCue(name){
   stopAllClips();
   const s = SOUND[name];
   if (!s) return;
-  playSeg(s.f, s.from, s.to);
+  playSeg(s.f, s.from, s.to, s.gain);
 }
 
 /* ==================== КОРОТКИЕ СИГНАЛЫ ==================== */
-let actx = null;
-
-function ac(){
-  try {
-    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
-    if (actx.state === 'suspended') actx.resume();
-    return actx;
-  } catch (e) { return null; }
-}
-
 function beep(freq, dur, gain, delay){
   const c = ac();
   if (!c) return;
@@ -844,6 +865,7 @@ function renderExercise(){
 
 function startSession(){
   ac();
+  graph();
   finished = false;
   xpEarned = 0;
   round = 1;
