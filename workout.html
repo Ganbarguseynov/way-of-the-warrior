@@ -306,7 +306,7 @@
 <div id="setup" class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Тренировка</h1>
-<div class="wk-ver">ВЕРСИЯ ЗВУКА 14</div>
+<div class="wk-ver">ВЕРСИЯ ЗВУКА 15</div>
 
 <div class="tabs">
   <button id="tabCardio" class="tab" onclick="setTab('cardio')">Кардио</button>
@@ -512,9 +512,10 @@ const REST_OPTIONS = [15, 30, 45, 60, 90, 120];
    from / to — секунды внутри файла.
    gain — усиление громкости, 1 = как в файле.
 
-   prep         играет в конце подготовки, впритык к её завершению
+   prep         запускается автоматически так, чтобы закончиться
+                ровно в момент перехода к тренировке
    workAfterPrep звука в начале тренировки после подготовки нет
-   workAfterRest играет в конце отдыха, за 3 секунды до старта
+   workAfterRest запускается за 3 секунды до конца отдыха
    ============================================================ */
 const FILES = {
   main:      'XRecorder_20261122_01_1.mp4',
@@ -523,7 +524,7 @@ const FILES = {
 };
 
 const SOUND = {
-  prep:          { f: 'main',      from: 2, to: 6, gain: 3 },
+  prep:          { f: 'main',      from: 3, to: 6, gain: 3 },
   workAfterPrep: null,
   rest:          { f: 'restStart', from: 0, to: 1, gain: 1.8 },
   workAfterRest: { f: 'restEnd',   from: 0, to: 3, gain: 2.5 }
@@ -548,7 +549,6 @@ let running = false;
 let iv = null;
 let xpEarned = 0;
 let finished = false;
-let lastBeep = -1;
 let soundOn = localStorage.getItem('wkSound') !== 'off';
 let wakeLock = null;
 let restCueDone = false;
@@ -698,11 +698,6 @@ function beep(freq, dur, gain, delay){
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
   o.connect(g); g.connect(c.destination);
   o.start(t0); o.stop(t0 + dur + 0.05);
-}
-
-function playBeep(last){
-  if (!soundOn) return;
-  beep(last ? 1700 : 1100, last ? 0.22 : 0.12, 0.32, 0);
 }
 
 function playVictory(){
@@ -923,7 +918,6 @@ function enterPhase(p){
   remainingMs = totalMs;
   endAt = Date.now() + remainingMs;
   running = true;
-  lastBeep = -1;
   restCueDone = false;
 
   const run = $('run');
@@ -940,7 +934,7 @@ function enterPhase(p){
   stopAllClips();
 
   if (p === 'prep'){
-    /* звук подготовки ставим впритык к концу фазы */
+    /* звук ставим так, чтобы он закончился ровно на старте тренировки */
     const snd = SOUND.prep;
     const len = snd ? (snd.to - snd.from) : 0;
     const delay = Math.max(0, sec - len) * 1000;
@@ -970,10 +964,6 @@ function tick(){
     if (!restCueDone && s <= 3 && s > 0){
       restCueDone = true;
       cue('workAfterRest');
-    }
-    if (!restCueDone && s <= 5 && s > 0 && s !== lastBeep){
-      lastBeep = s;
-      playBeep(s === 1);
     }
   }
   render();
