@@ -306,7 +306,7 @@
 <div id="setup" class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Тренировка</h1>
-<div class="wk-ver">ВЕРСИЯ ЗВУКА 15</div>
+<div class="wk-ver">ВЕРСИЯ ЗВУКА 16</div>
 
 <div class="tabs">
   <button id="tabCardio" class="tab" onclick="setTab('cardio')">Кардио</button>
@@ -510,12 +510,7 @@ const REST_OPTIONS = [15, 30, 45, 60, 90, 120];
    XRecorder_20261122_01_2.mp4   2.17 с  — начало отдыха
 
    from / to — секунды внутри файла.
-   gain — усиление громкости, 1 = как в файле.
-
-   prep         запускается автоматически так, чтобы закончиться
-                ровно в момент перехода к тренировке
-   workAfterPrep звука в начале тренировки после подготовки нет
-   workAfterRest запускается за 3 секунды до конца отдыха
+   gain      — усиление громкости, 1 = как в файле.
    ============================================================ */
 const FILES = {
   main:      'XRecorder_20261122_01_1.mp4',
@@ -528,6 +523,14 @@ const SOUND = {
   workAfterPrep: null,
   rest:          { f: 'restStart', from: 0, to: 1, gain: 1.8 },
   workAfterRest: { f: 'restEnd',   from: 0, to: 3, gain: 2.5 }
+};
+
+/* Сдвиг звука, в секундах. Плюс — позже, минус — раньше.
+   Если последний удар приходит слишком рано — увеличьте число.
+   Если перелезает в тренировку — уменьшите или сделайте отрицательным. */
+const TIMING = {
+  prepShift: 0.5,   /* звук подготовки */
+  restShift: 0      /* звук конца отдыха */
 };
 
 const cfg = {
@@ -551,10 +554,20 @@ let xpEarned = 0;
 let finished = false;
 let soundOn = localStorage.getItem('wkSound') !== 'off';
 let wakeLock = null;
-let restCueDone = false;
 
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2, '0');
+
+/* ==================== АУДИО-КОНТЕКСТ ==================== */
+let actx = null;
+
+function ac(){
+  try {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  } catch (e) { return null; }
+}
 
 /* ==================== ПЛЕЕР ==================== */
 const players = {};
@@ -652,7 +665,7 @@ function playSeg(key, from, to, gain){
   const seek = function(){
     try { a.currentTime = from; } catch (e) {}
     a.addEventListener('seeked', start, { once: true });
-    stopTimers.push(setTimeout(start, 300));
+    stopTimers.push(setTimeout(start, 120));
   };
 
   if (a.readyState >= 1) seek();
@@ -660,31 +673,38 @@ function playSeg(key, from, to, gain){
 }
 
 function cue(name){
-  if (!soundOn) return;
   const s = SOUND[name];
   if (!s) return;
+  const a = players[s.f];
+  if (!a) return;
   stopAllClips();
   playSeg(s.f, s.from, s.to, s.gain);
 }
 
 function testCue(name){
-  stopAllClips();
   const s = SOUND[name];
   if (!s) return;
+  stopAllClips();
   playSeg(s.f, s.from, s.to, s.gain);
 }
 
-/* ==================== КОРОТКИЕ СИГНАЛЫ ==================== */
-let actx = null;
-
-function ac(){
-  try {
-    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
-    if (actx.state === 'suspended') actx.resume();
-    return actx;
-  } catch (e) { return null; }
+/* Ставим звук так, чтобы он ЗАКОНЧИЛСЯ в нужный момент. */
+function scheduleEndingAt(name, msUntilEnd, expectPhase){
+  const s = SOUND[name];
+  if (!s) return;
+  const len = s.to - s.from;
+  const delay = msUntilEnd - len * 1000;
+  if (delay < 30){
+    cue(name);
+    return;
+  }
+  cueTimers.push(setTimeout(function(){
+    if (!running || phase !== expectPhase) return;
+    cue(name);
+  }, delay));
 }
 
+/* ==================== СИГНАЛЫ ==================== */
 function beep(freq, dur, gain, delay){
   const c = ac();
   if (!c) return;
@@ -912,13 +932,13 @@ function startSession(){
 }
 
 function enterPhase(p){
+  const prev = phase;
   phase = p;
   const sec = p === 'prep' ? cfg.prep : (p === 'work' ? cfg.work : cfg.rest);
   totalMs = sec * 1000;
   remainingMs = totalMs;
   endAt = Date.now() + remainingMs;
   running = true;
-  restCueDone = false;
 
   const run = $('run');
   run.classList.remove('prep', 'work', 'rest');
@@ -931,21 +951,40 @@ function enterPhase(p){
   renderExercise();
 
   clearCueTimers();
-  stopAllClips();
+  /* при переходе отдых -> тренировка не рубим хвост звука */
+  if (!(p === 'work' && prev === 'rest')) stopAllClips();
 
   if (p === 'prep'){
-    /* звук ставим так, чтобы он закончился ровно на старте тренировки */
     const snd = SOUND.prep;
-    const len = snd ? (snd.to - snd.from) : 0;
-    const delay = Math.max(0, sec - len) * 1000;
-    if (delay < 50) cue('prep');
-    else cueTimers.push(setTimeout(function(){
-      if (phase === 'prep') cue('prep');
-    }, delay));
+    if (snd){
+      const len = snd.to - snd.from;
+      const delay = (sec - len) * 1000 + TIMING.prepShift * 1000;
+      if (delay < 30){
+        cue('prep');
+      } else {
+        cueTimers.push(setTimeout(function(){
+          if (running && phase === 'prep') cue('prep');
+        }, delay));
+      }
+    }
   } else if (p === 'work'){
     /* в начале тренировки звука нет */
   } else {
     cue('rest');
+    const snd = SOUND.workAfterRest;
+    if (snd){
+      const len = snd.to - snd.from;
+      const delay = (sec - len) * 1000 + TIMING.restShift * 1000;
+      if (delay < 30){
+        cueTimers.push(setTimeout(function(){
+          if (running && phase === 'rest') cue('workAfterRest');
+        }, 30));
+      } else {
+        cueTimers.push(setTimeout(function(){
+          if (running && phase === 'rest') cue('workAfterRest');
+        }, delay));
+      }
+    }
   }
 
   render();
@@ -958,14 +997,6 @@ function tick(){
   const left = endAt - Date.now();
   if (left <= 0){ remainingMs = 0; render(); phaseDone(); return; }
   remainingMs = left;
-
-  if (phase === 'rest'){
-    const s = Math.ceil(left / 1000);
-    if (!restCueDone && s <= 3 && s > 0){
-      restCueDone = true;
-      cue('workAfterRest');
-    }
-  }
   render();
 }
 
