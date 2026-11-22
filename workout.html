@@ -289,7 +289,7 @@
 <div id="setup" class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Тренировка</h1>
-<div class="wk-ver">звук v3</div>
+<div class="wk-ver">звук v4</div>
 
 <div class="tabs">
   <button id="tabCardio" class="tab" onclick="setTab('cardio')">Кардио</button>
@@ -466,6 +466,11 @@ const PREP_OPTIONS = [3, 5, 10, 15];
 const WORK_OPTIONS = [60, 120, 180, 300, 600, 900];
 const REST_OPTIONS = [15, 30, 45, 60, 90, 120];
 
+/* Клипы: подготовка и начало тренировки, начало отдыха, конец отдыха и начало тренировки */
+const CLIP_MAIN = 'XRecorder_20261122_01.mp4';
+const CLIP_REST_START = 'XRecorder_20261122_01_2.mp4';
+const CLIP_REST_END = 'XRecorder_20261122_01_1.mp4';
+
 const cfg = {
   prep:   parseInt(localStorage.getItem('wkPrep'))   || 5,
   work:   parseInt(localStorage.getItem('wkWork'))   || 300,
@@ -495,6 +500,7 @@ const pad = n => String(n).padStart(2, '0');
 /* ==================== ЗВУК ==================== */
 let actx = null;
 let out = null;
+const clipBuf = {};
 
 function ac(){
   try {
@@ -522,6 +528,31 @@ function ac(){
     if (actx.state === 'suspended') actx.resume();
     return actx;
   } catch (e) { return null; }
+}
+
+function loadClips(){
+  const c = ac();
+  if (!c) return;
+  [CLIP_MAIN, CLIP_REST_START, CLIP_REST_END].forEach(name => {
+    fetch(name)
+      .then(r => { if (!r.ok) throw new Error(); return r.arrayBuffer(); })
+      .then(b => c.decodeAudioData(b))
+      .then(d => { clipBuf[name] = d; })
+      .catch(() => {});
+  });
+}
+
+/* Проиграть кусок клипа [from, to) в секундах. Возвращает false, если клип не загрузился */
+function clip(name, from, to){
+  if (!soundOn) return true;
+  const c = ac();
+  const b = clipBuf[name];
+  if (!c || !b || to <= from) return false;
+  const s = c.createBufferSource();
+  s.buffer = b;
+  s.connect(out);
+  s.start(c.currentTime, from, to - from);
+  return true;
 }
 
 /* Простой тон */
@@ -559,62 +590,16 @@ function noiseHit(t0, dur, gain, type, freq, q){
   s.start(t0); s.stop(t0 + dur + 0.02);
 }
 
-/* Жёсткий удар-стаб: пила через фильтр, закрывающийся за долю секунды, плюс суб */
-function stab(t0, f, dur, gain){
-  const c = ac(); if (!c) return;
-  const saw = c.createOscillator();
-  const sub = c.createOscillator();
-  const lp = c.createBiquadFilter();
-  const g = c.createGain();
-  saw.type = 'sawtooth';
-  saw.frequency.setValueAtTime(f, t0);
-  sub.type = 'square';
-  sub.frequency.setValueAtTime(f / 2, t0);
-  lp.type = 'lowpass';
-  lp.Q.value = 8;
-  lp.frequency.setValueAtTime(2400, t0);
-  lp.frequency.exponentialRampToValueAtTime(260, t0 + dur);
-  g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(gain, t0 + 0.005);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  saw.connect(lp); sub.connect(lp);
-  lp.connect(g); g.connect(out);
-  saw.start(t0); sub.start(t0);
-  saw.stop(t0 + dur + 0.05); sub.stop(t0 + dur + 0.05);
-}
-
-/* Боксёрский звонок: негармоничные обертоны дают металлический звон */
-function boxBell(t0, gain){
-  const c = ac(); if (!c) return;
-  [[1, 1.0, 1.8], [2.76, 0.55, 1.4], [5.4, 0.3, 0.9], [8.93, 0.15, 0.5]].forEach(([m, k, d]) => {
-    const o = c.createOscillator();
-    const g = c.createGain();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(980 * m, t0);
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(gain * k, t0 + 0.002);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
-    o.connect(g); g.connect(out);
-    o.start(t0); o.stop(t0 + d + 0.05);
-  });
-  noiseHit(t0, 0.03, gain * 0.8, 'highpass', 3500, 0.6);
-}
-
-/* ПОДГОТОВКА: три жёстких стаба и финальный удар на высоком тоне */
-function playPrep(){
-  if (!soundOn) return;
+/* Запасные синтетические сигналы, если клипы не загрузились */
+function synthPrep(){
   const c = ac(); if (!c) return;
   const t = c.currentTime;
-  stab(t,        110, 0.22, 1.0);
-  stab(t + 0.3,  110, 0.22, 1.0);
-  stab(t + 0.6,  110, 0.22, 1.0);
-  stab(t + 0.9,  165, 0.9,  1.0);
-  noiseHit(t + 0.9, 0.25, 0.5, 'highpass', 2500, 0.7);
+  hit('square', 880, 880, t, 0.2, 0.9);
+  hit('square', 880, 880, t + 0.3, 0.2, 0.9);
+  hit('square', 1320, 1320, t + 0.6, 0.4, 0.9);
 }
 
-/* СТАРТ ТРЕНИРОВКИ: без изменений */
-function playWork(){
-  if (!soundOn) return;
+function synthWork(){
   const c = ac(); if (!c) return;
   const t = c.currentTime;
   noiseHit(t, 0.06, 1.0, 'highpass', 900, 0.7);
@@ -627,15 +612,11 @@ function playWork(){
   hit('square', 990, 990, t + 0.6, 0.6, 0.5);
 }
 
-/* ОТДЫХ: конец раунда, два боксёрских «динь» и низкий удар */
-function playRest(){
-  if (!soundOn) return;
+function synthRest(){
   const c = ac(); if (!c) return;
   const t = c.currentTime;
   hit('sine', 90, 36, t, 0.6, 1.0);
   noiseHit(t, 0.05, 0.8, 'highpass', 1200, 0.6);
-  boxBell(t, 0.9);
-  boxBell(t + 0.45, 0.9);
 }
 
 /* Последние 5 секунд отдыха */
@@ -654,6 +635,30 @@ function playVictory(){
   [392, 523, 659, 784].forEach((f, i) => hit('sawtooth', f, f, t + i * 0.13, 0.22, 0.7));
   [523, 659, 784].forEach(f => hit('sawtooth', f, f, t + 0.6, 1.4, 0.45));
   noiseHit(t + 0.6, 0.15, 0.6, 'highpass', 2000, 0.7);
+}
+
+/* Подготовка: 0–5 с клипа (при короткой подготовке — только её длительность) */
+function cuePrep(){
+  if (!soundOn) return;
+  if (!clip(CLIP_MAIN, 0, Math.min(5, cfg.prep))) synthPrep();
+}
+
+/* Начало тренировки после подготовки: 5–6 с клипа */
+function cueWorkFromPrep(){
+  if (!soundOn) return;
+  if (!clip(CLIP_MAIN, 5, 6)) synthWork();
+}
+
+/* Начало тренировки после отдыха: 0–3 с клипа (конец отдыха и старт) */
+function cueWorkFromRest(){
+  if (!soundOn) return;
+  if (!clip(CLIP_REST_END, 0, 3)) synthWork();
+}
+
+/* Начало отдыха: 0–1 с клипа */
+function cueRest(){
+  if (!soundOn) return;
+  if (!clip(CLIP_REST_START, 0, 1)) synthRest();
 }
 
 function vibrate(p){ if (navigator.vibrate) navigator.vibrate(p); }
@@ -861,6 +866,7 @@ function startSession(){
 }
 
 function enterPhase(p){
+  const prev = phase;
   phase = p;
   const sec = p === 'prep' ? cfg.prep : (p === 'work' ? cfg.work : cfg.rest);
   totalMs = sec * 1000;
@@ -879,9 +885,12 @@ function enterPhase(p){
   setPauseIcon(false);
   renderExercise();
 
-  if (p === 'prep') playPrep();
-  if (p === 'work') playWork();
-  if (p === 'rest') playRest();
+  if (p === 'prep') cuePrep();
+  if (p === 'work'){
+    if (prev === 'prep') cueWorkFromPrep();
+    else cueWorkFromRest();
+  }
+  if (p === 'rest') cueRest();
 
   render();
   clearInterval(iv);
@@ -1081,7 +1090,7 @@ function toggleSound(){
   soundOn = !soundOn;
   localStorage.setItem('wkSound', soundOn ? 'on' : 'off');
   updateSoundIcon();
-  if (soundOn) playPrep();
+  if (soundOn) cuePrep();
 }
 
 function updateSoundIcon(){
@@ -1101,6 +1110,7 @@ renderChips();
 updateSummary();
 updateSoundIcon();
 updateLockIcon();
+loadClips();
 </script>
 </body>
 </html>
