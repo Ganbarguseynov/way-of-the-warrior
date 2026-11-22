@@ -306,7 +306,7 @@
 <div id="setup" class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Тренировка</h1>
-<div class="wk-ver">ВЕРСИЯ ЗВУКА 16</div>
+<div class="wk-ver">ВЕРСИЯ ЗВУКА 18</div>
 
 <div class="tabs">
   <button id="tabCardio" class="tab" onclick="setTab('cardio')">Кардио</button>
@@ -327,16 +327,16 @@
 
     <div class="st-row">
       <button onclick="testCue('prep')">Подготовка</button>
-      <span id="stMain">проверка файла…</span>
+      <span>4 сигнала, последний тянется 1.3 с</span>
     </div>
 
     <div class="st-row">
-      <button onclick="testCue('rest')">Начало отдыха</button>
+      <button onclick="testCue('restStart')">Начало отдыха</button>
       <span id="stRestStart">проверка файла…</span>
     </div>
 
     <div class="st-row">
-      <button onclick="testCue('workAfterRest')">Конец отдыха</button>
+      <button onclick="testCue('restEnd')">Конец отдыха</button>
       <span id="stRestEnd">проверка файла…</span>
     </div>
   </div>
@@ -505,12 +505,9 @@ const REST_OPTIONS = [15, 30, 45, 60, 90, 120];
 /* ============================================================
    ЗВУКИ. Файлы лежат в одной папке с workout.html.
 
-   XRecorder_20261122_01_1.mp4   6.38 с  — подготовка
+   XRecorder_20261122_01_1.mp4   6.38 с  — резерв для подготовки
    XRecorder_20261122_01.mp4     3.57 с  — конец отдыха
    XRecorder_20261122_01_2.mp4   2.17 с  — начало отдыха
-
-   from / to — секунды внутри файла.
-   gain      — усиление громкости, 1 = как в файле.
    ============================================================ */
 const FILES = {
   main:      'XRecorder_20261122_01_1.mp4',
@@ -519,19 +516,27 @@ const FILES = {
 };
 
 const SOUND = {
-  prep:          { f: 'main',      from: 3, to: 6, gain: 3 },
-  workAfterPrep: null,
-  rest:          { f: 'restStart', from: 0, to: 1, gain: 1.8 },
-  workAfterRest: { f: 'restEnd',   from: 0, to: 3, gain: 2.5 }
+  restStart: { f: 'restStart', from: 0, to: 1, gain: 1.8 },
+  restEnd:   { f: 'restEnd',   from: 0, to: 3, gain: 2.5 }
 };
 
-/* Сдвиг звука, в секундах. Плюс — позже, минус — раньше.
-   Если последний удар приходит слишком рано — увеличьте число.
-   Если перелезает в тренировку — уменьшите или сделайте отрицательным. */
-const TIMING = {
-  prepShift: 0.5,   /* звук подготовки */
-  restShift: 0      /* звук конца отдыха */
+/* Настройка сигналов подготовки.
+   longLen — длина четвёртого, продолговатого сигнала.
+   gap     — пауза между короткими сигналами.
+   Короткие три сигнала стоят перед четвёртым и не залезают на него. */
+const PREP_SIG = {
+  longLen: 1.3,
+  gap: 0.7,
+  shortLen: 0.13,
+  freqShort: 720,
+  freqLong: 900,
+  volShort: 0.34,
+  volLong: 0.30
 };
+
+/* Сдвиг звука конца отдыха в секундах.
+   Плюс — позже, минус — раньше. Менять здесь, если нужно подогнать. */
+const REST_END_SHIFT = 0;
 
 const cfg = {
   prep:   parseInt(localStorage.getItem('wkPrep11'))   || 5,
@@ -554,6 +559,7 @@ let xpEarned = 0;
 let finished = false;
 let soundOn = localStorage.getItem('wkSound') !== 'off';
 let wakeLock = null;
+let restEndDone = false;
 
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2, '0');
@@ -567,6 +573,63 @@ function ac(){
     if (actx.state === 'suspended') actx.resume();
     return actx;
   } catch (e) { return null; }
+}
+
+/* ==================== ГЕНЕРАТОР СИГНАЛОВ ==================== */
+let toneNodes = [];
+
+function clearTones(){
+  toneNodes.forEach(function(o){
+    try { o.stop(); } catch (e) {}
+    try { o.disconnect(); } catch (e) {}
+  });
+  toneNodes = [];
+}
+
+/* when — время по аудио-часам, когда сигнал должен зазвучать */
+function toneAt(when, freq, dur, vol, shape){
+  const c = ac();
+  if (!c) return;
+  const attack = Math.min(0.02, dur / 4);
+  const release = Math.min(0.18, dur / 2);
+  const o = c.createOscillator();
+  const g = c.createGain();
+  o.type = shape || 'sine';
+  o.frequency.setValueAtTime(freq, when);
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(vol, when + attack);
+  g.gain.setValueAtTime(vol, when + Math.max(attack + 0.01, dur - release));
+  g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  o.connect(g); g.connect(c.destination);
+  o.start(when);
+  o.stop(when + dur + 0.05);
+  toneNodes.push(o);
+}
+
+/* Сигналы подготовки: три коротких и один продолговатый,
+   который заканчивается ровно в момент старта тренировки. */
+function armPrepSignals(sec, fromNow){
+  if (!soundOn) return;
+  const c = ac();
+  if (!c) return;
+  const base = c.currentTime + (fromNow || 0);
+  const endAtCtx = base + sec;
+  const p = PREP_SIG;
+
+  const offsets = [
+    p.longLen + p.shortLen + p.gap * 2,
+    p.longLen + p.shortLen + p.gap,
+    p.longLen + p.shortLen * 0.5
+  ];
+
+  offsets.forEach(function(off){
+    const when = Math.max(base, endAtCtx - off);
+    toneAt(when, p.freqShort, p.shortLen, p.volShort, 'square');
+  });
+
+  const longStart = Math.max(base, endAtCtx - p.longLen);
+  const longDur = Math.max(0.2, endAtCtx - longStart);
+  toneAt(longStart, p.freqLong, longDur, p.volLong, 'sine');
 }
 
 /* ==================== ПЛЕЕР ==================== */
@@ -585,7 +648,7 @@ Object.keys(FILES).forEach(function(k){
   a.addEventListener('error', function(){
     const el = document.getElementById(statusEl[k]);
     if (el) el.innerHTML = FILES[k] +
-      '<br><span class="st-bad">не найден</span>';
+      '<br><span class="st-bad">файл не найден</span>';
   });
   players[k] = a;
 });
@@ -642,6 +705,8 @@ function stopAllClips(){
   });
 }
 
+/* Запуск куска файла. Если начало с нуля — играем сразу, без ожидания
+   перемотки: именно из-за этого ожидания звук начала отдыха запаздывал. */
 function playSeg(key, from, to, gain){
   const a = players[key];
   if (!a) return;
@@ -662,6 +727,12 @@ function playSeg(key, from, to, gain){
     }, dur * 1000));
   };
 
+  if (from <= 0.01){
+    try { a.currentTime = 0; } catch (e) {}
+    start();
+    return;
+  }
+
   const seek = function(){
     try { a.currentTime = from; } catch (e) {}
     a.addEventListener('seeked', start, { once: true });
@@ -672,59 +743,58 @@ function playSeg(key, from, to, gain){
   else a.addEventListener('loadedmetadata', seek, { once: true });
 }
 
-function cue(name){
+function playFile(name){
   const s = SOUND[name];
   if (!s) return;
+  stopAllClips();
+  playSeg(s.f, s.from, s.to, s.gain);
+}
+
+/* ==================== КОНЕЦ ОТДЫХА ==================== */
+function fireRestEnd(){
+  if (restEndDone) return;
+  if (!running || phase !== 'rest') return;
+  restEndDone = true;
+
+  const s = SOUND.restEnd;
   const a = players[s.f];
-  if (!a) return;
-  stopAllClips();
-  playSeg(s.f, s.from, s.to, s.gain);
-}
-
-function testCue(name){
-  const s = SOUND[name];
-  if (!s) return;
-  stopAllClips();
-  playSeg(s.f, s.from, s.to, s.gain);
-}
-
-/* Ставим звук так, чтобы он ЗАКОНЧИЛСЯ в нужный момент. */
-function scheduleEndingAt(name, msUntilEnd, expectPhase){
-  const s = SOUND[name];
-  if (!s) return;
-  const len = s.to - s.from;
-  const delay = msUntilEnd - len * 1000;
-  if (delay < 30){
-    cue(name);
+  if (!a || a.error){
+    restEndBeeps();
     return;
   }
-  cueTimers.push(setTimeout(function(){
-    if (!running || phase !== expectPhase) return;
-    cue(name);
-  }, delay));
+
+  const g = routePlayer(s.f);
+  if (g && actx) g.gain.setValueAtTime(s.gain, actx.currentTime);
+
+  try { a.currentTime = s.from; } catch (e) {}
+  const p = a.play();
+  if (p && p.catch){
+    p.catch(function(){ restEndBeeps(); });
+  }
+  stopTimers.push(setTimeout(function(){
+    try { a.pause(); } catch (e) {}
+  }, (s.to - s.from) * 1000));
+}
+
+/* Страховка, если файл не проигрался: два сигнала и третий на старте. */
+function restEndBeeps(){
+  const c = ac();
+  if (!c || !soundOn) return;
+  const t = c.currentTime;
+  toneAt(t, 880, 0.14, 0.34, 'square');
+  toneAt(t + 1.0, 880, 0.14, 0.34, 'square');
+  toneAt(t + 2.0, 1100, 0.35, 0.34, 'square');
 }
 
 /* ==================== СИГНАЛЫ ==================== */
-function beep(freq, dur, gain, delay){
-  const c = ac();
-  if (!c) return;
-  const t0 = c.currentTime + (delay || 0);
-  const o = c.createOscillator();
-  const g = c.createGain();
-  o.type = 'square';
-  o.frequency.setValueAtTime(freq, t0);
-  g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(gain, t0 + 0.008);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  o.connect(g); g.connect(c.destination);
-  o.start(t0); o.stop(t0 + dur + 0.05);
-}
-
 function playVictory(){
   if (!soundOn) return;
-  beep(523, 0.3, 0.28, 0);
-  beep(659, 0.3, 0.28, 0.14);
-  beep(784, 0.55, 0.3, 0.28);
+  const c = ac();
+  if (!c) return;
+  const t = c.currentTime;
+  toneAt(t, 523, 0.3, 0.28, 'square');
+  toneAt(t + 0.14, 659, 0.3, 0.28, 'square');
+  toneAt(t + 0.28, 784, 0.55, 0.3, 'square');
 }
 
 function vibrate(p){ if (navigator.vibrate) navigator.vibrate(p); }
@@ -939,6 +1009,7 @@ function enterPhase(p){
   remainingMs = totalMs;
   endAt = Date.now() + remainingMs;
   running = true;
+  restEndDone = false;
 
   const run = $('run');
   run.classList.remove('prep', 'work', 'rest');
@@ -951,40 +1022,21 @@ function enterPhase(p){
   renderExercise();
 
   clearCueTimers();
-  /* при переходе отдых -> тренировка не рубим хвост звука */
+  clearTones();
+  /* при переходе отдых -> тренировка не рубим хвост звука конца отдыха */
   if (!(p === 'work' && prev === 'rest')) stopAllClips();
 
   if (p === 'prep'){
-    const snd = SOUND.prep;
-    if (snd){
-      const len = snd.to - snd.from;
-      const delay = (sec - len) * 1000 + TIMING.prepShift * 1000;
-      if (delay < 30){
-        cue('prep');
-      } else {
-        cueTimers.push(setTimeout(function(){
-          if (running && phase === 'prep') cue('prep');
-        }, delay));
-      }
-    }
+    armPrepSignals(sec, 0);
   } else if (p === 'work'){
     /* в начале тренировки звука нет */
   } else {
-    cue('rest');
-    const snd = SOUND.workAfterRest;
-    if (snd){
-      const len = snd.to - snd.from;
-      const delay = (sec - len) * 1000 + TIMING.restShift * 1000;
-      if (delay < 30){
-        cueTimers.push(setTimeout(function(){
-          if (running && phase === 'rest') cue('workAfterRest');
-        }, 30));
-      } else {
-        cueTimers.push(setTimeout(function(){
-          if (running && phase === 'rest') cue('workAfterRest');
-        }, delay));
-      }
-    }
+    playFile('restStart');
+
+    const s = SOUND.restEnd;
+    const len = s.to - s.from;
+    const delay = Math.max(0, (sec - len) * 1000 + REST_END_SHIFT * 1000 + 100);
+    cueTimers.push(setTimeout(fireRestEnd, delay));
   }
 
   render();
@@ -997,6 +1049,12 @@ function tick(){
   const left = endAt - Date.now();
   if (left <= 0){ remainingMs = 0; render(); phaseDone(); return; }
   remainingMs = left;
+
+  /* дубль на случай, если длинный setTimeout убит системой */
+  if (phase === 'rest' && !restEndDone){
+    if (left <= 3100 + REST_END_SHIFT * 1000) fireRestEnd();
+  }
+
   render();
 }
 
@@ -1125,14 +1183,7 @@ function finishSession(){
   xpEarned += XP_BONUS;
   awardXP(XP_BONUS);
 
-  let played = false;
-  const fallback = function(){ if (!played){ played = true; playVictory(); } };
-  try {
-    const a = new Audio('12. Scroll Win 02.mp3');
-    a.volume = 1;
-    a.addEventListener('error', fallback);
-    a.play().catch(fallback);
-  } catch (e) { fallback(); }
+  playVictory();
 
   const total = cfg.prep + cfg.rounds * cfg.work + (cfg.rounds - 1) * cfg.rest;
   $('finStats').innerHTML =
@@ -1179,7 +1230,7 @@ function toggleSound(){
   soundOn = !soundOn;
   localStorage.setItem('wkSound', soundOn ? 'on' : 'off');
   updateSoundIcon();
-  if (soundOn) cue('prep');
+  if (soundOn) testCue('prep');
 }
 
 function updateSoundIcon(){
@@ -1190,6 +1241,18 @@ function updateSoundIcon(){
 
 function goBackToMain(){
   setTimeout(function(){ window.location.href = 'index.html'; }, 100);
+}
+
+/* ==================== ТЕСТ ==================== */
+function testCue(name){
+  ac();
+  stopAllClips();
+  if (name === 'prep'){
+    clearTones();
+    armPrepSignals(3.2, 0.1);
+    return;
+  }
+  playFile(name);
 }
 
 /* ==================== СТАРТ ==================== */
