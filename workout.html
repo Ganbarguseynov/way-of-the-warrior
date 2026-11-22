@@ -129,13 +129,13 @@
   display:flex; align-items:center; gap:10px; margin-bottom:8px;
 }
 .st-row button{
-  flex:0 0 130px; padding:10px 6px; border-radius:10px;
+  flex:0 0 128px; padding:10px 6px; border-radius:10px;
   border:1px solid rgba(255,255,255,.14);
   background:rgba(255,255,255,.06);
   color:#fff; font-size:12px; font-weight:700; cursor:pointer;
 }
 .st-row button:active{ background:rgba(255,204,0,.2); border-color:#ffcc00; }
-.st-row span{ font-size:11px; color:#8e8e93; line-height:1.35; }
+.st-row span{ font-size:10px; color:#8e8e93; line-height:1.4; }
 .st-ok{ color:#34c759; font-weight:700; }
 .st-bad{ color:#ff3b30; font-weight:700; }
 
@@ -306,7 +306,7 @@
 <div id="setup" class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Тренировка</h1>
-<div class="wk-ver">ВЕРСИЯ ЗВУКА 10</div>
+<div class="wk-ver">ВЕРСИЯ ЗВУКА 11</div>
 
 <div class="tabs">
   <button id="tabCardio" class="tab" onclick="setTab('cardio')">Кардио</button>
@@ -504,9 +504,10 @@ const REST_OPTIONS = [15, 30, 45, 60, 90, 120];
 
 /* ============================================================
    ЗВУКИ. Файлы лежат в одной папке с workout.html.
-   prep:    XRecorder_20261122_01_1.mp4  (6.38 с)
-   restEnd: XRecorder_20261122_01.mp4    (3.57 с)
-   restStart: XRecorder_20261122_01_2.mp4 (2.17 с)
+
+   XRecorder_20261122_01_1.mp4   6.38 с  — подготовка (1-5) + старт (5-6)
+   XRecorder_20261122_01.mp4     3.57 с  — конец отдыха (1-2) + старт (2-3)
+   XRecorder_20261122_01_2.mp4   2.17 с  — начало отдыха
    ============================================================ */
 const FILES = {
   main:      'XRecorder_20261122_01_1.mp4',
@@ -514,10 +515,7 @@ const FILES = {
   restEnd:   'XRecorder_20261122_01.mp4'
 };
 
-/* Какой кусок файла играет в какой момент. from / to — секунды.
-   main:      1-5 с подготовка, 5-6 с старт тренировки
-   restEnd:   1-2 с конец отдыха, 2-3 с старт тренировки
-   restStart: 0-1 с начало отдыха */
+/* Какой кусок файла играет в какой момент. from / to — секунды. */
 const SOUND = {
   prep:          { f: 'main',      from: 1, to: 5 },
   workAfterPrep: { f: 'main',      from: 5, to: 6 },
@@ -526,14 +524,14 @@ const SOUND = {
 };
 
 const cfg = {
-  prep:   parseInt(localStorage.getItem('wkPrep9'))   || 5,
-  work:   parseInt(localStorage.getItem('wkWork9'))   || 300,
-  rest:   parseInt(localStorage.getItem('wkRest9'))   || 60,
-  rounds: parseInt(localStorage.getItem('wkRounds9')) || 3
+  prep:   parseInt(localStorage.getItem('wkPrep11'))   || 5,
+  work:   parseInt(localStorage.getItem('wkWork11'))   || 300,
+  rest:   parseInt(localStorage.getItem('wkRest11'))   || 60,
+  rounds: parseInt(localStorage.getItem('wkRounds11')) || 3
 };
 
 let presets = [];
-try { presets = JSON.parse(localStorage.getItem('wkPresets9') || '[]'); } catch (e) { presets = []; }
+try { presets = JSON.parse(localStorage.getItem('wkPresets11') || '[]'); } catch (e) { presets = []; }
 
 let phase = 'prep';
 let round = 1;
@@ -561,11 +559,13 @@ Object.keys(FILES).forEach(function(k){
   a.src = FILES[k];
   a.addEventListener('loadedmetadata', function(){
     const el = document.getElementById(statusEl[k]);
-    if (el) el.innerHTML = '<span class="st-ok">файл есть</span>, ' + a.duration.toFixed(2) + ' с';
+    if (el) el.innerHTML = FILES[k] +
+      '<br><span class="st-ok">есть, ' + a.duration.toFixed(2) + ' с</span>';
   });
   a.addEventListener('error', function(){
     const el = document.getElementById(statusEl[k]);
-    if (el) el.innerHTML = '<span class="st-bad">файл не найден</span>';
+    if (el) el.innerHTML = FILES[k] +
+      '<br><span class="st-bad">не найден</span>';
   });
   players[k] = a;
 });
@@ -678,10 +678,10 @@ function renderChips(){
 }
 
 function saveCfg(){
-  localStorage.setItem('wkPrep9', cfg.prep);
-  localStorage.setItem('wkWork9', cfg.work);
-  localStorage.setItem('wkRest9', cfg.rest);
-  localStorage.setItem('wkRounds9', cfg.rounds);
+  localStorage.setItem('wkPrep11', cfg.prep);
+  localStorage.setItem('wkWork11', cfg.work);
+  localStorage.setItem('wkRest11', cfg.rest);
+  localStorage.setItem('wkRounds11', cfg.rounds);
 }
 
 function pickTime(kind, sec){
@@ -779,7 +779,7 @@ function savePreset(){
     work: cfg.work,
     rest: cfg.rest
   });
-  localStorage.setItem('wkPresets9', JSON.stringify(presets));
+  localStorage.setItem('wkPresets11', JSON.stringify(presets));
   $('presetName').value = '';
   setPresetStatus('');
   renderPresets();
@@ -804,7 +804,7 @@ function deletePreset(i){
   if (!p) return;
   if (!confirm('Удалить таймер «' + p.name + '»?')) return;
   presets.splice(i, 1);
-  localStorage.setItem('wkPresets9', JSON.stringify(presets));
+  localStorage.setItem('wkPresets11', JSON.stringify(presets));
   renderPresets();
 }
 
