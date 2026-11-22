@@ -237,10 +237,17 @@
   flex:0 0 auto; padding:0 2px 10px;
 }
 .icon-btn{
-  position:relative; z-index:6;
   background:none; border:none; padding:8px; cursor:pointer;
   color:rgba(255,255,255,.85); display:flex;
 }
+
+/* Замок всегда поверх блокирующего слоя и меняет вид:
+   открыт — экран свободен, закрыт и жёлтый — экран заблокирован. */
+#lockBtn{
+  position:relative; z-index:8;
+  transition:color .15s;
+}
+#lockBtn.locked{ color:#ffcc00; }
 
 .controls{
   display:grid; grid-template-columns:1fr auto 1fr;
@@ -255,11 +262,12 @@
 .ctl:active{ opacity:.6; }
 
 /* ================= БЛОКИРОВКА =================
-   Слой прозрачный: экран выглядит как обычно.
-   Он перехватывает все касания, кроме замка (z-index 6). */
+   Прозрачный слой. Экран выглядит как обычно, ни надписей, ни затемнения.
+   Перехватывает все касания, кроме кнопки замка (она выше по z-index). */
 .lock-ov{
   position:absolute; inset:0; z-index:5;
   display:none; background:transparent;
+  touch-action:none;
 }
 .lock-ov.show{ display:block; }
 
@@ -301,7 +309,7 @@
 <div id="setup" class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Тренировка</h1>
-<div class="wk-ver">ВЕРСИЯ ЗВУКА 22</div>
+<div class="wk-ver">ВЕРСИЯ ЗВУКА 23</div>
 
 <div class="tabs">
   <button id="tabCardio" class="tab" onclick="setTab('cardio')">Кардио</button>
@@ -403,14 +411,7 @@
   </div>
 
   <div class="bottombar">
-    <button class="icon-btn" id="lockBtn" onclick="toggleLock()" aria-label="Заблокировать или разблокировать экран">
-      <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
-           stroke="currentColor" stroke-width="1.8"
-           stroke-linecap="round" stroke-linejoin="round">
-        <rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/>
-        <path d="M8 10.5V7a4 4 0 0 1 7.6-1.7"/>
-      </svg>
-    </button>
+    <button class="icon-btn" id="lockBtn" onclick="toggleLock()" aria-label="Заблокировать или разблокировать экран"></button>
     <button class="icon-btn" onclick="exitSession()" aria-label="Выйти из тренировки">
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="1.8"
@@ -516,6 +517,20 @@ const TIMING = {
   prepShift: 1.5,
   restEndShift: 1
 };
+
+const ICON_LOCK_OPEN =
+  '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" ' +
+  'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+  '<rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/>' +
+  '<path d="M8 10.5V7a4 4 0 0 1 7.6-1.7"/>' +
+  '</svg>';
+
+const ICON_LOCK_CLOSED =
+  '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" ' +
+  'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+  '<rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/>' +
+  '<path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>' +
+  '</svg>';
 
 const cfg = {
   prep:   parseInt(localStorage.getItem('wkPrep11'))   || 5,
@@ -880,13 +895,23 @@ function releaseWake(){
   }
 }
 
-/* Одно нажатие на замок: включает или выключает блокировку.
-   Пока экран заблокирован, слой перехватывает все касания, кроме самого замка. */
+/* Вид замка: открытый — экран свободен, закрытый и жёлтый — заблокирован. */
+function updateLockIcon(){
+  const btn = $('lockBtn');
+  btn.innerHTML = locked ? ICON_LOCK_CLOSED : ICON_LOCK_OPEN;
+  btn.classList.toggle('locked', locked);
+  btn.setAttribute('aria-pressed', locked ? 'true' : 'false');
+}
+
+/* Одно нажатие переключает блокировку.
+   Когда заблокировано, прозрачный слой перехватывает все касания,
+   кроме самой кнопки замка: она выше слоя и остаётся нажимаемой. */
 function toggleLock(){
   if (finished) return;
   if (!$('run').classList.contains('show')) return;
   locked = !locked;
   $('lockOverlay').classList.toggle('show', locked);
+  updateLockIcon();
   if (locked) requestWake();
   else releaseWake();
 }
@@ -901,6 +926,9 @@ function exitSession(){
   clearCueTimers();
   stopAllClips();
   releaseWake();
+  locked = false;
+  $('lockOverlay').classList.remove('show');
+  updateLockIcon();
   $('run').classList.remove('show');
   $('finish').classList.remove('show');
   $('setup').style.display = '';
@@ -922,6 +950,7 @@ function startSession(){
   finished = false;
   locked = false;
   $('lockOverlay').classList.remove('show');
+  updateLockIcon();
   xpEarned = 0;
   round = 1;
   $('setup').style.display = 'none';
@@ -1106,6 +1135,7 @@ function finishSession(){
   releaseWake();
   locked = false;
   $('lockOverlay').classList.remove('show');
+  updateLockIcon();
 
   xpEarned += XP_BONUS;
   awardXP(XP_BONUS);
@@ -1156,6 +1186,7 @@ renderPresets();
 renderChips();
 updateSummary();
 updateSoundIcon();
+updateLockIcon();
 </script>
 </body>
 </html>
