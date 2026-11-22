@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тест звуков</title>
+<style>
+body{background:#0a0e27;color:#fff;font-family:-apple-system,sans-serif;padding:16px;}
+h1{font-size:18px;margin-bottom:14px;}
+.card{background:#1c1c1e;border-radius:12px;padding:14px;margin-bottom:12px;}
+.name{font-weight:700;font-size:14px;margin-bottom:6px;}
+.info{font-size:12px;color:#8e8e93;line-height:1.6;margin-bottom:10px;white-space:pre-wrap;}
+button{background:#ffcc00;color:#000;border:none;border-radius:8px;padding:10px 14px;font-weight:700;font-size:13px;margin-right:6px;margin-bottom:6px;}
+button.sec{background:#2c2c2e;color:#fff;}
+.ok{color:#34c759;font-weight:700;}
+.bad{color:#ff3b30;font-weight:700;}
+</style>
+</head>
+<body>
+<h1>Проверка клипов</h1>
+
+<div class="card">
+  <div class="name">XRecorder_20261122_01.mp4</div>
+  <div class="info" id="i0">загрузка…</div>
+  <button onclick="playPart(0,0,5)">0–5 с</button>
+  <button class="sec" onclick="playPart(0,5,6)">5–6 с</button>
+</div>
+
+<div class="card">
+  <div class="name">XRecorder_20261122_01_1.mp4</div>
+  <div class="info" id="i1">загрузка…</div>
+  <button onclick="playPart(1,0,3)">0–3 с</button>
+</div>
+
+<div class="card">
+  <div class="name">XRecorder_20261122_01_2.mp4</div>
+  <div class="info" id="i2">загрузка…</div>
+  <button onclick="playPart(2,0,1)">0–1 с</button>
+</div>
+
+<script>
+const FILES = [
+  'XRecorder_20261122_01.mp4',
+  'XRecorder_20261122_01_1.mp4',
+  'XRecorder_20261122_01_2.mp4'
+];
+
+const els = FILES.map(function(f, i){
+  const a = new Audio();
+  a.preload = 'auto';
+  a.src = f;
+  a.addEventListener('loadedmetadata', function(){
+    document.getElementById('i' + i).innerHTML =
+      '<span class="ok">загрузился</span>, длительность ' + a.duration.toFixed(2) + ' с';
+  });
+  a.addEventListener('error', function(){
+    document.getElementById('i' + i).innerHTML =
+      '<span class="bad">не загрузился</span> — файла нет рядом с этой страницей';
+  });
+  return a;
+});
+
+let stopTimer = null;
+
+function playPart(i, from, to){
+  els.forEach(function(e){ e.pause(); });
+  clearTimeout(stopTimer);
+  const a = els[i];
+  a.currentTime = from;
+  a.play().then(function(){
+    stopTimer = setTimeout(function(){ a.pause(); }, Math.max(0, to - from) * 1000);
+  }).catch(function(err){
+    document.getElementById('i' + i).innerHTML +=
+      '\n<span class="bad">не играет: ' + err.name + '</span>';
+  });
+}
+</script>
+</body>
+</html>
