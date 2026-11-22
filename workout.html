@@ -242,8 +242,6 @@
   color:rgba(255,255,255,.85); display:flex;
 }
 
-/* Замок всегда поверх блокирующего слоя.
-   Открыт — просто значок. Закрыт — жёлтый залитый кружок. */
 #lockBtn{
   position:relative; z-index:8;
   border-radius:50%;
@@ -267,9 +265,6 @@
 }
 .ctl:active{ opacity:.6; }
 
-/* ================= БЛОКИРОВКА =================
-   Прозрачный слой. Экран выглядит как обычно: ни надписей, ни затемнения.
-   Перехватывает все касания, кроме кнопки замка (она выше по z-index). */
 .lock-ov{
   position:absolute; inset:0; z-index:5;
   display:none; background:transparent;
@@ -504,29 +499,14 @@ const sb = supabase.createClient(
   'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF'
 );
 
-/* Упражнение для показа на таймере. null — только таймер.
-   Пример: { name: 'Приседания', photo: 'ex-squat.jpg' } */
 const EXERCISE = null;
-
 const XP_PER_ROUND = 15;
 const XP_BONUS = 20;
-
 const PREP_OPTIONS = [3, 5, 6, 10, 15];
 const WORK_OPTIONS = [60, 120, 180, 300, 600, 900];
 const REST_OPTIONS = [15, 30, 45, 60, 90, 120];
-
 const OPTIONS = { prep: PREP_OPTIONS, work: WORK_OPTIONS, rest: REST_OPTIONS };
 
-/* ============================================================
-   ЗВУКИ. Файлы лежат в одной папке с workout.html.
-   Звуки берутся только из этих файлов, ничего не синтезируется.
-
-   XRecorder_20261122_01_1.mp4   6.38 с  — подготовка
-   XRecorder_20261122_01_2.mp4   2.17 с  — начало отдыха
-   XRecorder_20261122_01.mp4     3.57 с  — конец отдыха
-
-   from / to — секунды внутри файла. gain — громкость, 1 = как в файле.
-   ============================================================ */
 const FILES = {
   main:      'XRecorder_20261122_01_1.mp4',
   restStart: 'XRecorder_20261122_01_2.mp4',
@@ -539,9 +519,6 @@ const SOUND = {
   workAfterRest: { f: 'restEnd',   from: 0, to: 3.57, gain: 2.5 }
 };
 
-/* Сдвиг в секундах: плюс — позже, минус — раньше.
-   prepShift 1.5 — звук подготовки стартует на 3-й секунде при подготовке 5 с.
-   restEndShift 1.5 — звук конца отдыха звучит на полсекунды позже, чем при 1. */
 const TIMING = {
   prepShift: 1.5,
   restEndShift: 1.5
@@ -588,9 +565,7 @@ let restEndFired = false;
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2, '0');
 
-/* ==================== АУДИО-КОНТЕКСТ ==================== */
 let actx = null;
-
 function ac(){
   try {
     if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
@@ -599,9 +574,7 @@ function ac(){
   } catch (e) { return null; }
 }
 
-/* ==================== ПЛЕЕР ==================== */
 const players = {};
-
 Object.keys(FILES).forEach(function(k){
   const a = new Audio();
   a.preload = 'auto';
@@ -664,13 +637,10 @@ function stopAllClips(){
 function playSeg(key, from, to, gain){
   const a = players[key];
   if (!a) return;
-
   const g = routePlayer(key);
   if (g && actx) g.gain.setValueAtTime(Math.max(0.01, gain || 1), actx.currentTime);
-
   const dur = Math.max(0.05, to - from);
   let started = false;
-
   const start = function(){
     if (started) return;
     started = true;
@@ -680,19 +650,16 @@ function playSeg(key, from, to, gain){
       try { a.pause(); } catch (e) {}
     }, dur * 1000));
   };
-
   if (from <= 0.01){
     try { a.currentTime = 0; } catch (e) {}
     start();
     return;
   }
-
   const seek = function(){
     try { a.currentTime = from; } catch (e) {}
     a.addEventListener('seeked', start, { once: true });
     stopTimers.push(setTimeout(start, 120));
   };
-
   if (a.readyState >= 1) seek();
   else a.addEventListener('loadedmetadata', seek, { once: true });
 }
@@ -709,7 +676,6 @@ function testCue(name){
   cue(name);
 }
 
-/* ==================== СИГНАЛЫ ФАЗ ==================== */
 function scheduleEndingAt(name, msBeforeEnd, shiftSec, phaseName){
   const s = SOUND[name];
   if (!s) return;
@@ -727,7 +693,6 @@ function fireRestEnd(){
   cue('workAfterRest');
 }
 
-/* ==================== НАСТРОЙКА ==================== */
 function setTab(which){
   $('tabCardio').classList.toggle('on', which === 'cardio');
   $('tabTimer').classList.toggle('on', which === 'timer');
@@ -811,7 +776,6 @@ function updateSummary(){
     '<br>Всего ≈ ' + Math.round(total / 60) + ' мин';
 }
 
-/* ==================== СОХРАНЁННЫЕ ТАЙМЕРЫ ==================== */
 function presetSummary(p){
   return p.rounds + ' ' + word(p.rounds) + ' · ' + fmtSec(p.work) + ' / ' + fmtSec(p.rest) +
     ' · подг. ' + fmtSec(p.prep);
@@ -833,7 +797,7 @@ function renderPresets(){
 
     const main = document.createElement('button');
     main.className = 'pl-main';
-    main.onclick = function(){ loadPreset(i); };
+    main.onclick = function(){ loadAndStartPreset(i); };
     const title = document.createElement('b');
     title.textContent = p.name;
     const info = document.createElement('span');
@@ -887,6 +851,11 @@ function loadPreset(i){
   setPresetStatus('');
 }
 
+function loadAndStartPreset(i){
+  loadPreset(i);
+  startSession();
+}
+
 function deletePreset(i){
   const p = presets[i];
   if (!p) return;
@@ -896,7 +865,6 @@ function deletePreset(i){
   renderPresets();
 }
 
-/* ==================== XP ==================== */
 async function addXP(delta){
   const tgId = localStorage.getItem('tgId');
   const email = localStorage.getItem('currentEmail') || localStorage.getItem('linkedEmail');
@@ -919,7 +887,6 @@ function awardXP(delta){
   addXP(delta);
 }
 
-/* ==================== БЛОКИРОВКА ЭКРАНА ==================== */
 async function requestWake(){
   try {
     if ('wakeLock' in navigator && !wakeLock){
@@ -936,8 +903,6 @@ function releaseWake(){
   }
 }
 
-/* Вид замка: открытый значок — экран свободен,
-   жёлтый залитый кружок с закрытым замком — экран заблокирован. */
 function updateLockIcon(){
   const btn = $('lockBtn');
   btn.innerHTML = locked ? ICON_LOCK_CLOSED : ICON_LOCK_OPEN;
@@ -945,9 +910,6 @@ function updateLockIcon(){
   btn.setAttribute('aria-pressed', locked ? 'true' : 'false');
 }
 
-/* Одно нажатие переключает блокировку.
-   Когда заблокировано, прозрачный слой перехватывает все касания,
-   кроме самой кнопки замка: она выше слоя и остаётся нажимаемой. */
 function toggleLock(){
   if (finished) return;
   if (!$('run').classList.contains('show')) return;
@@ -958,7 +920,6 @@ function toggleLock(){
   else releaseWake();
 }
 
-/* ==================== ВЫХОД ==================== */
 function exitSession(){
   if (locked) return;
   if (!confirm('Выйти из тренировки?')) return;
@@ -976,7 +937,6 @@ function exitSession(){
   $('setup').style.display = '';
 }
 
-/* ==================== ТАЙМЕР ==================== */
 function renderExercise(){
   const b = $('exBlock');
   if (!EXERCISE){ b.classList.remove('show'); return; }
@@ -1022,7 +982,6 @@ function enterPhase(p){
   renderExercise();
 
   clearCueTimers();
-  /* Вход в тренировку не рубит звук: хвост подготовки и хвост конца отдыха доигрывают полностью. */
   if (p !== 'work') stopAllClips();
 
   if (p === 'prep'){
@@ -1043,7 +1002,6 @@ function tick(){
   if (left <= 0){ remainingMs = 0; render(); phaseDone(); return; }
   remainingMs = left;
 
-  /* страховка: если длинный таймер убит системой, звук конца отдыха всё равно сработает */
   if (phase === 'rest' && !restEndFired){
     const len = (SOUND.workAfterRest.to - SOUND.workAfterRest.from) * 1000;
     if (left <= len - TIMING.restEndShift * 1000 + 50) fireRestEnd();
@@ -1205,7 +1163,6 @@ function finishSession(){
   $('finish').classList.add('show');
 }
 
-/* ==================== ЗВУК ==================== */
 function toggleSound(){
   soundOn = !soundOn;
   localStorage.setItem('wkSound', soundOn ? 'on' : 'off');
@@ -1223,7 +1180,6 @@ function goBackToMain(){
   setTimeout(function(){ window.location.href = 'index.html'; }, 100);
 }
 
-/* ==================== СТАРТ ==================== */
 $('roundsInput').value = cfg.rounds;
 $('roundsInput').addEventListener('change', function(){ setRounds(this.value); });
 renderPresets();
