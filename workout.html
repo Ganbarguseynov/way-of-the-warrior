@@ -13,7 +13,10 @@
 }
 *{ -webkit-tap-highlight-color:transparent; box-sizing:border-box; }
 
-.wk-ver{ font-size:10px; color:#5b5b60; margin:-8px 0 14px; }
+.wk-ver{
+  font-size:11px; font-weight:700; color:#ffcc00;
+  margin:-10px 0 14px; letter-spacing:.3px;
+}
 
 /* ================= НАСТРОЙКА ================= */
 .tabs{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:4px 0 18px; }
@@ -122,14 +125,19 @@
 }
 .wk-start:active{ transform:scale(.98); }
 
-.wk-test{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
-.wk-test button{
-  padding:10px 4px; border-radius:10px;
+.st-row{
+  display:flex; align-items:center; gap:10px; margin-bottom:8px;
+}
+.st-row button{
+  flex:0 0 130px; padding:10px 6px; border-radius:10px;
   border:1px solid rgba(255,255,255,.14);
   background:rgba(255,255,255,.06);
-  color:#fff; font-size:11px; font-weight:700; cursor:pointer;
+  color:#fff; font-size:12px; font-weight:700; cursor:pointer;
 }
-.wk-test button:active{ background:rgba(255,204,0,.2); border-color:#ffcc00; }
+.st-row button:active{ background:rgba(255,204,0,.2); border-color:#ffcc00; }
+.st-row span{ font-size:11px; color:#8e8e93; line-height:1.35; }
+.st-ok{ color:#34c759; font-weight:700; }
+.st-bad{ color:#ff3b30; font-weight:700; }
 
 .pl-empty{ font-size:12px; color:#8e8e93; line-height:1.5; margin-bottom:10px; }
 .pl-item{
@@ -298,7 +306,7 @@
 <div id="setup" class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Тренировка</h1>
-<div class="wk-ver">звук v7</div>
+<div class="wk-ver">ВЕРСИЯ ЗВУКА 8</div>
 
 <div class="tabs">
   <button id="tabCardio" class="tab" onclick="setTab('cardio')">Кардио</button>
@@ -316,10 +324,20 @@
 <div id="paneTimer" class="pane on">
   <div class="wk-sec">
     <div class="wk-sec-title">Проверить звуки</div>
-    <div class="wk-test">
+
+    <div class="st-row">
       <button onclick="testCue('prep')">Подготовка</button>
+      <span id="stMain">проверка файла…</span>
+    </div>
+
+    <div class="st-row">
       <button onclick="testCue('rest')">Начало отдыха</button>
+      <span id="stRestStart">проверка файла…</span>
+    </div>
+
+    <div class="st-row">
       <button onclick="testCue('workAfterRest')">Конец отдыха</button>
+      <span id="stRestEnd">проверка файла…</span>
     </div>
   </div>
 
@@ -485,21 +503,20 @@ const WORK_OPTIONS = [60, 120, 180, 300, 600, 900];
 const REST_OPTIONS = [15, 30, 45, 60, 90, 120];
 
 /* ============================================================
-   ЗВУКИ
+   ЗВУКИ. Файлы лежат в одной папке с workout.html.
    ============================================================ */
 const FILES = {
-  main:      'XRecorder_20261122_01.mp4',    /* подготовка + переход в тренировку */
-  restEnd:   'XRecorder_20261122_01_1.mp4',  /* конец отдыха + старт тренировки */
-  restStart: 'XRecorder_20261122_01_2.mp4'   /* начало отдыха */
+  main:      'XRecorder_20261122_01.mp4',
+  restStart: 'XRecorder_20261122_01_2.mp4',
+  restEnd:   'XRecorder_20261122_01_1.mp4'
 };
 
-/* Что и где играть. from / to — секунды внутри файла.
-   Если звук стоит не на своём месте — меняются только эти строки. */
+/* Какой кусок файла играет в какой момент. from / to — секунды. */
 const SOUND = {
-  prep:          { f: 'main',      from: 0, to: 6 },   /* вся подготовка, 6 секунд */
-  workAfterPrep: null,                                 /* старт уже внутри клипа подготовки */
-  workAfterRest: { f: 'restEnd',   from: 0, to: 3 },   /* конец отдыха + старт тренировки */
-  rest:          { f: 'restStart', from: 0, to: 1 }    /* начало отдыха */
+  prep:          { f: 'main',      from: 0, to: 6 },
+  workAfterPrep: null,
+  rest:          { f: 'restStart', from: 0, to: 1 },
+  workAfterRest: { f: 'restEnd',   from: 0, to: 3 }
 };
 
 const cfg = {
@@ -530,10 +547,20 @@ const pad = n => String(n).padStart(2, '0');
 
 /* ==================== ПЛЕЕР ==================== */
 const players = {};
+const statusEl = { main: 'stMain', restStart: 'stRestStart', restEnd: 'stRestEnd' };
+
 Object.keys(FILES).forEach(function(k){
   const a = new Audio();
   a.preload = 'auto';
   a.src = FILES[k];
+  a.addEventListener('loadedmetadata', function(){
+    const el = document.getElementById(statusEl[k]);
+    if (el) el.innerHTML = '<span class="st-ok">файл есть</span>, ' + a.duration.toFixed(2) + ' с';
+  });
+  a.addEventListener('error', function(){
+    const el = document.getElementById(statusEl[k]);
+    if (el) el.innerHTML = '<span class="st-bad">файл не найден</span>';
+  });
   players[k] = a;
 });
 
