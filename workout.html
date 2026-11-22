@@ -298,7 +298,7 @@
 <div id="setup" class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Тренировка</h1>
-<div class="wk-ver">звук v6</div>
+<div class="wk-ver">звук v7</div>
 
 <div class="tabs">
   <button id="tabCardio" class="tab" onclick="setTab('cardio')">Кардио</button>
@@ -528,7 +528,7 @@ let wakeLock = null;
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2, '0');
 
-/* ==================== ПЛЕЕР (как в sound-test) ==================== */
+/* ==================== ПЛЕЕР ==================== */
 const players = {};
 Object.keys(FILES).forEach(function(k){
   const a = new Audio();
