@@ -482,8 +482,8 @@ function hit(type, f0, f1, t0, dur, gain){
   o.start(t0); o.stop(t0 + dur + 0.05);
 }
 
-/* Шум: щелчок, снейр, гул */
-function noiseHit(t0, dur, gain, type, freq, q, dest){
+/* Шум: щелчок и удар */
+function noiseHit(t0, dur, gain, type, freq, q){
   const c = ac(); if (!c) return;
   const len = Math.max(1, Math.floor(c.sampleRate * dur));
   const buf = c.createBuffer(1, len, c.sampleRate);
@@ -498,112 +498,50 @@ function noiseHit(t0, dur, gain, type, freq, q, dest){
   const g = c.createGain();
   g.gain.setValueAtTime(gain, t0);
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  s.connect(f); f.connect(g); g.connect(dest || out);
+  s.connect(f); f.connect(g); g.connect(out);
   s.start(t0); s.stop(t0 + dur + 0.02);
 }
 
-/* Бочка: низкий удар */
-function kick(t0, gain, f0, f1, dur){
+/* Мягкий колокольчик: основной тон с обертонами и плавным затуханием */
+function chime(f, t0, dur, gain){
   const c = ac(); if (!c) return;
-  const o = c.createOscillator();
-  const g = c.createGain();
-  o.type = 'sine';
-  o.frequency.setValueAtTime(f0 || 170, t0);
-  o.frequency.exponentialRampToValueAtTime(f1 || 44, t0 + 0.09);
-  g.gain.setValueAtTime(gain, t0);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + (dur || 0.4));
-  o.connect(g); g.connect(out);
-  o.start(t0); o.stop(t0 + (dur || 0.4) + 0.05);
+  [[1, 1], [2, 0.22], [3, 0.07]].forEach(([m, k]) => {
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(f * m, t0);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(gain * k, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(out);
+    o.start(t0); o.stop(t0 + dur + 0.05);
+  });
 }
 
-/* Барабан: шум плюс тело */
-function snare(t0, gain){
+/* Низкий тёплый фон для отдыха: медленно нарастает и плавно уходит */
+function pad2(f, t0, dur, gain){
   const c = ac(); if (!c) return;
-  noiseHit(t0, 0.16, gain, 'highpass', 1500, 0.7);
   const o = c.createOscillator();
   const g = c.createGain();
   o.type = 'triangle';
-  o.frequency.setValueAtTime(220, t0);
-  o.frequency.exponentialRampToValueAtTime(150, t0 + 0.1);
-  g.gain.setValueAtTime(gain * 0.8, t0);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.13);
+  o.frequency.setValueAtTime(f, t0);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(gain, t0 + 0.6);
+  g.gain.setValueAtTime(gain, t0 + dur - 0.8);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
   o.connect(g); g.connect(out);
-  o.start(t0); o.stop(t0 + 0.16);
+  o.start(t0); o.stop(t0 + dur + 0.05);
 }
 
-/* Свисток судьи с трелью */
-function whistle(t0, dur, gain){
-  const c = ac(); if (!c) return;
-  const env = c.createGain();
-  env.gain.setValueAtTime(0.0001, t0);
-  env.gain.exponentialRampToValueAtTime(gain, t0 + 0.04);
-  env.gain.setValueAtTime(gain, t0 + dur - 0.1);
-  env.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  env.connect(out);
-
-  const lfo = c.createOscillator();
-  const depth = c.createGain();
-  lfo.type = 'sine';
-  lfo.frequency.value = 36;
-  depth.gain.value = 0.5;
-  lfo.connect(depth);
-  lfo.start(t0); lfo.stop(t0 + dur + 0.05);
-
-  [2560, 2720].forEach(f => {
-    const o = c.createOscillator();
-    const g = c.createGain();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(f, t0);
-    o.frequency.linearRampToValueAtTime(f * 1.07, t0 + dur);
-    g.gain.value = 0.5;
-    depth.connect(g.gain);
-    o.connect(g); g.connect(env);
-    o.start(t0); o.stop(t0 + dur + 0.05);
-  });
-
-  noiseHit(t0, dur, gain * 0.12, 'bandpass', 2800, 3, env);
-}
-
-/* Боксёрский гонг */
-function bell(t0, gain){
-  const c = ac(); if (!c) return;
-  [
-    { f: 790,  g: 1.00, d: 2.2 },
-    { f: 1210, g: 0.72, d: 1.8 },
-    { f: 1830, g: 0.50, d: 1.4 },
-    { f: 2610, g: 0.33, d: 1.0 },
-    { f: 3580, g: 0.21, d: 0.75 },
-    { f: 4750, g: 0.11, d: 0.5 }
-  ].forEach(p => {
-    const o = c.createOscillator();
-    const g = c.createGain();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(p.f, t0);
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(gain * p.g, t0 + 0.003);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + p.d);
-    o.connect(g); g.connect(out);
-    o.start(t0); o.stop(t0 + p.d + 0.05);
-  });
-  noiseHit(t0, 0.035, gain * 0.9, 'highpass', 3200, 0.6);
-}
-
-/* ПОДГОТОВКА: дробь барабана, затем свисток судьи. ~2,5 секунды */
+/* ПОДГОТОВКА: восходящий перелив колокольчиков — «приготовься» */
 function playPrep(){
   if (!soundOn) return;
   const c = ac(); if (!c) return;
   const t = c.currentTime;
-
-  snare(t,        0.4);
-  snare(t + 0.17, 0.5);
-  snare(t + 0.32, 0.6);
-  snare(t + 0.44, 0.72);
-  snare(t + 0.54, 0.88);
-
-  whistle(t + 0.62, 1.85, 0.85);
+  [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => chime(f, t + i * 0.14, 1.2, 0.45));
 }
 
-/* СТАРТ ТРЕНИРОВКИ: удар и рог вверх */
+/* СТАРТ ТРЕНИРОВКИ: удар и рог вверх, без изменений */
 function playWork(){
   if (!soundOn) return;
   const c = ac(); if (!c) return;
@@ -618,22 +556,14 @@ function playWork(){
   hit('square', 990, 990, t + 0.6, 0.6, 0.5);
 }
 
-/* ОТДЫХ: два тяжёлых удара и гонг. ~2,8 секунды */
+/* ОТДЫХ: мягкий нисходящий аккорд на тёплом фоне — «выдохни» */
 function playRest(){
   if (!soundOn) return;
   const c = ac(); if (!c) return;
   const t = c.currentTime;
-
-  kick(t, 1.0, 150, 38, 0.5);
-  noiseHit(t, 0.07, 0.85, 'highpass', 1200, 0.6);
-
-  kick(t + 0.42, 0.85, 195, 50, 0.42);
-  noiseHit(t + 0.42, 0.06, 0.7, 'highpass', 1500, 0.6);
-
-  bell(t + 0.42, 0.55);
-
-  hit('sine', 58, 40, t, 2.8, 0.45);
-  noiseHit(t, 2.6, 0.13, 'lowpass', 200, 0.8);
+  pad2(98, t, 3.2, 0.25);
+  pad2(146.83, t, 3.2, 0.2);
+  [783.99, 659.25, 523.25].forEach((f, i) => chime(f, t + i * 0.25, 2.2, 0.4));
 }
 
 /* Последние 5 секунд отдыха */
