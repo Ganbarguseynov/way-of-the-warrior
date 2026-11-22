@@ -50,6 +50,10 @@
   padding:14px;
   margin-bottom:12px;
 }
+.wk-sec-title{
+  font-size:11px; font-weight:700; letter-spacing:1.2px;
+  text-transform:uppercase; color:#8e8e93; margin-bottom:10px;
+}
 .wk-row{
   display:flex; align-items:center; justify-content:space-between;
   margin-bottom:12px;
@@ -117,6 +121,43 @@
   margin-top:6px;
 }
 .wk-start:active{ transform:scale(.98); }
+
+.pl-empty{ font-size:12px; color:#8e8e93; line-height:1.5; margin-bottom:10px; }
+.pl-item{
+  display:flex; align-items:center; gap:8px;
+  margin-bottom:8px;
+}
+.pl-main{
+  flex:1 1 auto; min-width:0; text-align:left;
+  padding:10px 12px; border-radius:11px;
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.05);
+  color:#fff; cursor:pointer;
+}
+.pl-main b{ display:block; font-size:14px; margin-bottom:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pl-main span{ font-size:11px; color:#8e8e93; }
+.pl-main:active{ background:rgba(255,204,0,.15); border-color:#ffcc00; }
+.pl-del{
+  flex:0 0 auto; width:38px; height:38px; border-radius:10px;
+  border:1px solid rgba(255,59,48,.35);
+  background:rgba(255,59,48,.12); color:#ff3b30;
+  font-size:15px; font-weight:700; cursor:pointer;
+}
+.pl-save{
+  display:grid; grid-template-columns:1fr auto; gap:6px; margin-top:10px;
+}
+.pl-save input{
+  padding:10px 12px; border-radius:10px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(0,0,0,.3); color:#fff;
+  font-size:13px; outline:none; min-width:0;
+}
+.pl-save button{
+  padding:10px 14px; border-radius:10px; border:none;
+  background:linear-gradient(135deg,#ffcc00,#ffd700);
+  color:#000; font-weight:800; font-size:13px; cursor:pointer;
+}
+.pl-status{ font-size:12px; color:#ff8a80; min-height:16px; margin-top:6px; }
 
 /* ================= ЭКРАН ТАЙМЕРА ================= */
 .run{
@@ -264,6 +305,16 @@
 </div>
 
 <div id="paneTimer" class="pane on">
+  <div class="wk-sec">
+    <div class="wk-sec-title">Мои таймеры</div>
+    <div id="presetList"></div>
+    <div class="pl-save">
+      <input id="presetName" type="text" maxlength="30" placeholder="Название, например «Утро 3 мин»">
+      <button onclick="savePreset()">Сохранить</button>
+    </div>
+    <div class="pl-status" id="presetStatus"></div>
+  </div>
+
   <div class="wk-sec">
     <div class="wk-row">
       <span class="wk-label">Подходы</span>
@@ -421,6 +472,9 @@ const cfg = {
   rest:   parseInt(localStorage.getItem('wkRest'))   || 60,
   rounds: parseInt(localStorage.getItem('wkRounds')) || 3
 };
+
+let presets = [];
+try { presets = JSON.parse(localStorage.getItem('wkPresets') || '[]'); } catch (e) { presets = []; }
 
 let phase = 'prep';
 let round = 1;
@@ -630,16 +684,23 @@ function renderChips(){
   $('restChips').innerHTML = chipsHtml(REST_OPTIONS, cfg.rest, 'rest');
 }
 
+function saveCfg(){
+  localStorage.setItem('wkPrep', cfg.prep);
+  localStorage.setItem('wkWork', cfg.work);
+  localStorage.setItem('wkRest', cfg.rest);
+  localStorage.setItem('wkRounds', cfg.rounds);
+}
+
 function pickTime(kind, sec){
   cfg[kind] = sec;
-  localStorage.setItem('wk' + kind.charAt(0).toUpperCase() + kind.slice(1), sec);
+  saveCfg();
   renderChips();
   updateSummary();
 }
 
 function bumpRounds(d){
   cfg.rounds = Math.min(30, Math.max(1, cfg.rounds + d));
-  localStorage.setItem('wkRounds', cfg.rounds);
+  saveCfg();
   $('roundsVal').textContent = cfg.rounds;
   updateSummary();
 }
@@ -667,6 +728,91 @@ function updateSummary(){
     ' · подготовка ' + fmtSec(cfg.prep) +
     '<br>тренировка ' + fmtSec(cfg.work) + ' · отдых ' + fmtSec(cfg.rest) +
     '<br>Всего ≈ ' + Math.round(total / 60) + ' мин';
+}
+
+/* ==================== СОХРАНЁННЫЕ ТАЙМЕРЫ ==================== */
+function presetSummary(p){
+  return p.rounds + ' ' + word(p.rounds) + ' · ' + fmtSec(p.work) + ' / ' + fmtSec(p.rest) +
+    ' · подг. ' + fmtSec(p.prep);
+}
+
+function renderPresets(){
+  const box = $('presetList');
+  box.innerHTML = '';
+  if (presets.length === 0){
+    const e = document.createElement('div');
+    e.className = 'pl-empty';
+    e.textContent = 'Пока пусто. Настройте таймер ниже, дайте название и сохраните.';
+    box.appendChild(e);
+    return;
+  }
+  presets.forEach((p, i) => {
+    const row = document.createElement('div');
+    row.className = 'pl-item';
+
+    const main = document.createElement('button');
+    main.className = 'pl-main';
+    main.onclick = () => loadPreset(i);
+    const title = document.createElement('b');
+    title.textContent = p.name;
+    const info = document.createElement('span');
+    info.textContent = presetSummary(p);
+    main.appendChild(title);
+    main.appendChild(info);
+
+    const del = document.createElement('button');
+    del.className = 'pl-del';
+    del.textContent = '✕';
+    del.setAttribute('aria-label', 'Удалить');
+    del.onclick = () => deletePreset(i);
+
+    row.appendChild(main);
+    row.appendChild(del);
+    box.appendChild(row);
+  });
+}
+
+function setPresetStatus(text){
+  $('presetStatus').textContent = text || '';
+}
+
+function savePreset(){
+  const name = $('presetName').value.trim();
+  if (!name){ setPresetStatus('Введите название таймера'); return; }
+  presets.push({
+    name: name,
+    rounds: cfg.rounds,
+    prep: cfg.prep,
+    work: cfg.work,
+    rest: cfg.rest
+  });
+  localStorage.setItem('wkPresets', JSON.stringify(presets));
+  $('presetName').value = '';
+  setPresetStatus('');
+  renderPresets();
+}
+
+function loadPreset(i){
+  const p = presets[i];
+  if (!p) return;
+  cfg.rounds = p.rounds;
+  cfg.prep = p.prep;
+  cfg.work = p.work;
+  cfg.rest = p.rest;
+  saveCfg();
+  $('roundsVal').textContent = cfg.rounds;
+  renderChips();
+  updateSummary();
+  setPresetStatus('');
+}
+
+function deletePreset(i){
+  const p = presets[i];
+  if (!p) return;
+  if (!confirm('Удалить таймер «' + p.name + '»?')) return;
+  presets.splice(i, 1);
+  localStorage.setItem('wkPresets', JSON.stringify(presets));
+  renderPresets();
 }
 
 /* ==================== XP ==================== */
@@ -950,6 +1096,7 @@ function goBackToMain(){
 
 /* ==================== СТАРТ ==================== */
 $('roundsVal').textContent = cfg.rounds;
+renderPresets();
 renderChips();
 updateSummary();
 updateSoundIcon();
