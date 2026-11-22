@@ -13,11 +13,6 @@
 }
 *{ -webkit-tap-highlight-color:transparent; box-sizing:border-box; }
 
-.wk-ver{
-  font-size:11px; font-weight:700; color:#ffcc00;
-  margin:-10px 0 14px; letter-spacing:.3px;
-}
-
 /* ================= НАСТРОЙКА ================= */
 .tabs{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:4px 0 18px; }
 .tab{
@@ -59,14 +54,17 @@
 }
 .wk-row{
   display:flex; align-items:center; justify-content:space-between;
-  margin-bottom:12px;
+  margin-bottom:14px;
 }
-.wk-row.col{ display:block; }
 .wk-label{
   font-size:13px; font-weight:600; color:#d1d1d6;
-  display:block; margin-bottom:8px;
 }
-.wk-row .wk-label{ margin-bottom:0; }
+.wk-block{ margin-bottom:16px; }
+.wk-block-head{
+  display:flex; justify-content:space-between; align-items:center;
+  margin-bottom:8px;
+}
+.wk-cur{ font-size:12px; font-weight:700; color:#ffcc00; }
 .wk-chips{
   display:flex; gap:8px; overflow-x:auto; padding-bottom:2px;
   -webkit-overflow-scrolling:touch;
@@ -97,20 +95,19 @@
   font-size:17px; font-weight:700; color:#ffcc00;
 }
 .wk-custom{
-  display:grid; grid-template-columns:1fr 1fr 1.4fr 44px;
-  gap:6px; margin-top:6px;
+  display:grid; grid-template-columns:1fr 1fr 1.5fr;
+  gap:6px; margin-top:8px;
 }
-.wk-custom input,.wk-custom select{
+.wk-custom input{
   padding:10px 6px; border-radius:10px;
   border:1px solid rgba(255,255,255,.14);
   background:rgba(0,0,0,.3); color:#fff;
-  font-size:13px; text-align:center; outline:none;
+  font-size:13px; text-align:center; outline:none; min-width:0;
 }
-.wk-custom select{ text-align:left; padding-left:8px; font-size:12px; }
 .wk-custom button{
   border-radius:10px; border:none;
   background:linear-gradient(135deg,#ffcc00,#ffd700);
-  color:#000; font-weight:800; font-size:15px; cursor:pointer;
+  color:#000; font-weight:800; font-size:13px; cursor:pointer;
 }
 .wk-summary{
   font-size:12px; color:#8e8e93; text-align:center;
@@ -121,9 +118,11 @@
   background:linear-gradient(135deg,#ffcc00,#ffd700);
   color:#000; font-size:16px; font-weight:800; letter-spacing:.4px;
   cursor:pointer; box-shadow:0 6px 18px rgba(255,204,0,.25);
-  margin-top:6px;
+  margin-top:6px; margin-bottom:12px;
 }
 .wk-start:active{ transform:scale(.98); }
+
+.wk-hint{ font-size:12px; color:#8e8e93; line-height:1.5; margin-bottom:10px; }
 
 .pl-empty{ font-size:12px; color:#8e8e93; line-height:1.5; margin-bottom:10px; }
 .pl-item{
@@ -147,7 +146,7 @@
   font-size:15px; font-weight:700; cursor:pointer;
 }
 .pl-save{
-  display:grid; grid-template-columns:1fr auto; gap:6px; margin-top:10px;
+  display:grid; grid-template-columns:1fr auto; gap:6px; margin-top:4px;
 }
 .pl-save input{
   padding:10px 12px; border-radius:10px;
@@ -314,7 +313,6 @@
 <div id="setup" class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Тренировка</h1>
-<div class="wk-ver">ВЕРСИЯ ЗВУКА 25</div>
 
 <div class="tabs">
   <button id="tabCardio" class="tab" onclick="setTab('cardio')">Кардио</button>
@@ -331,16 +329,8 @@
 
 <div id="paneTimer" class="pane on">
   <div class="wk-sec">
-    <div class="wk-sec-title">Мои таймеры</div>
-    <div id="presetList"></div>
-    <div class="pl-save">
-      <input id="presetName" type="text" maxlength="30" placeholder="Название, например «Утро 3 мин»">
-      <button onclick="savePreset()">Сохранить</button>
-    </div>
-    <div class="pl-status" id="presetStatus"></div>
-  </div>
+    <div class="wk-sec-title">Настройка тренировки</div>
 
-  <div class="wk-sec">
     <div class="wk-row">
       <span class="wk-label">Подходы</span>
       <div class="wk-stepper">
@@ -350,36 +340,64 @@
       </div>
     </div>
 
-    <div class="wk-row col">
-      <span class="wk-label">Подготовка</span>
+    <div class="wk-block">
+      <div class="wk-block-head">
+        <span class="wk-label">Подготовка</span>
+        <span class="wk-cur" id="curPrep"></span>
+      </div>
       <div class="wk-chips" id="prepChips"></div>
+      <div class="wk-custom">
+        <input id="c-prep-min" type="number" min="0" inputmode="numeric" placeholder="мин">
+        <input id="c-prep-sec" type="number" min="0" max="59" inputmode="numeric" placeholder="сек">
+        <button onclick="applyCustom('prep')">Задать</button>
+      </div>
     </div>
 
-    <div class="wk-row col">
-      <span class="wk-label">Тренировка</span>
+    <div class="wk-block">
+      <div class="wk-block-head">
+        <span class="wk-label">Тренировка</span>
+        <span class="wk-cur" id="curWork"></span>
+      </div>
       <div class="wk-chips" id="workChips"></div>
+      <div class="wk-custom">
+        <input id="c-work-min" type="number" min="0" inputmode="numeric" placeholder="мин">
+        <input id="c-work-sec" type="number" min="0" max="59" inputmode="numeric" placeholder="сек">
+        <button onclick="applyCustom('work')">Задать</button>
+      </div>
     </div>
 
-    <div class="wk-row col">
-      <span class="wk-label">Отдых</span>
+    <div class="wk-block">
+      <div class="wk-block-head">
+        <span class="wk-label">Отдых</span>
+        <span class="wk-cur" id="curRest"></span>
+      </div>
       <div class="wk-chips" id="restChips"></div>
-    </div>
-
-    <div class="wk-custom">
-      <input id="c-min" type="number" min="0" placeholder="мин">
-      <input id="c-sec" type="number" min="0" max="59" placeholder="сек">
-      <select id="c-target">
-        <option value="prep">Подготовка</option>
-        <option value="work">Тренировка</option>
-        <option value="rest">Отдых</option>
-      </select>
-      <button onclick="applyCustom()">✓</button>
+      <div class="wk-custom">
+        <input id="c-rest-min" type="number" min="0" inputmode="numeric" placeholder="мин">
+        <input id="c-rest-sec" type="number" min="0" max="59" inputmode="numeric" placeholder="сек">
+        <button onclick="applyCustom('rest')">Задать</button>
+      </div>
     </div>
 
     <div class="wk-summary" id="summary"></div>
   </div>
 
   <button class="wk-start" onclick="startSession()">Начать тренировку</button>
+
+  <div class="wk-sec">
+    <div class="wk-sec-title">Сохранить как таймер</div>
+    <div class="wk-hint">Запомнит текущие подходы, подготовку, тренировку и отдых под названием. Потом нажмите на сохранённый таймер в списке ниже, и настройки подставятся сами.</div>
+    <div class="pl-save">
+      <input id="presetName" type="text" maxlength="30" placeholder="Название, например «Утро 3 мин»">
+      <button onclick="savePreset()">Сохранить таймер</button>
+    </div>
+    <div class="pl-status" id="presetStatus"></div>
+  </div>
+
+  <div class="wk-sec">
+    <div class="wk-sec-title">Мои таймеры</div>
+    <div id="presetList"></div>
+  </div>
 </div>
 </div>
 
@@ -494,6 +512,8 @@ const XP_BONUS = 20;
 const PREP_OPTIONS = [3, 5, 6, 10, 15];
 const WORK_OPTIONS = [60, 120, 180, 300, 600, 900];
 const REST_OPTIONS = [15, 30, 45, 60, 90, 120];
+
+const OPTIONS = { prep: PREP_OPTIONS, work: WORK_OPTIONS, rest: REST_OPTIONS };
 
 /* ============================================================
    ЗВУКИ. Файлы лежат в одной папке с workout.html.
@@ -714,8 +734,10 @@ function setTab(which){
 }
 
 function fmtSec(sec){
-  if (sec >= 60) return Math.round(sec / 60) + ' мин';
-  return sec + ' сек';
+  if (sec < 60) return sec + ' сек';
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return s ? m + ' мин ' + s + ' сек' : m + ' мин';
 }
 
 function chipsHtml(list, current, kind){
@@ -726,9 +748,14 @@ function chipsHtml(list, current, kind){
 }
 
 function renderChips(){
-  $('prepChips').innerHTML = chipsHtml(PREP_OPTIONS, cfg.prep, 'prep');
-  $('workChips').innerHTML = chipsHtml(WORK_OPTIONS, cfg.work, 'work');
-  $('restChips').innerHTML = chipsHtml(REST_OPTIONS, cfg.rest, 'rest');
+  ['prep', 'work', 'rest'].forEach(function(kind){
+    const list = OPTIONS[kind].slice();
+    if (list.indexOf(cfg[kind]) === -1) list.push(cfg[kind]);
+    list.sort(function(a, b){ return a - b; });
+    $(kind + 'Chips').innerHTML = chipsHtml(list, cfg[kind], kind);
+    $('cur' + kind.charAt(0).toUpperCase() + kind.slice(1)).textContent =
+      'сейчас: ' + fmtSec(cfg[kind]);
+  });
 }
 
 function saveCfg(){
@@ -752,14 +779,14 @@ function bumpRounds(d){
   updateSummary();
 }
 
-function applyCustom(){
-  const m = parseInt($('c-min').value) || 0;
-  const s = parseInt($('c-sec').value) || 0;
+function applyCustom(kind){
+  const m = parseInt($('c-' + kind + '-min').value) || 0;
+  const s = Math.min(59, parseInt($('c-' + kind + '-sec').value) || 0);
   const sec = m * 60 + s;
   if (sec <= 0) { tg.showAlert('Укажите время больше нуля'); return; }
-  pickTime($('c-target').value, sec);
-  $('c-min').value = '';
-  $('c-sec').value = '';
+  pickTime(kind, sec);
+  $('c-' + kind + '-min').value = '';
+  $('c-' + kind + '-sec').value = '';
 }
 
 function word(n){
@@ -789,7 +816,7 @@ function renderPresets(){
   if (presets.length === 0){
     const e = document.createElement('div');
     e.className = 'pl-empty';
-    e.textContent = 'Пока пусто. Настройте таймер ниже, дайте название и сохраните.';
+    e.textContent = 'Пока пусто. Настройте тренировку выше, введите название и нажмите «Сохранить таймер».';
     box.appendChild(e);
     return;
   }
@@ -835,7 +862,7 @@ function savePreset(){
   });
   localStorage.setItem('wkPresets11', JSON.stringify(presets));
   $('presetName').value = '';
-  setPresetStatus('');
+  setPresetStatus('Таймер «' + name + '» сохранён');
   renderPresets();
 }
 
@@ -988,8 +1015,7 @@ function enterPhase(p){
   renderExercise();
 
   clearCueTimers();
-  /* Вход в тренировку не рубит звук: хвост подготовки и хвост конца отдыха
-     доигрывают полностью, как и было записано в файле. */
+  /* Вход в тренировку не рубит звук: хвост подготовки и хвост конца отдыха доигрывают полностью. */
   if (p !== 'work') stopAllClips();
 
   if (p === 'prep'){
