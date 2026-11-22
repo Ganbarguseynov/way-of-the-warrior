@@ -125,20 +125,6 @@
 }
 .wk-start:active{ transform:scale(.98); }
 
-.st-row{
-  display:flex; align-items:center; gap:10px; margin-bottom:8px;
-}
-.st-row button{
-  flex:0 0 128px; padding:10px 6px; border-radius:10px;
-  border:1px solid rgba(255,255,255,.14);
-  background:rgba(255,255,255,.06);
-  color:#fff; font-size:12px; font-weight:700; cursor:pointer;
-}
-.st-row button:active{ background:rgba(255,204,0,.2); border-color:#ffcc00; }
-.st-row span{ font-size:10px; color:#8e8e93; line-height:1.4; }
-.st-ok{ color:#34c759; font-weight:700; }
-.st-bad{ color:#ff3b30; font-weight:700; }
-
 .pl-empty{ font-size:12px; color:#8e8e93; line-height:1.5; margin-bottom:10px; }
 .pl-item{
   display:flex; align-items:center; gap:8px;
@@ -268,6 +254,35 @@
 }
 .ctl:active{ opacity:.6; }
 
+/* ================= БЛОКИРОВКА ================= */
+.lock-ov{
+  position:fixed; inset:0; z-index:980;
+  display:none; flex-direction:column;
+  align-items:center; justify-content:center;
+  background:rgba(8,10,12,.94);
+  color:var(--ink);
+  touch-action:none; user-select:none; -webkit-user-select:none;
+  padding:24px; text-align:center;
+}
+.lock-ov.show{ display:flex; }
+.lo-clock{
+  font-size:clamp(66px,23vw,116px);
+  font-weight:800; line-height:1; letter-spacing:-3px;
+  font-variant-numeric:tabular-nums;
+}
+.lo-phase{
+  font-size:clamp(19px,5.6vw,25px);
+  font-weight:800; letter-spacing:1.5px;
+  text-transform:uppercase; margin-top:14px; opacity:.85;
+}
+.lo-unlock{
+  margin-top:48px; background:rgba(255,255,255,.07);
+  border:1px solid rgba(255,255,255,.18); border-radius:50%;
+  width:84px; height:84px; color:#ffcc00; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+}
+.lo-hint{ margin-top:16px; font-size:13px; color:#8e8e93; line-height:1.5; }
+
 /* ================= ФИНИШ ================= */
 .wk-finish{
   position:fixed; inset:0; z-index:950;
@@ -306,7 +321,7 @@
 <div id="setup" class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Тренировка</h1>
-<div class="wk-ver">ВЕРСИЯ ЗВУКА 20</div>
+<div class="wk-ver">ВЕРСИЯ ЗВУКА 21</div>
 
 <div class="tabs">
   <button id="tabCardio" class="tab" onclick="setTab('cardio')">Кардио</button>
@@ -322,25 +337,6 @@
 </div>
 
 <div id="paneTimer" class="pane on">
-  <div class="wk-sec">
-    <div class="wk-sec-title">Проверить звуки</div>
-
-    <div class="st-row">
-      <button onclick="testCue('prep')">Подготовка</button>
-      <span id="stMain">проверка файла…</span>
-    </div>
-
-    <div class="st-row">
-      <button onclick="testCue('rest')">Начало отдыха</button>
-      <span id="stRestStart">проверка файла…</span>
-    </div>
-
-    <div class="st-row">
-      <button onclick="testCue('workAfterRest')">Конец отдыха</button>
-      <span id="stRestEnd">проверка файла…</span>
-    </div>
-  </div>
-
   <div class="wk-sec">
     <div class="wk-sec-title">Мои таймеры</div>
     <div id="presetList"></div>
@@ -427,12 +423,18 @@
   </div>
 
   <div class="bottombar">
-    <button class="icon-btn" id="lockBtn" onclick="toggleWake()" aria-label="Не гасить экран">
+    <button class="icon-btn" id="lockBtn" onclick="lockScreen()" aria-label="Заблокировать экран">
       <svg id="lockIcon" width="26" height="26" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="1.8"
            stroke-linecap="round" stroke-linejoin="round">
         <rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/>
         <path d="M8 10.5V7a4 4 0 0 1 7.6-1.7"/>
+      </svg>
+    </button>
+    <button class="icon-btn" onclick="exitSession()" aria-label="Выйти из тренировки">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+        <path d="M6 6l12 12M18 6L6 18"/>
       </svg>
     </button>
     <button class="icon-btn" id="soundBtn" onclick="toggleSound()" aria-label="Звук">
@@ -466,6 +468,21 @@
       </svg>
     </button>
   </div>
+</div>
+
+<!-- ================== БЛОКИРОВКА ================== -->
+<div id="lockOverlay" class="lock-ov">
+  <div class="lo-clock" id="lockClock">00:00</div>
+  <div class="lo-phase" id="lockPhase">Подготовка</div>
+  <button class="lo-unlock" id="loUnlock" aria-label="Удерживайте для разблокировки">
+    <svg width="34" height="34" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="1.8"
+         stroke-linecap="round" stroke-linejoin="round">
+      <rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/>
+      <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>
+    </svg>
+  </button>
+  <div class="lo-hint">Экран заблокирован. Удерживайте замок 1,5 секунды, чтобы разблокировать.</div>
 </div>
 
 <!-- ================== ФИНИШ ================== -->
@@ -551,6 +568,8 @@ let xpEarned = 0;
 let finished = false;
 let soundOn = localStorage.getItem('wkSound') !== 'off';
 let wakeLock = null;
+let locked = false;
+let holdTimer = null;
 let restEndFired = false;
 
 const $ = id => document.getElementById(id);
@@ -569,22 +588,11 @@ function ac(){
 
 /* ==================== ПЛЕЕР ==================== */
 const players = {};
-const statusEl = { main: 'stMain', restStart: 'stRestStart', restEnd: 'stRestEnd' };
 
 Object.keys(FILES).forEach(function(k){
   const a = new Audio();
   a.preload = 'auto';
   a.src = FILES[k];
-  a.addEventListener('loadedmetadata', function(){
-    const el = document.getElementById(statusEl[k]);
-    if (el) el.innerHTML = FILES[k] +
-      '<br><span class="st-ok">есть, ' + a.duration.toFixed(2) + ' с</span>';
-  });
-  a.addEventListener('error', function(){
-    const el = document.getElementById(statusEl[k]);
-    if (el) el.innerHTML = FILES[k] +
-      '<br><span class="st-bad">файл не найден</span>';
-  });
   players[k] = a;
 });
 
@@ -886,6 +894,76 @@ function awardXP(delta){
   addXP(delta);
 }
 
+/* ==================== БЛОКИРОВКА ЭКРАНА ==================== */
+async function requestWake(){
+  try {
+    if ('wakeLock' in navigator && !wakeLock){
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', function(){ wakeLock = null; });
+    }
+  } catch (e) {}
+}
+
+function releaseWake(){
+  if (wakeLock){
+    try { wakeLock.release(); } catch (e) {}
+    wakeLock = null;
+  }
+}
+
+function lockScreen(){
+  if (finished || !running && phase !== 'prep' && phase !== 'work' && phase !== 'rest') return;
+  locked = true;
+  $('lockOverlay').classList.add('show');
+  requestWake();
+  updateLockIcon();
+  render();
+}
+
+function unlockScreen(){
+  locked = false;
+  clearTimeout(holdTimer);
+  holdTimer = null;
+  $('lockOverlay').classList.remove('show');
+  releaseWake();
+  updateLockIcon();
+}
+
+function holdStart(e){
+  e.preventDefault();
+  clearTimeout(holdTimer);
+  holdTimer = setTimeout(unlockScreen, 1500);
+}
+
+function holdCancel(){
+  clearTimeout(holdTimer);
+  holdTimer = null;
+}
+
+$('loUnlock').addEventListener('pointerdown', holdStart);
+$('loUnlock').addEventListener('pointerup', holdCancel);
+$('loUnlock').addEventListener('pointerleave', holdCancel);
+$('loUnlock').addEventListener('pointercancel', holdCancel);
+
+function updateLockIcon(){
+  $('lockBtn').classList.toggle('off', !locked);
+}
+
+/* ==================== ВЫХОД ==================== */
+function exitSession(){
+  if (locked) return;
+  if (!confirm('Выйти из тренировки?')) return;
+  finished = true;
+  running = false;
+  clearInterval(iv);
+  clearCueTimers();
+  stopAllClips();
+  releaseWake();
+  $('run').classList.remove('show');
+  $('finish').classList.remove('show');
+  $('setup').style.display = '';
+}
+
 /* ==================== ТАЙМЕР ==================== */
 function renderExercise(){
   const b = $('exBlock');
@@ -922,8 +1000,9 @@ function enterPhase(p){
   run.classList.remove('prep', 'work', 'rest');
   run.classList.add(p);
 
-  $('phaseLabel').textContent =
-    p === 'prep' ? 'Подготовка' : (p === 'work' ? 'Тренировка' : 'Отдых');
+  const label = p === 'prep' ? 'Подготовка' : (p === 'work' ? 'Тренировка' : 'Отдых');
+  $('phaseLabel').textContent = label;
+  $('lockPhase').textContent = label;
 
   setPauseIcon(false);
   renderExercise();
@@ -960,7 +1039,9 @@ function tick(){
 
 function render(){
   const s = Math.ceil(Math.max(0, remainingMs) / 1000);
-  $('clock').textContent = pad(Math.floor(s / 60)) + ':' + pad(s % 60);
+  const clock = pad(Math.floor(s / 60)) + ':' + pad(s % 60);
+  $('clock').textContent = clock;
+  $('lockClock').textContent = clock;
   $('totalLeft').textContent = fmtTotal(totalLeftMs());
   $('setsVal').textContent = (phase === 'prep' ? 0 : round) + '/' + cfg.rounds;
 }
@@ -1081,6 +1162,7 @@ function finishSession(){
   running = false;
   clearCueTimers();
   stopAllClips();
+  releaseWake();
 
   xpEarned += XP_BONUS;
   awardXP(XP_BONUS);
@@ -1110,31 +1192,7 @@ function finishSession(){
   $('finish').classList.add('show');
 }
 
-/* ==================== ЭКРАН / ЗВУК ==================== */
-async function toggleWake(){
-  try {
-    if (wakeLock){
-      await wakeLock.release();
-      wakeLock = null;
-    } else if ('wakeLock' in navigator){
-      wakeLock = await navigator.wakeLock.request('screen');
-      wakeLock.addEventListener('release', function(){ wakeLock = null; updateLockIcon(); });
-    } else {
-      tg.showAlert('Этот браузер не умеет не гасить экран.');
-    }
-  } catch (e){
-    tg.showAlert('Не удалось включить. Экран может гаснуть.');
-  }
-  updateLockIcon();
-}
-
-function updateLockIcon(){
-  $('lockBtn').classList.toggle('off', !wakeLock);
-  $('lockIcon').innerHTML = wakeLock
-    ? '<rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>'
-    : '<rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7a4 4 0 0 1 7.6-1.7"/>';
-}
-
+/* ==================== ЗВУК ==================== */
 function toggleSound(){
   soundOn = !soundOn;
   localStorage.setItem('wkSound', soundOn ? 'on' : 'off');
