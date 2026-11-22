@@ -13,6 +13,8 @@
 }
 *{ -webkit-tap-highlight-color:transparent; box-sizing:border-box; }
 
+.wk-ver{ font-size:10px; color:#5b5b60; margin:-8px 0 14px; }
+
 /* ================= НАСТРОЙКА ================= */
 .tabs{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:4px 0 18px; }
 .tab{
@@ -246,6 +248,7 @@
 <div id="setup" class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Тренировка</h1>
+<div class="wk-ver">звук v3</div>
 
 <div class="tabs">
   <button id="tabCardio" class="tab" onclick="setTab('cardio')">Кардио</button>
@@ -502,46 +505,60 @@ function noiseHit(t0, dur, gain, type, freq, q){
   s.start(t0); s.stop(t0 + dur + 0.02);
 }
 
-/* Мягкий колокольчик: основной тон с обертонами и плавным затуханием */
-function chime(f, t0, dur, gain){
+/* Жёсткий удар-стаб: пила через фильтр, закрывающийся за долю секунды, плюс суб */
+function stab(t0, f, dur, gain){
   const c = ac(); if (!c) return;
-  [[1, 1], [2, 0.22], [3, 0.07]].forEach(([m, k]) => {
+  const saw = c.createOscillator();
+  const sub = c.createOscillator();
+  const lp = c.createBiquadFilter();
+  const g = c.createGain();
+  saw.type = 'sawtooth';
+  saw.frequency.setValueAtTime(f, t0);
+  sub.type = 'square';
+  sub.frequency.setValueAtTime(f / 2, t0);
+  lp.type = 'lowpass';
+  lp.Q.value = 8;
+  lp.frequency.setValueAtTime(2400, t0);
+  lp.frequency.exponentialRampToValueAtTime(260, t0 + dur);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(gain, t0 + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  saw.connect(lp); sub.connect(lp);
+  lp.connect(g); g.connect(out);
+  saw.start(t0); sub.start(t0);
+  saw.stop(t0 + dur + 0.05); sub.stop(t0 + dur + 0.05);
+}
+
+/* Боксёрский звонок: негармоничные обертоны дают металлический звон */
+function boxBell(t0, gain){
+  const c = ac(); if (!c) return;
+  [[1, 1.0, 1.8], [2.76, 0.55, 1.4], [5.4, 0.3, 0.9], [8.93, 0.15, 0.5]].forEach(([m, k, d]) => {
     const o = c.createOscillator();
     const g = c.createGain();
     o.type = 'sine';
-    o.frequency.setValueAtTime(f * m, t0);
+    o.frequency.setValueAtTime(980 * m, t0);
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(gain * k, t0 + 0.012);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    g.gain.exponentialRampToValueAtTime(gain * k, t0 + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
     o.connect(g); g.connect(out);
-    o.start(t0); o.stop(t0 + dur + 0.05);
+    o.start(t0); o.stop(t0 + d + 0.05);
   });
+  noiseHit(t0, 0.03, gain * 0.8, 'highpass', 3500, 0.6);
 }
 
-/* Низкий тёплый фон для отдыха: медленно нарастает и плавно уходит */
-function pad2(f, t0, dur, gain){
-  const c = ac(); if (!c) return;
-  const o = c.createOscillator();
-  const g = c.createGain();
-  o.type = 'triangle';
-  o.frequency.setValueAtTime(f, t0);
-  g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(gain, t0 + 0.6);
-  g.gain.setValueAtTime(gain, t0 + dur - 0.8);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  o.connect(g); g.connect(out);
-  o.start(t0); o.stop(t0 + dur + 0.05);
-}
-
-/* ПОДГОТОВКА: восходящий перелив колокольчиков — «приготовься» */
+/* ПОДГОТОВКА: три жёстких стаба и финальный удар на высоком тоне */
 function playPrep(){
   if (!soundOn) return;
   const c = ac(); if (!c) return;
   const t = c.currentTime;
-  [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => chime(f, t + i * 0.14, 1.2, 0.45));
+  stab(t,        110, 0.22, 1.0);
+  stab(t + 0.3,  110, 0.22, 1.0);
+  stab(t + 0.6,  110, 0.22, 1.0);
+  stab(t + 0.9,  165, 0.9,  1.0);
+  noiseHit(t + 0.9, 0.25, 0.5, 'highpass', 2500, 0.7);
 }
 
-/* СТАРТ ТРЕНИРОВКИ: удар и рог вверх, без изменений */
+/* СТАРТ ТРЕНИРОВКИ: без изменений */
 function playWork(){
   if (!soundOn) return;
   const c = ac(); if (!c) return;
@@ -556,14 +573,15 @@ function playWork(){
   hit('square', 990, 990, t + 0.6, 0.6, 0.5);
 }
 
-/* ОТДЫХ: мягкий нисходящий аккорд на тёплом фоне — «выдохни» */
+/* ОТДЫХ: конец раунда, два боксёрских «динь» и низкий удар */
 function playRest(){
   if (!soundOn) return;
   const c = ac(); if (!c) return;
   const t = c.currentTime;
-  pad2(98, t, 3.2, 0.25);
-  pad2(146.83, t, 3.2, 0.2);
-  [783.99, 659.25, 523.25].forEach((f, i) => chime(f, t + i * 0.25, 2.2, 0.4));
+  hit('sine', 90, 36, t, 0.6, 1.0);
+  noiseHit(t, 0.05, 0.8, 'highpass', 1200, 0.6);
+  boxBell(t, 0.9);
+  boxBell(t + 0.45, 0.9);
 }
 
 /* Последние 5 секунд отдыха */
