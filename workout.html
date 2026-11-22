@@ -306,7 +306,7 @@
 <div id="setup" class="inner-screen">
 <button class="back-btn" onclick="window.location.href='index.html'">← Назад в приложение</button>
 <h1>Тренировка</h1>
-<div class="wk-ver">ВЕРСИЯ ЗВУКА 19</div>
+<div class="wk-ver">ВЕРСИЯ ЗВУКА 20</div>
 
 <div class="tabs">
   <button id="tabCardio" class="tab" onclick="setTab('cardio')">Кардио</button>
@@ -519,14 +519,14 @@ const FILES = {
 };
 
 const SOUND = {
-  prep:          { f: 'main',      from: 3, to: 6.35, gain: 3 },
+  prep:          { f: 'main',      from: 2.88, to: 6.38, gain: 3 },
   rest:          { f: 'restStart', from: 0, to: 2.17, gain: 1.8 },
   workAfterRest: { f: 'restEnd',   from: 0, to: 3.57, gain: 2.5 }
 };
 
 /* Сдвиг в секундах: плюс — позже, минус — раньше. */
 const TIMING = {
-  prepShift: 1.5,
+  prepShift: 0.5,
   restEndShift: 1
 };
 
