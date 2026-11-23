@@ -10,27 +10,16 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <link rel="stylesheet" href="style.css">
 <style>
-:root { --accent-color: #ffcc00; --success: #34c759; --danger: #ff3b30; --info: #5ac8fa; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: #0a0a0a; color: #fff; margin: 0; padding: 0; }
-.screen { display: none; }
-.screen.active { display: flex; }
-.auth-screen { justify-content: center; align-items: center; min-height: 100vh; }
-.inner-screen { width: 100%; max-width: 600px; padding: 20px; box-sizing: border-box; overflow-y: auto; }
-.back-btn { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 8px 12px; border-radius: 6px; cursor: pointer; margin-bottom: 15px; }
-.btn { background: var(--accent-color); color: #000; border: none; padding: 12px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 15px; }
-.form-group { margin-bottom: 15px; }
-.form-group label { display: block; margin-bottom: 6px; color: #8e8e93; font-size: 13px; }
-.form-group input, .form-group select { width: 100%; padding: 10px; border-radius: 8px; background: #1c1c1e; border: 1px solid #3a3a3c; color: #fff; box-sizing: border-box; }
 .history-card { background: #1c1c1e; border-radius: 12px; padding: 15px; margin-bottom: 10px; border: 1px solid #2c2c2e; }
 .history-date { color: var(--accent-color); font-weight: bold; font-size: 15px; margin-bottom: 5px; }
-.history-food-item { font-size: 12px; color: #fff; margin-bottom: 5px; padding-left: 10px; border-left: 2px solid var(--success); display: flex; justify-content: space-between; }
-.history-water-item { font-size: 12px; color: #fff; margin-bottom: 5px; padding-left: 10px; border-left: 2px solid var(--info); display: flex; justify-content: space-between; }
+.history-food-item { font-size: 12px; color: #fff; margin-bottom: 5px; padding-left: 10px; border-left: 2px solid #34c759; display: flex; justify-content: space-between; }
+.history-water-item { font-size: 12px; color: #fff; margin-bottom: 5px; padding-left: 10px; border-left: 2px solid #5ac8fa; display: flex; justify-content: space-between; }
 .history-weight-item { font-size: 14px; color: #fff; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; }
 .custom-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box; }
 .custom-modal.active { display: flex; }
-.custom-modal-content { background: #1c1c1e; border-radius: 16px; padding: 20px; width: 100%; max-width: 400px; box-sizing: border-box; position: relative; max-height: 90vh; overflow-y: auto; }
-.custom-modal-close { position: absolute; top: 15px; right: 15px; background: rgba(255,255,255,0.1); border: none; color: white; font-size: 18px; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.compact-panel { background: rgba(28, 28, 30, 0.85); border-radius: 10px; padding: 8px; border: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; min-width: 0; box-sizing: border-box; cursor: pointer; transition: 0.2s; }
+.custom-modal-content { background: #1c1c1e; border-radius: 16px; padding: 20px; width: 100%; max-width: 400px; box-sizing: border-box; position: relative; max-height: 90vh; overflow-y: auto;}
+.custom-modal-close { position: absolute; top: 15px; right: 15px; background: rgba(255,255,255,0.1); border: none; color: white; font-size: 18px; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10;}
+.compact-panel { background: rgba(28, 28, 30, 0.85); border-radius: 10px; padding: 8px; border: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; min-width: 0; box-sizing: border-box; cursor: pointer; transition: 0.2s;}
 .compact-panel:active { background: rgba(50, 50, 55, 0.9); }
 .compact-food-list { max-height: 50px; overflow-y: auto; margin-top: 6px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 4px; }
 .compact-food-item { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 2px 5px; border-radius: 4px; margin-bottom: 2px; font-size: 10px; }
@@ -40,7 +29,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sa
 .analysis-btn { background: rgba(255, 204, 0, 0.2); border: 1px solid var(--accent-color); color: var(--accent-color); padding: 6px 12px; border-radius: 20px; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; }
 .diary-btn { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; border-radius: 6px; padding: 2px 6px; font-size: 12px; cursor: pointer; }
 .diary-btn:active { background: rgba(255,255,255,0.3); }
-.chart-container { background: #2c2c2e; border-radius: 12px; padding: 10px; margin-top: 15px; position: relative; height: 200px; width: 100%; box-sizing: border-box; }
+.chart-container { background: #2c2c2e; border-radius: 12px; padding: 10px; margin-top: 15px; position: relative; height: 200px; width: 100%; box-sizing: border-box;}
 .summary-box { background: rgba(52, 199, 89, 0.1); border: 1px solid #34c759; border-radius: 12px; padding: 15px; margin-bottom: 15px; }
 .summary-title { font-size: 14px; font-weight: bold; color: #34c759; margin-bottom: 8px; }
 .summary-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 5px; text-align: center; }
@@ -51,7 +40,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sa
 100% { transform: scale(1); box-shadow: 0 0 15px #ff5722; background: rgba(255, 87, 34, 0.4); color: #fff; }
 }
 .streak-pending { animation: pulse-fire 1.5s infinite; border: 2px solid #fff; }
-.motivation-toast { position: fixed; top: -150px; left: 50%; transform: translateX(-50%); background: rgba(28, 28, 30, 0.95); backdrop-filter: blur(10px); border: 2px solid var(--accent-color); border-radius: 16px; padding: 15px 20px; display: flex; align-items: center; gap: 15px; z-index: 9999; box-shadow: 0 10px 30px rgba(0,0,0,0.8); transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); width: 90%; max-width: 350px; }
+.motivation-toast { position: fixed; top: -150px; left: 50%; transform: translateX(-50%); background: rgba(28, 28, 30, 0.95); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 2px solid var(--accent-color); border-radius: 16px; padding: 15px 20px; display: flex; align-items: center; gap: 15px; z-index: 9999; box-shadow: 0 10px 30px rgba(0,0,0,0.8), 0 0 20px rgba(255, 204, 0, 0.3); transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); width: 90%; max-width: 350px; }
 .motivation-toast.show { top: 20px; }
 .motivation-icon { font-size: 36px; }
 .motivation-text h3 { margin: 0 0 4px 0; color: var(--accent-color); font-size: 16px; }
@@ -88,15 +77,13 @@ transition: 0.2s;
 }
 .nav-btn span.icon { font-size: 22px; }
 .nav-btn.chess-active { color: #af52de; }
-.overlay { padding-bottom: 75px; }
+.overlay { padding-bottom: 75px !important; }
 body { height: 100vh; height: 100dvh; width: 100%; overflow: hidden; }
 .dash-overlay {
-justify-content: space-between;
-padding: 8px 10px 78px 10px;
+justify-content: space-between !important;
+padding: 8px 10px 78px 10px !important;
 gap: 6px;
 overflow-y: auto;
-display: flex;
-flex-direction: column;
 }
 .dash-header {
 display: flex;
@@ -121,6 +108,7 @@ background: rgba(44,44,46,0.75);
 color: #fff;
 border: 1px solid rgba(255,255,255,0.15);
 backdrop-filter: blur(10px);
+-webkit-backdrop-filter: blur(10px);
 }
 .dash-header .dash-btn-settings { margin-left: auto; }
 .dash-header .dash-btn-exit {
@@ -129,7 +117,7 @@ border-color: #ff3b30;
 color: #ff3b30;
 }
 .dash-overlay .top-info {
-margin: 0;
+margin: 0 !important;
 flex: 0 0 auto;
 text-align: center;
 }
@@ -154,15 +142,11 @@ text-overflow: ellipsis;
 .dash-overlay .dash-subrow .analysis-btn { font-size: 11px; padding: 5px 12px; margin: 0; }
 .dash-overlay .bottom-panel { gap: 6px; flex: 0 0 auto; }
 .dash-overlay .stats-row { gap: 8px; }
-.dash-overlay .stat-box { padding: 6px; border-radius: 12px; }
-.dash-overlay .stat-box p { font-size: 9px; }
-.dash-overlay .stat-box h3 { font-size: 15px; margin-top: 2px; }
+.dash-overlay .stat-box { padding: 6px !important; border-radius: 12px; }
+.dash-overlay .stat-box p { font-size: 9px !important; }
+.dash-overlay .stat-box h3 { font-size: 15px !important; margin-top: 2px !important; }
 .dash-overlay .compact-panel { padding: 7px; border-radius: 12px; }
 .dash-overlay .compact-food-list { max-height: 34px; }
-.stat-box { background: rgba(255,255,255,0.05); padding: 8px; border-radius: 10px; text-align: center; }
-.stat-box p { margin: 0; color: #8e8e93; font-size: 11px; }
-.stat-box h3 { margin: 4px 0 0 0; color: #fff; font-size: 16px; }
-.xp-bar { background: var(--accent-color); height: 100%; border-radius: 5px; width: 0%; transition: width 0.3s; }
 </style>
 </head>
 <body class="male-theme">
@@ -190,14 +174,8 @@ text-overflow: ellipsis;
 </button>
 </div>
 
-<div id="auth-screen" class="screen active">
-<div style="text-align: center; padding: 40px 20px;">
-<h1>Sport Royale</h1>
-<p style="color: #8e8e93; margin-bottom: 30px;">Стань лучшей версией себя.<br>Начни прямо сейчас.</p>
-<button class="btn" onclick="loginWithTelegram()" style="background: #0088cc; margin-bottom: 15px;">✈️ Продолжить через Telegram</button>
-<div style="color: #8e8e93; margin: 15px 0;">или</div>
-<button class="btn" onclick="showEmailForm()">✉️ Войти по Email</button>
-</div>
+<div id="auth-screen" class="screen active auth-screen">
+<div class="auth-container"><div class="auth-content"><div class="auth-title">Sport Royale</div><div class="inspiration-text">Стань лучшей версией себя.<br>Начни прямо сейчас.</div><div class="auth-buttons"><button class="auth-btn tg-btn" onclick="loginWithTelegram()">✈️ Продолжить через Telegram</button><div class="auth-divider"><span>или</span></div><button class="auth-btn email-btn" onclick="showEmailForm()">✉️ Войти по Email</button></div></div></div>
 </div>
 
 <div id="email-screen" class="screen">
@@ -211,8 +189,8 @@ text-overflow: ellipsis;
 </div>
 
 <div id="dashboard-screen" class="screen">
-<video id="character-video" class="video-background" autoplay loop muted playsinline style="position: absolute; width: 100%; height: 100%; object-fit: cover; z-index: 0;"></video>
-<div class="overlay dash-overlay" style="position: relative; z-index: 1;">
+<video id="character-video" class="video-background" autoplay loop muted playsinline></video>
+<div class="overlay dash-overlay">
 
 <div class="dash-header">
 <div id="streak-display" class="streak-badge" onclick="openChallengeModal()">🔥 0</div>
@@ -223,7 +201,7 @@ text-overflow: ellipsis;
 <div class="top-info">
 <div class="character-level" id="char-level">Уровень 1</div>
 <div class="character-title" id="char-title">Странник</div>
-<div class="xp-bar-container" style="background: rgba(255,255,255,0.1); border-radius: 5px; margin: 0 auto;"><div class="xp-bar" id="xp-bar"></div></div>
+<div class="xp-bar-container"><div class="xp-bar" id="xp-bar"></div></div>
 <p class="xp-text" id="xp-text">0 / 100 XP</p>
 <div class="dash-subrow">
 <button class="weight-btn" onclick="openWeightDiary()">⚖️ <span id="current-weight-display">0</span> кг</button>
@@ -232,7 +210,7 @@ text-overflow: ellipsis;
 </div>
 
 <div class="bottom-panel">
-<div class="stats-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 0;">
+<div class="stats-row" style="margin-bottom: 0;">
 <div class="stat-box"><p>Норма</p><h3 id="calories-norm">0 ккал</h3></div>
 <div class="stat-box"><p>Сожжено</p><h3 id="burned-total">0 ккал</h3></div>
 </div>
@@ -265,13 +243,12 @@ text-overflow: ellipsis;
 </div>
 </div>
 </div>
-</div>
 
 <div id="water-diary-screen" class="screen">
 <div class="inner-screen">
 <button class="back-btn" onclick="closeScreen('water-diary-screen')">← Назад</button>
 <h1 style="text-align: center; margin-bottom: 15px;">📜 Дневник воды</h1>
-<div style="display: flex; gap: 8px; margin-bottom: 15px;"><input type="number" id="custom-water-input" placeholder="Мл" style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #3a3a3c; background: #2c2c2e; color: white; font-size: 16px; text-align: center;"><button class="btn" style="width: auto; margin: 0; padding: 10px 15px; background-color: #5ac8fa; color: #000; font-size: 14px;" onclick="addWaterFromDiary()">Добавить</button></div>
+<div style="display: flex; gap: 8px; margin-bottom: 15px;"><input type="number" id="custom-water-input" placeholder="Мл" style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #3a3a3c; background: #2c2c2e; color: white; font-size: 16px; text-align: center;"><button class="btn" style="width: auto; margin: 0; padding: 10px 15px; background-color: #5ac8fa; color: #fff; font-size: 14px;" onclick="addWaterFromDiary()">Добавить</button></div>
 <div style="background: #1c1c1e; padding: 15px; border-radius: 12px; margin-bottom: 15px;">
 <div style="display: flex; gap: 10px; margin-bottom: 10px;">
 <div style="flex: 1;"><label style="font-size: 11px; color: #8e8e93;">От</label><input type="date" id="water-start-date" style="width: 100%; padding: 6px; border-radius: 6px; background: #2c2c2e; color: white; border: 1px solid #3a3a3c; font-size: 12px;" onchange="renderWaterDiary()"></div>
@@ -332,7 +309,7 @@ text-overflow: ellipsis;
 <button class="back-btn" onclick="closeScreen('global-stats-screen')">← Назад</button>
 <h1 style="text-align: center; margin-bottom: 15px;">📊 Полный Анализ</h1>
 <div style="background: #1c1c1e; padding: 15px; border-radius: 12px; margin-bottom: 15px;"><div style="display: flex; gap: 10px;"><div style="flex: 1;"><label style="font-size: 11px; color: #8e8e93;">От</label><input type="date" id="global-start-date" style="width: 100%; padding: 6px; border-radius: 6px; background: #2c2c2e; color: white; border: 1px solid #3a3a3c; font-size: 12px;" onchange="renderAllCharts()"></div><div style="flex: 1;"><label style="font-size: 11px; color: #8e8e93;">До</label><input type="date" id="global-end-date" style="width: 100%; padding: 6px; border-radius: 6px; background: #2c2c2e; color: white; border: 1px solid #3a3a3c; font-size: 12px;" onchange="renderAllCharts()"></div></div></div>
-<div class="chart-container"><canvas id="g-weight-chart"></canvas></div><div class="chart-container"><canvas id="g-calories-chart"></canvas></div><div class="chart-container"><canvas id="g-macros-chart"></canvas></div><div class="chart-container"><canvas id="g-water-chart"></canvas></div><div class="chart-container"><canvas id="g-workout-cal-chart"></canvas></div>
+<div class="chart-container"><canvas id="g-weight-chart"></canvas></div><div class="chart-container"><canvas id="g-calories-chart"></canvas></div><div class="chart-container"><canvas id="g-macros-chart"></canvas></div><div class="chart-container"><canvas id="g-water-chart"></canvas></div>
 </div>
 </div>
 
@@ -373,7 +350,6 @@ text-overflow: ellipsis;
 <iframe id="challenge-frame" style="width: 100%; height: 80vh; border: 0; display: block;"></iframe>
 </div>
 </div>
-
 <script>
 function openChallengeModal(){
   if (localStorage.getItem('streakPendingReward') === 'true' && typeof claimStreakReward === 'function') {
