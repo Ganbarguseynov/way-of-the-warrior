@@ -1,927 +1,1784 @@
-/* ============================================================
-   Sport Royale — exercises.js
-   Дополнение к app.js. Ничего в app.js не меняет.
-   Добавляет: списки упражнений, свои упражнения с фото,
-   конструктор тренировок с таймерами, анализ сожжённых калорий.
-   Данные лежат в profile (cachedProfile + Supabase user_links.profile).
-   ============================================================ */
+/* ============================================================================
+   exercises.js — Sport Royale · модуль тренировок и аналитики
+   Версия 1.0.0
+   ----------------------------------------------------------------------------
+   Подключать ПОСЛЕ app.js:
+       <script src="exercises.js"></script>
+   Файл ничего не переопределяет в app.js / index.html.
+   Работает с: window.currentProfileData | window.cachedProfile
+   Хранит данные в профиле: customExercises / workoutLists / workoutSessions
+   ========================================================================== */
 (function () {
   'use strict';
 
-  var TG = (window.Telegram && window.Telegram.WebApp) || null;
+  if (window.__SRX_LOADED__) return;
+  window.__SRX_LOADED__ = true;
 
-  /* ---------- утилиты ---------- */
-  function alertUser(m) {
-    try { if (TG && TG.showAlert) { TG.showAlert(m); return; } } catch (e) {}
-    alert(m);
-  }
-  function lsJSON(key, def) {
-    try { var v = JSON.parse(localStorage.getItem(key) || 'null'); return v == null ? def : v; }
-    catch (e) { return def; }
-  }
-  function dkey(d) {
-    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-  }
-  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
-  function num(v, d) { var n = parseFloat(v); return isNaN(n) ? d : n; }
-  function logged() { return !!(localStorage.getItem('tgId') || localStorage.getItem('linkedEmail') || localStorage.getItem('currentEmail')); }
+  var VERSION = '1.0.0';
+  var LS = {
+    draft: 'srx_draft',
+    settings: 'srx_settings',
+    last: 'srx_last_profile'
+  };
 
-  function prof() {
-    if (typeof currentProfileData !== 'undefined' && currentProfileData) return currentProfileData;
-    var p = lsJSON('cachedProfile', {});
-    return p || {};
-  }
-  function persist() {
-    var p = prof();
-    try { localStorage.setItem('cachedProfile', JSON.stringify(p)); } catch (e) {}
-    try {
-      if (typeof saveProgressToCloud === 'function') {
-        var xp = parseInt(localStorage.getItem('cachedXP') || 0, 10);
-        var burned = parseInt(localStorage.getItem('cachedBurned') || 0, 10);
-        saveProgressToCloud(
-          localStorage.getItem('tgId'),
-          localStorage.getItem('linkedEmail') || localStorage.getItem('currentEmail'),
-          localStorage.getItem('userName') || 'Атлет',
-          p, xp, burned
-        );
-      }
-    } catch (e) { console.log('sync error', e); }
-  }
-
-  function getCustom() { var p = prof(); if (!Array.isArray(p.custom_exercises)) p.custom_exercises = []; return p.custom_exercises; }
-  function getLists() { var p = prof(); if (!Array.isArray(p.exercise_lists)) p.exercise_lists = []; return p.exercise_lists; }
-  function getLog() { var p = prof(); if (!Array.isArray(p.workout_log)) p.workout_log = []; return p.workout_log; }
-
-  /* ---------- базовая библиотека ---------- */
-  var BASE = [
-    { id: 'b_squat', name: 'Приседания', rate: 8, minutes: 2, rest: 60, prep: 30 },
-    { id: 'b_push', name: 'Отжимания', rate: 7, minutes: 2, rest: 60, prep: 30 },
-    { id: 'b_plank', name: 'Планка', rate: 5, minutes: 1, rest: 45, prep: 20 },
-    { id: 'b_lunge', name: 'Выпады', rate: 7, minutes: 2, rest: 60, prep: 30 },
-    { id: 'b_run', name: 'Бег', rate: 12, minutes: 10, rest: 120, prep: 60 },
-    { id: 'b_rope', name: 'Скакалка', rate: 13, minutes: 3, rest: 60, prep: 30 },
-    { id: 'b_pull', name: 'Подтягивания', rate: 8, minutes: 2, rest: 90, prep: 30 },
-    { id: 'b_crunch', name: 'Скручивания', rate: 6, minutes: 2, rest: 45, prep: 20 },
-    { id: 'b_burpee', name: 'Берпи', rate: 12, minutes: 2, rest: 90, prep: 30 },
-    { id: 'b_press', name: 'Жим гантелей', rate: 6, minutes: 3, rest: 90, prep: 30 }
-  ];
-
-  function allExercises() {
-    var out = BASE.slice();
-    getCustom().forEach(function (e) {
-      out.push({ id: e.id, name: e.name, rate: e.rate, minutes: e.minutes, rest: e.rest, prep: e.prep, photo: e.photo, custom: true });
-    });
-    return out;
-  }
-  function findEx(id) {
-    var a = allExercises();
-    for (var i = 0; i < a.length; i++) if (a[i].id === id) return a[i];
-    return null;
-  }
-  function kcalOf(e, sets) { return Math.round(num(e.rate, 0) * num(e.minutes, 0) * (sets || 1)); }
-
-  /* ---------- стили (только новые классы exb-) ---------- */
-  function injectStyles() {
-    if (document.getElementById('exb-styles')) return;
-    var s = document.createElement('style');
-    s.id = 'exb-styles';
-    s.textContent = [
-      '.exb-card{background:#1c1c1e;border:1px solid #2c2c2e;border-radius:12px;padding:12px;margin-bottom:10px;}',
-      '.exb-row{display:flex;align-items:center;gap:10px;}',
-      '.exb-thumb{width:46px;height:46px;border-radius:10px;object-fit:cover;background:#2c2c2e;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:18px;color:#8e8e93;}',
-      '.exb-name{font-size:14px;font-weight:700;color:#fff;}',
-      '.exb-sub{font-size:11px;color:#8e8e93;margin-top:2px;}',
-      '.exb-kcal{font-size:13px;font-weight:700;color:#ff9f0a;white-space:nowrap;}',
-      '.exb-actions{display:flex;gap:6px;margin-left:auto;}',
-      '.exb-ibtn{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#fff;border-radius:8px;padding:6px 9px;font-size:12px;cursor:pointer;}',
-      '.exb-ibtn.red{background:rgba(255,59,48,0.15);border-color:#ff3b30;color:#ff3b30;}',
-      '.exb-ibtn.green{background:rgba(52,199,89,0.15);border-color:#34c759;color:#34c759;}',
-      '.exb-empty{text-align:center;color:#8e8e93;font-size:12px;padding:12px 0;}',
-      '.exb-timer{background:#1c1c1e;border:1px solid #2c2c2e;border-radius:16px;padding:18px;text-align:center;margin-bottom:12px;}',
-      '.exb-phase{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#8e8e93;}',
-      '.exb-clock{font-size:52px;font-weight:800;color:#fff;line-height:1.1;font-variant-numeric:tabular-nums;}',
-      '.exb-phase-work .exb-clock{color:#34c759;}',
-      '.exb-phase-rest .exb-clock{color:#5ac8fa;}',
-      '.exb-phase-prep .exb-clock{color:#ffcc00;}',
-      '.exb-exname{font-size:17px;font-weight:700;color:#fff;margin-bottom:6px;}',
-      '.exb-progress{height:6px;background:rgba(255,255,255,0.1);border-radius:3px;overflow:hidden;margin-top:10px;}',
-      '.exb-progress > div{height:100%;background:#34c759;width:0;transition:width .3s;}',
-      '.exb-preview{width:100%;max-height:180px;object-fit:cover;border-radius:10px;margin-bottom:8px;}'
-    ].join('');
-    document.head.appendChild(s);
-  }
-
-  /* ---------- модалка ввода ---------- */
-  function exPrompt(title, placeholder, def, cb) {
-    var m = document.createElement('div');
-    m.className = 'custom-modal active';
-    m.innerHTML =
-      '<div class="custom-modal-content">' +
-        '<button class="custom-modal-close">✖</button>' +
-        '<h3 style="margin-top:0;text-align:center;font-size:16px;">' + title + '</h3>' +
-        '<div class="form-group"><input type="text" id="ex-prompt-input" value="' + (def || '') + '" placeholder="' + (placeholder || '') + '"></div>' +
-        '<button class="btn" style="margin-top:10px;" id="ex-prompt-ok">OK</button>' +
-      '</div>';
-    document.body.appendChild(m);
-    var inp = m.querySelector('#ex-prompt-input');
-    function close() { m.remove(); }
-    m.querySelector('.custom-modal-close').onclick = close;
-    m.querySelector('#ex-prompt-ok').onclick = function () {
-      var v = inp.value.trim(); close(); if (v) cb(v);
-    };
-    setTimeout(function () { inp.focus(); }, 120);
-  }
-
-  /* ---------- экраны ---------- */
-  function injectScreens() {
-    if (document.getElementById('ex-screen')) return;
-    var host = document.createElement('div');
-    host.innerHTML = [
-      /* ЭКРАН УПРАЖНЕНИЙ */
-      '<div id="ex-screen" class="screen"><div class="inner-screen">',
-      '<button class="back-btn" onclick="closeScreen(\'ex-screen\')">← Назад</button>',
-      '<h1 style="text-align:center;margin-bottom:12px;">🏋️ Упражнения</h1>',
-      '<div style="display:flex;gap:8px;margin-bottom:14px;">',
-      '<button class="btn" style="margin:0;flex:1;font-size:13px;padding:12px 8px;" onclick="exOpenEditor()">+ Своё упражнение</button>',
-      '<button class="btn" style="margin:0;flex:1;font-size:13px;padding:12px 8px;background:#34c759;" onclick="exCreateList()">+ Новый список</button>',
-      '</div>',
-      '<button class="btn" style="margin:0 0 14px 0;background:#ff9f0a;color:#000;font-weight:700;" onclick="exOpenAnalysis()">📈 Анализ сожжённых калорий</button>',
-      '<h3 style="margin:0 0 8px;font-size:15px;">Мои списки</h3><div id="ex-lists-box"></div>',
-      '<h3 style="margin:16px 0 8px;font-size:15px;">Мои упражнения</h3><div id="ex-mine-box"></div>',
-      '<h3 style="margin:16px 0 8px;font-size:15px;">Библиотека</h3><div id="ex-base-box"></div>',
-      '</div></div>',
-
-      /* РЕДАКТОР УПРАЖНЕНИЯ */
-      '<div id="ex-editor-screen" class="screen"><div class="inner-screen">',
-      '<button class="back-btn" onclick="closeScreen(\'ex-editor-screen\')">← Назад</button>',
-      '<h1 id="ex-editor-title" style="text-align:center;margin-bottom:16px;">Новое упражнение</h1>',
-      '<div class="form-group"><label>Название</label><input type="text" id="ex-f-name" placeholder="Напр. Жим лёжа"></div>',
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">',
-      '<div class="form-group" style="margin:0;"><label>Ккал / мин</label><input type="number" step="0.5" id="ex-f-rate" placeholder="8"></div>',
-      '<div class="form-group" style="margin:0;"><label>Время, мин</label><input type="number" step="1" id="ex-f-dur" placeholder="3"></div>',
-      '<div class="form-group" style="margin:0;"><label>Отдых, сек</label><input type="number" id="ex-f-rest" placeholder="60"></div>',
-      '<div class="form-group" style="margin:0;"><label>Подготовка, сек</label><input type="number" id="ex-f-prep" placeholder="30"></div>',
-      '</div>',
-      '<div class="form-group"><label>Заметка</label><input type="text" id="ex-f-note" placeholder="Техника, вес снаряда..."></div>',
-      '<div style="margin:14px 0;"><label style="font-size:13px;color:#8e8e93;">Фото (необязательно)</label>',
-      '<div id="ex-f-photo-box" style="margin-top:8px;"></div>',
-      '<input type="file" accept="image/*" id="ex-f-photo" onchange="exOnPhoto(this)" style="margin-top:8px;color:#fff;font-size:12px;"></div>',
-      '<button class="btn" id="ex-f-save" onclick="exSaveExercise()">Сохранить</button>',
-      '</div></div>',
-
-      /* СПИСОК */
-      '<div id="ex-list-screen" class="screen"><div class="inner-screen">',
-      '<button class="back-btn" onclick="closeScreen(\'ex-list-screen\')">← Назад</button>',
-      '<h1 id="ex-list-title" style="text-align:center;margin-bottom:12px;">Список</h1>',
-      '<div style="display:flex;gap:8px;margin-bottom:14px;">',
-      '<button class="btn" style="margin:0;flex:1;font-size:13px;padding:12px 8px;" onclick="exAddToList()">+ Упражнение</button>',
-      '<button class="btn" style="margin:0;flex:1;font-size:13px;padding:12px 8px;background:#34c759;" onclick="exStartWorkout()">▶ Начать</button>',
-      '</div>',
-      '<div id="ex-list-box"></div>',
-      '</div></div>',
-
-      /* ТРЕНИРОВКА */
-      '<div id="ex-work-screen" class="screen"><div class="inner-screen">',
-      '<button class="back-btn" onclick="exLeaveWorkout()">← Выйти</button>',
-      '<h1 style="text-align:center;margin-bottom:12px;">🔥 Тренировка</h1>',
-      '<div id="ex-work-timer"></div>',
-      '<div id="ex-work-plan"></div>',
-      '</div></div>',
-
-      /* АНАЛИЗ */
-      '<div id="ex-analysis-screen" class="screen"><div class="inner-screen">',
-      '<button class="back-btn" onclick="closeScreen(\'ex-analysis-screen\')">← Назад</button>',
-      '<h1 style="text-align:center;margin-bottom:12px;">📈 Анализ калорий</h1>',
-      '<div style="background:#1c1c1e;padding:15px;border-radius:12px;margin-bottom:12px;">',
-      '<div style="display:flex;gap:10px;margin-bottom:10px;">',
-      '<div style="flex:1;"><label style="font-size:11px;color:#8e8e93;">От</label><input type="date" id="exa-from" style="width:100%;padding:6px;border-radius:6px;background:#2c2c2e;color:#fff;border:1px solid #3a3a3c;font-size:12px;" onchange="exRenderAnalysis()"></div>',
-      '<div style="flex:1;"><label style="font-size:11px;color:#8e8e93;">До</label><input type="date" id="exa-to" style="width:100%;padding:6px;border-radius:6px;background:#2c2c2e;color:#fff;border:1px solid #3a3a3c;font-size:12px;" onchange="exRenderAnalysis()"></div>',
-      '</div>',
-      '<div style="display:flex;gap:5px;flex-wrap:wrap;">',
-      '<button class="quick-btn" onclick="exSetPeriod(7)">7 дней</button>',
-      '<button class="quick-btn" onclick="exSetPeriod(30)">30 дней</button>',
-      '<button class="quick-btn" onclick="exSetPeriod(\'month\')">Этот месяц</button>',
-      '</div></div>',
-      '<div id="exa-cards" class="summary-box" style="border-color:#ff9f0a;background:rgba(255,159,10,0.1);"></div>',
-      '<div id="exa-corr" style="font-size:12px;color:#8e8e93;margin:10px 0;line-height:1.5;"></div>',
-      '<div class="chart-container"><canvas id="exa-chart1"></canvas></div>',
-      '<div class="chart-container" style="margin-top:10px;"><canvas id="exa-chart2"></canvas></div>',
-      '<div class="chart-container" style="margin-top:10px;"><canvas id="exa-chart3"></canvas></div>',
-      '<div class="chart-container" style="margin-top:10px;"><canvas id="exa-chart4"></canvas></div>',
-      '<h3 style="margin:18px 0 8px;font-size:15px;">История тренировок</h3><div id="exa-log"></div>',
-      '</div></div>'
-    ].join('');
-    while (host.firstChild) document.body.appendChild(host.firstChild);
-  }
-
-  function injectDashboardButton() {
-    var row = document.querySelector('.dash-subrow');
-    if (!row || document.getElementById('exb-dash-btn')) return;
-    var b = document.createElement('button');
-    b.id = 'exb-dash-btn';
-    b.className = 'analysis-btn';
-    b.style.cssText = 'border-color:#ff9f0a;color:#ff9f0a;background:rgba(255,159,10,0.2);';
-    b.innerHTML = '🏋️ Тренировки';
-    b.onclick = function () { exOpen(); };
-    row.appendChild(b);
-  }
-
-  /* ---------- экран упражнений ---------- */
-  function exOpen() {
-    if (!logged()) { alertUser('Сначала войдите в аккаунт.'); return; }
-    injectDashboardButton();
-    renderExercisesScreen();
-    if (typeof openScreen === 'function') openScreen('ex-screen');
-  }
-
-  function renderExercisesScreen() {
-    var lists = getLists(), custom = getCustom();
-
-    var lb = document.getElementById('ex-lists-box');
-    if (lb) {
-      if (!lists.length) lb.innerHTML = '<div class="exb-empty">Списков пока нет. Создайте первый — например «День ног».</div>';
-      else lb.innerHTML = lists.map(function (l) {
-        var total = (l.items || []).reduce(function (s, it) {
-          var e = findEx(it.exId); return s + (e ? kcalOf(e, it.sets) : 0);
-        }, 0);
-        return '<div class="exb-card"><div class="exb-row">' +
-          '<div class="exb-thumb">📋</div>' +
-          '<div style="min-width:0;"><div class="exb-name">' + esc(l.name) + '</div>' +
-          '<div class="exb-sub">' + (l.items || []).length + ' упр. · ≈' + total + ' ккал</div></div>' +
-          '<div class="exb-actions">' +
-          '<button class="exb-ibtn green" onclick="exOpenList(\'' + l.id + '\')">Открыть</button>' +
-          '<button class="exb-ibtn red" onclick="exDeleteList(\'' + l.id + '\')">✕</button>' +
-          '</div></div></div>';
-      }).join('');
-    }
-
-    var mb = document.getElementById('ex-mine-box');
-    if (mb) {
-      if (!custom.length) mb.innerHTML = '<div class="exb-empty">Своих упражнений пока нет. Нажмите «+ Своё упражнение».</div>';
-      else mb.innerHTML = custom.map(function (e) { return exCardHTML(e, true); }).join('');
-    }
-
-    var bb = document.getElementById('ex-base-box');
-    if (bb) bb.innerHTML = BASE.map(function (e) { return exCardHTML(e, false); }).join('');
-  }
-
-  function exCardHTML(e, mine) {
-    var img = e.photo
-      ? '<img class="exb-thumb" src="' + e.photo + '" alt="">'
-      : '<div class="exb-thumb">🏋️</div>';
-    var sub = num(e.rate, 0) + ' ккал/мин · ' + num(e.minutes, 0) + ' мин · отдых ' + num(e.rest, 0) + 'с · подг. ' + num(e.prep, 0) + 'с';
-    var acts = mine
-      ? '<button class="exb-ibtn" onclick="exOpenEditor(\'' + e.id + '\')">✎</button>' +
-        '<button class="exb-ibtn red" onclick="exDeleteExercise(\'' + e.id + '\')">✕</button>'
-      : '<button class="exb-ibtn" onclick="exQuickAdd(\'' + e.id + '\')">+</button>';
-    return '<div class="exb-card"><div class="exb-row">' + img +
-      '<div style="min-width:0;flex:1;"><div class="exb-name">' + esc(e.name) + '</div>' +
-      '<div class="exb-sub">' + sub + '</div></div>' +
-      '<div class="exb-kcal">' + kcalOf(e, 1) + '</div>' +
-      '<div class="exb-actions">' + acts + '</div>' +
-      '</div></div>';
-  }
-
+  /* ==========================================================================
+     1. УТИЛИТЫ
+     ========================================================================== */
+  function $(sel, root) { return (root || document).querySelector(sel); }
+  function $$(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
-      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
-
-  /* ---------- создание / редактирование упражнения ---------- */
-  var editId = null, photoDraft = null;
-
-  function exOpenEditor(id) {
-    editId = id || null;
-    photoDraft = null;
-    var e = id ? getCustom().filter(function (x) { return x.id === id; })[0] : null;
-    document.getElementById('ex-editor-title').innerText = e ? 'Изменить упражнение' : 'Новое упражнение';
-    document.getElementById('ex-f-name').value = e ? e.name : '';
-    document.getElementById('ex-f-rate').value = e ? e.rate : '';
-    document.getElementById('ex-f-dur').value = e ? e.minutes : '';
-    document.getElementById('ex-f-rest').value = e ? e.rest : 60;
-    document.getElementById('ex-f-prep').value = e ? e.prep : 30;
-    document.getElementById('ex-f-note').value = e && e.note ? e.note : '';
-    photoDraft = e && e.photo ? e.photo : null;
-    renderPhotoPreview();
-    document.getElementById('ex-f-photo').value = '';
-    if (typeof openScreen === 'function') openScreen('ex-editor-screen');
+  function num(v) {
+    if (typeof v === 'number') return isFinite(v) ? v : 0;
+    var n = parseFloat(String(v == null ? '' : v).replace(',', '.').replace(/\s/g, ''));
+    return isFinite(n) ? n : 0;
   }
-
-  function renderPhotoPreview() {
-    var box = document.getElementById('ex-f-photo-box');
-    if (!box) return;
-    box.innerHTML = photoDraft
-      ? '<img class="exb-preview" src="' + photoDraft + '"><button class="exb-ibtn red" onclick="exClearPhoto()">Удалить фото</button>'
-      : '<div class="exb-empty" style="padding:6px 0;">Фото не выбрано</div>';
+  function ymd(d) {
+    var m = ('0' + (d.getMonth() + 1)).slice(-2);
+    var dd = ('0' + d.getDate()).slice(-2);
+    return d.getFullYear() + '-' + m + '-' + dd;
   }
-
-  function exClearPhoto() { photoDraft = null; renderPhotoPreview(); }
-
-  function exOnPhoto(input) {
-    var f = input.files && input.files[0];
-    if (!f) return;
-    var r = new FileReader();
-    r.onload = function (ev) {
-      var img = new Image();
-      img.onload = function () {
-        var max = 420, w = img.width, h = img.height;
-        if (w > h && w > max) { h = Math.round(h * max / w); w = max; }
-        else if (h >= w && h > max) { w = Math.round(w * max / h); h = max; }
-        var c = document.createElement('canvas');
-        c.width = w; c.height = h;
-        c.getContext('2d').drawImage(img, 0, 0, w, h);
-        try { photoDraft = c.toDataURL('image/jpeg', 0.6); } catch (e) { photoDraft = null; }
-        renderPhotoPreview();
-      };
-      img.onerror = function () { alertUser('Не удалось прочитать фото.'); };
-      img.src = ev.target.result;
-    };
-    r.onerror = function () { alertUser('Не удалось прочитать файл.'); };
-    r.readAsDataURL(f);
+  function todayISO() { return ymd(new Date()); }
+  function parseYmd(s) {
+    var p = String(s).split('-');
+    return new Date(+p[0], (+p[1] || 1) - 1, +p[2] || 1);
   }
-
-  function exSaveExercise() {
-    var name = document.getElementById('ex-f-name').value.trim();
-    var rate = num(document.getElementById('ex-f-rate').value, 0);
-    var dur = num(document.getElementById('ex-f-dur').value, 0);
-    var rest = num(document.getElementById('ex-f-rest').value, 60);
-    var prep = num(document.getElementById('ex-f-prep').value, 30);
-    var note = document.getElementById('ex-f-note').value.trim();
-
-    if (!name) { alertUser('Введите название упражнения.'); return; }
-    if (rate <= 0 || dur <= 0) { alertUser('Укажите ккал/мин и время больше нуля.'); return; }
-
-    var list = getCustom();
-    if (editId) {
-      var e = list.filter(function (x) { return x.id === editId; })[0];
-      if (e) { e.name = name; e.rate = rate; e.minutes = dur; e.rest = rest; e.prep = prep; e.note = note; e.photo = photoDraft; }
-    } else {
-      list.push({ id: 'c_' + uid(), name: name, rate: rate, minutes: dur, rest: rest, prep: prep, note: note, photo: photoDraft });
-    }
-    persist();
-    editId = null; photoDraft = null;
-    renderExercisesScreen();
-    closeScreen('ex-editor-screen');
-    alertUser('Сохранено.');
-  }
-
-  function exDeleteExercise(id) {
-    if (!confirm('Удалить это упражнение? Оно исчезнет и из списков.')) return;
-    var p = prof();
-    p.custom_exercises = getCustom().filter(function (e) { return e.id !== id; });
-    getLists().forEach(function (l) { l.items = (l.items || []).filter(function (it) { return it.exId !== id; }); });
-    persist();
-    renderExercisesScreen();
-  }
-
-  /* ---------- списки ---------- */
-  function exCreateList() {
-    exPrompt('Название списка', 'Напр. День ног', '', function (name) {
-      getLists().push({ id: 'l_' + uid(), name: name, items: [] });
-      persist();
-      renderExercisesScreen();
-    });
-  }
-
-  function exDeleteList(id) {
-    if (!confirm('Удалить список?')) return;
-    var p = prof();
-    p.exercise_lists = getLists().filter(function (l) { return l.id !== id; });
-    persist();
-    renderExercisesScreen();
-  }
-
-  var currentListId = null;
-
-  function exOpenList(id) {
-    currentListId = id;
-    var l = getLists().filter(function (x) { return x.id === id; })[0];
-    if (!l) return;
-    document.getElementById('ex-list-title').innerText = l.name;
-    renderListScreen();
-    if (typeof openScreen === 'function') openScreen('ex-list-screen');
-  }
-
-  function renderListScreen() {
-    var l = getLists().filter(function (x) { return x.id === currentListId; })[0];
-    var box = document.getElementById('ex-list-box');
-    if (!l || !box) return;
-    var items = l.items || [];
-    if (!items.length) { box.innerHTML = '<div class="exb-empty">Пусто. Добавьте упражнения кнопкой «+ Упражнение».</div>'; return; }
-    var totalKcal = 0, totalMin = 0;
-    items.forEach(function (it) {
-      var e = findEx(it.exId);
-      if (!e) return;
-      totalKcal += kcalOf(e, it.sets);
-      totalMin += num(e.minutes, 0) * it.sets;
-    });
-    var html = items.map(function (it, i) {
-      var e = findEx(it.exId);
-      if (!e) return '';
-      var img = e.photo ? '<img class="exb-thumb" src="' + e.photo + '">' : '<div class="exb-thumb">🏋️</div>';
-      return '<div class="exb-card"><div class="exb-row">' + img +
-        '<div style="min-width:0;flex:1;"><div class="exb-name">' + esc(e.name) + '</div>' +
-        '<div class="exb-sub">' + it.sets + ' × ' + num(e.minutes, 0) + ' мин · отдых ' + num(e.rest, 0) + 'с</div></div>' +
-        '<div class="exb-kcal">' + kcalOf(e, it.sets) + ' ккал</div>' +
-        '<div class="exb-actions">' +
-        '<button class="exb-ibtn" onclick="exSets(\'' + i + '\',-1)">−</button>' +
-        '<button class="exb-ibtn" onclick="exSets(\'' + i + '\',1)">+</button>' +
-        '<button class="exb-ibtn red" onclick="exRemoveItem(\'' + i + '\')">✕</button>' +
-        '</div></div></div>';
-    }).join('');
-    box.innerHTML = '<div class="summary-box" style="margin-bottom:12px;"><div class="summary-title">Итого: ' + totalKcal +
-      ' ккал · ~' + Math.round(totalMin) + ' мин</div></div>' + html;
-  }
-
-  function exSets(i, d) {
-    var l = getLists().filter(function (x) { return x.id === currentListId; })[0];
-    if (!l || !l.items[i]) return;
-    l.items[i].sets = Math.max(1, num(l.items[i].sets, 1) + d);
-    persist(); renderListScreen();
-  }
-
-  function exRemoveItem(i) {
-    var l = getLists().filter(function (x) { return x.id === currentListId; })[0];
-    if (!l) return;
-    l.items.splice(i, 1);
-    persist(); renderListScreen();
-  }
-
-  function exAddToList() {
-    if (!currentListId) return;
-    var all = allExercises();
-    var opts = all.map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '</option>'; }).join('');
-    var m = document.createElement('div');
-    m.className = 'custom-modal active';
-    m.innerHTML =
-      '<div class="custom-modal-content">' +
-      '<button class="custom-modal-close">✖</button>' +
-      '<h3 style="margin-top:0;text-align:center;font-size:16px;">Добавить в список</h3>' +
-      '<div class="form-group"><label>Упражнение</label><select id="ex-add-sel" style="width:100%;padding:10px;border-radius:8px;background:#2c2c2e;color:#fff;border:1px solid #3a3a3c;font-size:15px;">' + opts + '</select></div>' +
-      '<div class="form-group"><label>Подходов</label><input type="number" id="ex-add-sets" value="3" min="1" style="width:100%;padding:10px;border-radius:8px;background:#2c2c2e;color:#fff;border:1px solid #3a3a3c;font-size:15px;"></div>' +
-      '<button class="btn" id="ex-add-ok" style="margin-top:10px;">Добавить</button>' +
-      '</div>';
-    document.body.appendChild(m);
-    function close() { m.remove(); }
-    m.querySelector('.custom-modal-close').onclick = close;
-    m.querySelector('#ex-add-ok').onclick = function () {
-      var exId = m.querySelector('#ex-add-sel').value;
-      var sets = Math.max(1, num(m.querySelector('#ex-add-sets').value, 1));
-      var l = getLists().filter(function (x) { return x.id === currentListId; })[0];
-      if (l) { l.items.push({ exId: exId, sets: sets }); persist(); renderListScreen(); }
-      close();
-    };
-  }
-
-  /* быстрый переход: добавить упражнение в существующий список / новый */
-  function exQuickAdd(exId) {
-    var lists = getLists();
-    if (!lists.length) {
-      exPrompt('Название нового списка', 'Напр. День ног', '', function (name) {
-        getLists().push({ id: 'l_' + uid(), name: name, items: [{ exId: exId, sets: 3 }] });
-        persist(); renderExercisesScreen();
-        alertUser('Упражнение добавлено в новый список «' + name + '».');
-      });
-      return;
-    }
-    var opts = lists.map(function (l) { return '<option value="' + l.id + '">' + esc(l.name) + '</option>'; }).join('');
-    var m = document.createElement('div');
-    m.className = 'custom-modal active';
-    m.innerHTML =
-      '<div class="custom-modal-content">' +
-      '<button class="custom-modal-close">✖</button>' +
-      '<h3 style="margin-top:0;text-align:center;font-size:16px;">В какой список?</h3>' +
-      '<div class="form-group"><select id="ex-q-sel" style="width:100%;padding:10px;border-radius:8px;background:#2c2c2e;color:#fff;border:1px solid #3a3a3c;font-size:15px;">' + opts + '</select></div>' +
-      '<div class="form-group"><label>Подходов</label><input type="number" id="ex-q-sets" value="3" min="1" style="width:100%;padding:10px;border-radius:8px;background:#2c2c2e;color:#fff;border:1px solid #3a3a3c;font-size:15px;"></div>' +
-      '<button class="btn" id="ex-q-ok" style="margin-top:10px;">Добавить</button>' +
-      '</div>';
-    document.body.appendChild(m);
-    function close() { m.remove(); }
-    m.querySelector('.custom-modal-close').onclick = close;
-    m.querySelector('#ex-q-ok').onclick = function () {
-      var lid = m.querySelector('#ex-q-sel').value;
-      var sets = Math.max(1, num(m.querySelector('#ex-q-sets').value, 1));
-      getLists().forEach(function (l) { if (l.id === lid) l.items.push({ exId: exId, sets: sets }); });
-      persist(); renderExercisesScreen(); close();
-    };
-  }
-
-  /* ============================================================
-     ТАЙМЕР ТРЕНИРОВКИ
-     ============================================================ */
-  var TM = null, TM_INTERVAL = null;
-
-  function exStartWorkout() {
-    var l = getLists().filter(function (x) { return x.id === currentListId; })[0];
-    if (!l || !l.items || !l.items.length) { alertUser('В списке нет упражнений.'); return; }
-    var queue = [];
-    l.items.forEach(function (it) {
-      var e = findEx(it.exId);
-      if (!e) return;
-      for (var s = 0; s < it.sets; s++) queue.push({ ex: e, setNo: s + 1, sets: it.sets });
-    });
-    if (!queue.length) { alertUser('Не удалось собрать план.'); return; }
-
-    TM = {
-      name: l.name, queue: queue, i: 0, phase: 'prep',
-      left: num(queue[0].ex.prep, 30), paused: false,
-      kcal: 0, done: 0, elapsed: 0, finished: false
-    };
-    renderWorkoutScreen();
-    if (typeof openScreen === 'function') openScreen('ex-work-screen');
-    startTick();
-  }
-
-  function startTick() {
-    stopTick();
-    TM_INTERVAL = setInterval(function () {
-      if (!TM || TM.finished || TM.paused) { if (TM) { TM.elapsed += 0; } return; }
-      TM.elapsed++;
-      TM.left--;
-      if (TM.left <= 0) nextPhase();
-      renderTimerOnly();
-    }, 1000);
-  }
-  function stopTick() { if (TM_INTERVAL) { clearInterval(TM_INTERVAL); TM_INTERVAL = null; } }
-
-  function nextPhase() {
-    if (!TM) return;
-    var cur = TM.queue[TM.i];
-    if (TM.phase === 'prep') {
-      TM.phase = 'work';
-      TM.left = Math.max(1, Math.round(num(cur.ex.minutes, 1) * 60));
-    } else if (TM.phase === 'work') {
-      TM.kcal += num(cur.ex.rate, 0) * num(cur.ex.minutes, 0);
-      TM.done++;
-      var isLastSet = cur.setNo >= cur.sets;
-      var isLastEx = TM.i >= TM.queue.length - 1;
-      if (isLastSet && isLastEx) { finishWorkout(); return; }
-      TM.phase = 'rest';
-      TM.left = Math.max(1, num(cur.ex.rest, 60));
-    } else if (TM.phase === 'rest') {
-      TM.i++;
-      var nx = TM.queue[TM.i];
-      if (!nx) { finishWorkout(); return; }
-      TM.phase = 'prep';
-      TM.left = Math.max(1, num(nx.ex.prep, 30));
-    }
-    renderWorkoutScreen();
-  }
-
+  function daysAgoYmd(n) { var d = new Date(); d.setDate(d.getDate() - n); return ymd(d); }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
   function mmss(sec) {
     sec = Math.max(0, Math.round(sec));
     var m = Math.floor(sec / 60), s = sec % 60;
     return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
   }
+  function humanDur(sec) {
+    sec = Math.max(0, Math.round(sec));
+    var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+    if (h) return h + ' ч ' + m + ' мин';
+    return m + ' мин';
+  }
+  function round1(v) { return Math.round(v * 10) / 10; }
 
-  function phaseLabel() {
-    if (!TM) return '';
-    if (TM.phase === 'prep') return 'Подготовка';
-    if (TM.phase === 'work') return 'Работа';
-    return 'Отдых';
+  /* ==========================================================================
+     2. ДОСТУП К ПРОФИЛЮ И СОХРАНЕНИЕ
+     ========================================================================== */
+  var PROFILE_GETTERS = ['currentProfileData', 'cachedProfile', 'profileData', 'currentProfile'];
+
+  function getProfile() {
+    for (var i = 0; i < PROFILE_GETTERS.length; i++) {
+      var p = window[PROFILE_GETTERS[i]];
+      if (p && typeof p === 'object' && !Array.isArray(p)) return p;
+    }
+    return null;
   }
 
-  function renderTimerOnly() {
-    var box = document.getElementById('ex-work-timer');
-    if (!box || !TM) return;
-    var cur = TM.queue[TM.i] || TM.queue[TM.queue.length - 1];
-    var clock = box.querySelector('.exb-clock');
-    if (clock) clock.innerText = mmss(TM.left);
-    var pr = box.querySelector('.exb-progress > div');
-    if (pr) pr.style.width = Math.round(TM.done / TM.queue.length * 100) + '%';
-    var pn = box.querySelector('.exb-exname');
-    if (pn) pn.innerText = cur.ex.name + ' · подход ' + cur.setNo + '/' + cur.sets;
+  /* Функции сохранения, которые может экспортировать app.js.
+     Вызываем только те, что не требуют аргументов — чтобы не сломать подпись. */
+  var SAVE_FNS = [
+    'saveProfile', 'saveProfileData', 'persistProfile', 'persistProfileData',
+    'syncProfile', 'pushProfile', 'saveCurrentProfile', 'updateProfileData',
+    'saveUserProfile', 'syncToSupabase', 'saveProfileToSupabase', 'pushToCloud'
+  ];
+
+  function persist(silent) {
+    var p = getProfile();
+    if (!p) return false;
+
+    try { localStorage.setItem(LS.draft, JSON.stringify({
+      ts: Date.now(), profile: p
+    })); } catch (e) { /* quota */ }
+
+    var called = [];
+    for (var i = 0; i < SAVE_FNS.length; i++) {
+      var name = SAVE_FNS[i];
+      var fn = window[name];
+      if (typeof fn !== 'function') continue;
+      if (fn.length > 0) continue;            // требует аргументов — не трогаем
+      try {
+        var r = fn();
+        if (r && typeof r.catch === 'function') {
+          r.catch(function (err) { console.warn('[SRX] cloud save rejected:', err && err.message); });
+        }
+        called.push(name);
+      } catch (e) {
+        console.warn('[SRX] save fn "' + name + '" failed:', e && e.message);
+      }
+    }
+
+    try {
+      window.dispatchEvent(new CustomEvent('srx:profile-changed', { detail: { fns: called } }));
+    } catch (e) {}
+
+    if (!silent && !called.length) {
+      toast('Локально сохранено. Облачная синхронизация — при следующем сохранении профиля.');
+    }
+    return true;
   }
 
-  function renderWorkoutScreen() {
-    if (!TM) return;
-    var cur = TM.queue[TM.i] || TM.queue[TM.queue.length - 1];
-    var totalPlanned = TM.queue.reduce(function (s, q) { return s + num(q.ex.rate, 0) * num(q.ex.minutes, 0); }, 0);
-    var timer = document.getElementById('ex-work-timer');
-    timer.innerHTML =
-      '<div class="exb-timer exb-phase-' + TM.phase + '">' +
-      '<div class="exb-phase">' + phaseLabel() + '</div>' +
-      '<div class="exb-clock">' + mmss(TM.left) + '</div>' +
-      '<div class="exb-exname">' + esc(cur.ex.name) + ' · подход ' + cur.setNo + '/' + cur.sets + '</div>' +
-      '<div class="exb-sub">Сожжено: <b style="color:#ff9f0a">' + Math.round(TM.kcal) + '</b> из ~' + Math.round(totalPlanned) + ' ккал · ' + mmss(TM.elapsed) + '</div>' +
-      '<div class="exb-progress"><div style="width:' + Math.round(TM.done / TM.queue.length * 100) + '%"></div></div>' +
-      '<div style="display:flex;gap:8px;margin-top:14px;">' +
-      '<button class="exb-ibtn" style="flex:1;padding:10px;" onclick="exTogglePause()">' + (TM.paused ? '▶ Продолжить' : '⏸ Пауза') + '</button>' +
-      '<button class="exb-ibtn" style="flex:1;padding:10px;" onclick="exSkipPhase()">⏭ Дальше</button>' +
-      '<button class="exb-ibtn red" style="flex:1;padding:10px;" onclick="exFinishNow()">Завершить</button>' +
-      '</div></div>';
+  /* ==========================================================================
+     3. СХЕМА ДАННЫХ
+     ========================================================================== */
+  var K = {
+    ex: 'customExercises',
+    lists: 'workoutLists',
+    sessions: 'workoutSessions'
+  };
 
-    var plan = document.getElementById('ex-work-plan');
-    plan.innerHTML = TM.queue.map(function (q, idx) {
-      var mark = idx < TM.i || (idx === TM.i && TM.phase === 'rest') ? '✅' : (idx === TM.i ? '▶' : '•');
-      return '<div class="exb-card" style="padding:8px 12px;"><div class="exb-row">' +
-        '<div style="width:16px;text-align:center;font-size:12px;color:#8e8e93;">' + mark + '</div>' +
-        '<div style="min-width:0;flex:1;"><div class="exb-name" style="font-size:13px;">' + esc(q.ex.name) + '</div>' +
-        '<div class="exb-sub">подход ' + q.setNo + '/' + q.sets + ' · ' + Math.round(num(q.ex.rate, 0) * num(q.ex.minutes, 0)) + ' ккал</div></div>' +
-        '</div></div>';
-    }).join('');
+  function ensureSchema(p) {
+    if (!p) return null;
+    if (!Array.isArray(p[K.ex])) p[K.ex] = [];
+    if (!Array.isArray(p[K.lists])) p[K.lists] = [];
+    if (!Array.isArray(p[K.sessions])) p[K.sessions] = [];
+    return p;
   }
 
-  function exTogglePause() { if (TM) { TM.paused = !TM.paused; renderWorkoutScreen(); } }
-  function exSkipPhase() { if (TM && !TM.finished) { TM.left = 0; nextPhase(); } }
-  function exFinishNow() {
-    if (!TM) return;
-    if (!confirm('Завершить тренировку сейчас?')) return;
-    finishWorkout();
+  function profileData() {
+    var p = getProfile();
+    if (!p) return null;
+    return ensureSchema(p);
   }
 
-  function finishWorkout() {
-    stopTick();
-    if (!TM) return;
-    TM.finished = true;
-    var kcal = Math.round(TM.kcal);
-    var minutes = Math.round(TM.elapsed / 60);
-
-    getLog().unshift({
-      id: 'w_' + uid(),
-      date: dkey(new Date()),
-      name: TM.name || 'Тренировка',
-      kcal: kcal,
-      minutes: minutes,
-      sets: TM.done
+  function customExercises() { var p = profileData(); return p ? p[K.ex] : []; }
+  function workoutLists() { var p = profileData(); return p ? p[K.lists] : []; }
+  function sessions() {
+    var p = profileData(); if (!p) return [];
+    return p[K.sessions].slice().sort(function (a, b) {
+      return String(b.startedAt || '').localeCompare(String(a.startedAt || ''));
     });
-    var p = prof();
-    if (p.workout_log.length > 400) p.workout_log.length = 400;
-
-    var nb = parseInt(localStorage.getItem('cachedBurned') || 0, 10) + kcal;
-    localStorage.setItem('cachedBurned', String(nb));
-    var bEl = document.getElementById('burned-total');
-    if (bEl) bEl.innerText = nb + ' ккал';
-
-    persist();
-
-    if (typeof showMotivationToast === 'function') {
-      showMotivationToast('Тренировка завершена! 🔥', 'Сожжено ' + kcal + ' ккал за ' + minutes + ' мин. Так держать!', '🔥');
-    } else {
-      alertUser('Готово! Сожжено ' + kcal + ' ккал.');
-    }
-
-    TM = null;
-    document.getElementById('ex-work-timer').innerHTML = '';
-    document.getElementById('ex-work-plan').innerHTML = '';
-    renderExercisesScreen();
-    closeScreen('ex-work-screen');
   }
 
-  function exLeaveWorkout() {
-    if (TM && !TM.finished) {
-      if (!confirm('Выйти без сохранения результата?')) return;
-    }
-    stopTick();
-    TM = null;
-    closeScreen('ex-work-screen');
+  /* ==========================================================================
+     4. БАЗА УПРАЖНЕНИЙ (встроенная)
+     ========================================================================== */
+  var MUSCLES = ['Грудь', 'Спина', 'Ноги', 'Плечи', 'Руки', 'Пресс', 'Кардио', 'Всё тело'];
+
+  var BUILTIN = [
+    { id: 'b_bench',      name: 'Жим штанги лёжа',        group: 'Грудь',  met: 5.0,  icon: '🏋️' },
+    { id: 'b_pushup',     name: 'Отжимания',              group: 'Грудь',  met: 8.0,  icon: '💪' },
+    { id: 'b_dips',       name: 'Брусья',                 group: 'Грудь',  met: 6.0,  icon: '💪' },
+    { id: 'b_pullup',     name: 'Подтягивания',           group: 'Спина',  met: 8.0,  icon: '🧗' },
+    { id: 'b_row',        name: 'Тяга штанги в наклоне',  group: 'Спина',  met: 5.5,  icon: '🏋️' },
+    { id: 'b_latpull',    name: 'Тяга верхнего блока',    group: 'Спина',  met: 5.0,  icon: '🏋️' },
+    { id: 'b_deadlift',   name: 'Становая тяга',          group: 'Спина',  met: 6.0,  icon: '🏋️' },
+    { id: 'b_squat',      name: 'Приседания со штангой',  group: 'Ноги',   met: 6.0,  icon: '🦵' },
+    { id: 'b_lunge',      name: 'Выпады',                 group: 'Ноги',   met: 5.0,  icon: '🦵' },
+    { id: 'b_legpress',   name: 'Жим ногами',             group: 'Ноги',   met: 5.0,  icon: '🦵' },
+    { id: 'b_calf',       name: 'Подъёмы на носки',       group: 'Ноги',   met: 4.0,  icon: '🦶' },
+    { id: 'b_ohp',        name: 'Жим стоя / гантели',     group: 'Плечи',  met: 5.0,  icon: '🏋️' },
+    { id: 'b_raises',     name: 'Махи гантелями',         group: 'Плечи',  met: 4.5,  icon: '🏋️' },
+    { id: 'b_curl',       name: 'Подъём на бицепс',       group: 'Руки',   met: 4.0,  icon: '💪' },
+    { id: 'b_triext',     name: 'Разгибание на трицепс',  group: 'Руки',   met: 4.0,  icon: '💪' },
+    { id: 'b_plank',      name: 'Планка',                 group: 'Пресс',  met: 4.0,  icon: '🧘' },
+    { id: 'b_crunch',     name: 'Скручивания',            group: 'Пресс',  met: 4.0,  icon: '🧘' },
+    { id: 'b_legraise',   name: 'Подъём ног лёжа',        group: 'Пресс',  met: 4.5,  icon: '🧘' },
+    { id: 'b_running',    name: 'Бег',                    group: 'Кардио', met: 9.8,  icon: '🏃' },
+    { id: 'b_walk',       name: 'Ходьба',                 group: 'Кардио', met: 3.5,  icon: '🚶' },
+    { id: 'b_bike',       name: 'Велотренажёр',           group: 'Кардио', met: 7.5,  icon: '🚴' },
+    { id: 'b_rope',       name: 'Скакалка',               group: 'Кардио', met: 11.0, icon: '🪢' },
+    { id: 'b_burpee',     name: 'Бёрпи',                  group: 'Всё тело', met: 10.0, icon: '🔥' },
+    { id: 'b_kettlebell', name: 'Гиря / махи',            group: 'Всё тело', met: 9.0,  icon: '🔔' }
+  ];
+
+  function allExercises() {
+    var custom = customExercises().map(function (e) {
+      return {
+        id: e.id, name: e.name, group: e.group || 'Всё тело',
+        met: num(e.met) || 5, icon: e.icon || '⭐',
+        photo: e.photo || null, note: e.note || '', custom: true
+      };
+    });
+    return BUILTIN.map(function (e) {
+      return { id: e.id, name: e.name, group: e.group, met: e.met, icon: e.icon, photo: null, custom: false };
+    }).concat(custom);
   }
 
-  /* ============================================================
-     АНАЛИЗ
-     ============================================================ */
-  var charts = {};
-
-  function exOpenAnalysis() {
-    var to = new Date(), from = new Date();
-    from.setDate(to.getDate() - 6);
-    document.getElementById('exa-from').value = dkey(from);
-    document.getElementById('exa-to').value = dkey(to);
-    if (typeof openScreen === 'function') openScreen('ex-analysis-screen');
-    setTimeout(exRenderAnalysis, 120);
+  function findExercise(id) {
+    var list = allExercises();
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    return null;
   }
 
-  function exSetPeriod(range) {
-    var now = new Date();
-    var toEl = document.getElementById('exa-to'), fromEl = document.getElementById('exa-from');
-    toEl.value = dkey(now);
-    if (range === 'month') {
-      fromEl.value = dkey(new Date(now.getFullYear(), now.getMonth(), 1));
-    } else {
-      var a = new Date(now); a.setDate(now.getDate() - (range - 1));
-      fromEl.value = dkey(a);
+  /* ==========================================================================
+     5. ДНЕВНЫЕ ЛОГИ ПРИЛОЖЕНИЯ (гибкое чтение)
+     ========================================================================== */
+  var DAY_KEYS = ['days', 'log', 'logs', 'daysLog', 'history', 'entries', 'diary', 'daily', 'mealsByDay'];
+  var ALIAS = {
+    eaten:  ['calories', 'kcal', 'kcalEaten', 'caloriesEaten', 'eaten', 'totalCalories', 'kkal', 'caloriesIn'],
+    burned: ['burned', 'caloriesBurned', 'kcalBurned', 'burn', 'activityCalories', 'spent', 'caloriesOut'],
+    water:  ['water', 'waterMl', 'water_ml', 'waterAmount', 'ml', 'waterMlTotal'],
+    weight: ['weight', 'weightKg', 'mass', 'ves']
+  };
+
+  function pickField(obj, keys) {
+    if (!obj || typeof obj !== 'object') return null;
+    for (var i = 0; i < keys.length; i++) {
+      var v = obj[keys[i]];
+      if (v != null && v !== '' && !(typeof v === 'object')) {
+        var n = num(v);
+        if (n || v === 0 || v === '0') return n;
+      }
     }
-    exRenderAnalysis();
+    return null;
+  }
+
+  function sumFoodArray(arr) {
+    if (!Array.isArray(arr)) return null;
+    var total = 0, any = false;
+    arr.forEach(function (it) {
+      if (!it || typeof it !== 'object') return;
+      var v = pickField(it, ['calories', 'kcal', 'kkal', 'cal', 'energy']);
+      if (v == null && it.weight && it.kcalPer100) v = num(it.weight) * num(it.kcalPer100) / 100;
+      if (v != null) { total += v; any = true; }
+    });
+    return any ? total : null;
+  }
+
+  function dayLogsMap() {
+    var p = getProfile(), out = {};
+    if (!p) return out;
+
+    for (var i = 0; i < DAY_KEYS.length; i++) {
+      var src = p[DAY_KEYS[i]];
+      if (!src) continue;
+
+      if (Array.isArray(src)) {
+        src.forEach(function (it) {
+          if (!it || typeof it !== 'object') return;
+          var d = it.date || it.day || it.d || it.id;
+          if (!d) return;
+          out[String(d).slice(0, 10)] = it;
+        });
+      } else if (typeof src === 'object') {
+        Object.keys(src).forEach(function (k) {
+          if (!/^\d{4}-\d{2}-\d{2}/.test(k)) return;
+          var v = src[k];
+          if (v && typeof v === 'object') out[k.slice(0, 10)] = v;
+        });
+      }
+      if (Object.keys(out).length) break;
+    }
+    return out;
+  }
+
+  function sessionKcalByDay() {
+    var map = {};
+    sessions().forEach(function (s) {
+      var d = String(s.date || s.startedAt || '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
+      map[d] = (map[d] || 0) + (num(s.kcal) || 0);
+    });
+    return map;
+  }
+
+  /* Единая серия по диапазону дат */
+  function buildSeries(fromYmd, toYmd) {
+    var logs = dayLogsMap();
+    var extraBurn = sessionKcalByDay();
+    var out = [];
+    var start = parseYmd(fromYmd), end = parseYmd(toYmd);
+    if (start > end) { var t = start; start = end; end = t; }
+    var guard = 0;
+
+    for (var d = new Date(start); d <= end && guard < 800; d.setDate(d.getDate() + 1), guard++) {
+      var key = ymd(d);
+      var rec = logs[key] || null;
+
+      var eaten = pickField(rec, ALIAS.eaten);
+      if (eaten == null && rec) {
+        eaten = sumFoodArray(rec.food || rec.meals || rec.items || rec.products);
+      }
+
+      var burned = pickField(rec, ALIAS.burned);
+      burned = (burned || 0) + (extraBurn[key] || 0);
+
+      out.push({
+        date: key,
+        eaten: eaten || 0,
+        burned: burned || 0,
+        water: pickField(rec, ALIAS.water) || 0,
+        weight: pickField(rec, ALIAS.weight) || 0,
+        hasEaten: eaten != null,
+        hasBurned: !!burned,
+        hasWater: pickField(rec, ALIAS.water) != null,
+        hasWeight: pickField(rec, ALIAS.weight) != null
+      });
+    }
+    return out;
   }
 
   function pearson(xs, ys) {
-    var px = [], py = [];
-    for (var i = 0; i < xs.length; i++) {
-      if (xs[i] != null && ys[i] != null) { px.push(xs[i]); py.push(ys[i]); }
-    }
-    var n = px.length;
+    var n = Math.min(xs.length, ys.length);
     if (n < 3) return null;
-    var mx = 0, my = 0;
-    for (var j = 0; j < n; j++) { mx += px[j]; my += py[j]; }
-    mx /= n; my /= n;
-    var nume = 0, dx = 0, dy = 0;
-    for (var k = 0; k < n; k++) {
-      var a = px[k] - mx, b = py[k] - my;
-      nume += a * b; dx += a * a; dy += b * b;
+    var i, sx = 0, sy = 0;
+    for (i = 0; i < n; i++) { sx += xs[i]; sy += ys[i]; }
+    var mx = sx / n, my = sy / n, a = 0, b = 0, c = 0;
+    for (i = 0; i < n; i++) {
+      var dx = xs[i] - mx, dy = ys[i] - my;
+      a += dx * dy; b += dx * dx; c += dy * dy;
     }
-    if (dx === 0 || dy === 0) return null;
-    return nume / Math.sqrt(dx * dy);
+    if (!b || !c) return null;
+    return a / Math.sqrt(b * c);
   }
 
-  function corrWord(r) {
+  function corrLabel(r) {
     if (r == null) return 'мало данных';
-    var a = Math.abs(r);
-    var lvl = a < 0.2 ? 'очень слабая' : a < 0.4 ? 'слабая' : a < 0.6 ? 'умеренная' : a < 0.8 ? 'заметная' : 'сильная';
-    return lvl + (r < 0 ? ' обратная' : ' прямая') + ' (' + r.toFixed(2) + ')';
+    var a = Math.abs(r), dir = r >= 0 ? 'прямая' : 'обратная';
+    if (a >= 0.7) return 'сильная ' + dir;
+    if (a >= 0.4) return 'умеренная ' + dir;
+    if (a >= 0.2) return 'слабая ' + dir;
+    return 'связи нет';
   }
 
-  function exRenderAnalysis() {
-    if (typeof Chart === 'undefined') return;
-    var from = document.getElementById('exa-from').value;
-    var to = document.getElementById('exa-to').value;
-    if (!from || !to) return;
-
-    var foodHist = lsJSON('foodHistory', {});
-    var waterHist = lsJSON('waterHistory', {});
-    var weights = lsJSON('weightHistory', []);
-    var log = getLog();
-
-    var labels = [], burned = [], eaten = [], water = [], weight = [];
-    var lastW = null;
-
-    for (var d = new Date(from); d <= new Date(to); d.setDate(d.getDate() + 1)) {
-      var key = dkey(d);
-      labels.push(key.split('-').slice(1).reverse().join('.'));
-
-      var b = 0;
-      log.forEach(function (w) { if (w.date === key) b += num(w.kcal, 0); });
-      burned.push(Math.round(b));
-
-      var e = 0;
-      (foodHist[key] || []).forEach(function (x) {
-        e += num(x.calories_100g != null ? x.calories_100g : x.calories, 0);
-      });
-      eaten.push(Math.round(e));
-
-      var w2 = 0;
-      (waterHist[key] || []).forEach(function (x) { w2 += num(x.amount, 0); });
-      water.push(Math.round(w2));
-
-      var found = null;
-      for (var i = 0; i < weights.length; i++) {
-        if (weights[i].dateRaw === key) { found = num(weights[i].weight, null); break; }
-      }
-      if (found != null) lastW = found;
-      weight.push(lastW);
+  /* ==========================================================================
+     6. КАЛОРИИ ТРЕНИРОВКИ
+     ========================================================================== */
+  function userWeight() {
+    var p = getProfile();
+    if (p) {
+      var w = num(p.weight || p.weightKg || p.mass);
+      if (w > 25 && w < 350) return w;
     }
+    var logs = dayLogsMap();
+    var keys = Object.keys(logs).sort().reverse();
+    for (var i = 0; i < keys.length; i++) {
+      var v = pickField(logs[keys[i]], ALIAS.weight);
+      if (v && v > 25 && v < 350) return v;
+    }
+    return 70;
+  }
 
-    /* карточки */
-    var sumB = burned.reduce(function (a, b) { return a + b; }, 0);
-    var sumE = eaten.reduce(function (a, b) { return a + b; }, 0);
-    var sumW = water.reduce(function (a, b) { return a + b; }, 0);
-    var days = labels.length || 1;
-    var wStart = weight.filter(function (v) { return v != null; })[0];
-    var wEnd = weight.filter(function (v) { return v != null; }).slice(-1)[0];
-    var wDiff = (wStart != null && wEnd != null) ? (wEnd - wStart) : null;
+  /* kcal = MET * 3.5 * kg / 200 * минуты */
+  function kcalFor(met, minutes, kg) {
+    if (!met || !minutes) return 0;
+    return met * 3.5 * (kg || 70) / 200 * minutes;
+  }
 
-    var cards = document.getElementById('exa-cards');
-    cards.innerHTML =
-      '<div class="summary-title">Сожжено: ' + sumB + ' ккал за ' + labels.length + ' дн.</div>' +
-      '<div class="summary-grid">' +
-      '<div><span style="color:#ff9f0a;font-weight:bold;font-size:16px;">' + Math.round(sumB / days) + '</span><br><span style="font-size:10px;color:#8e8e93;">Ккал/день</span></div>' +
-      '<div><span style="color:#ff3b30;font-weight:bold;font-size:16px;">' + sumE + '</span><br><span style="font-size:10px;color:#8e8e93;">Съедено</span></div>' +
-      '<div><span style="color:#5ac8fa;font-weight:bold;font-size:16px;">' + sumW + '</span><br><span style="font-size:10px;color:#8e8e93;">Вода, мл</span></div>' +
-      '<div><span style="color:#fff;font-weight:bold;font-size:16px;">' + (wDiff == null ? '—' : (wDiff > 0 ? '+' : '') + wDiff.toFixed(1)) + '</span><br><span style="font-size:10px;color:#8e8e93;">Вес, кг</span></div>' +
+  /* ==========================================================================
+     7. ИЗОБРАЖЕНИЯ
+     ========================================================================== */
+  function compressImage(file, maxSide, quality, cb) {
+    maxSide = maxSide || 480;
+    quality = quality || 0.72;
+    if (!file || !/^image\//.test(file.type)) { cb(null, 'Не изображение'); return; }
+
+    var reader = new FileReader();
+    reader.onerror = function () { cb(null, 'Ошибка чтения файла'); };
+    reader.onload = function () {
+      var img = new Image();
+      img.onerror = function () { cb(null, 'Ошибка декодирования'); };
+      img.onload = function () {
+        try {
+          var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+          var s = Math.min(1, maxSide / Math.max(w, h));
+          var cw = Math.max(1, Math.round(w * s)), ch = Math.max(1, Math.round(h * s));
+          var cv = document.createElement('canvas');
+          cv.width = cw; cv.height = ch;
+          var ctx = cv.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, cw, ch);
+          ctx.drawImage(img, 0, 0, cw, ch);
+          var data = cv.toDataURL('image/jpeg', quality);
+          if (data.length > 340000) {
+            data = cv.toDataURL('image/jpeg', 0.5);
+          }
+          cb(data, null);
+        } catch (e) { cb(null, 'Не удалось обработать'); }
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  /* ==========================================================================
+     8. ЗВУК
+     ========================================================================== */
+  var actx = null;
+  function beep(freq, ms, vol) {
+    try {
+      if (!actx) {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        actx = new AC();
+      }
+      if (actx.state === 'suspended') actx.resume();
+      var o = actx.createOscillator(), g = actx.createGain();
+      o.type = 'sine';
+      o.frequency.value = freq || 880;
+      g.gain.value = vol == null ? 0.14 : vol;
+      o.connect(g); g.connect(actx.destination);
+      var t = actx.currentTime;
+      o.start(t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + (ms || 160) / 1000);
+      o.stop(t + (ms || 160) / 1000 + 0.02);
+    } catch (e) {}
+  }
+
+  /* ==========================================================================
+     9. СТИЛИ
+     ========================================================================== */
+  var CSS = [
+    '.srx-root{position:fixed;inset:0;z-index:9998;display:none;flex-direction:column;',
+    'background:#0b0f14;color:#e8eef5;font-family:inherit;-webkit-tap-highlight-color:transparent}',
+    '.srx-root.open{display:flex}',
+    '.srx-head{display:flex;align-items:center;gap:10px;padding:14px 14px 12px;',
+    'background:linear-gradient(180deg,#141b23,#0b0f14);border-bottom:1px solid #1e2833}',
+    '.srx-head h2{margin:0;font-size:17px;font-weight:700;flex:1;letter-spacing:.2px}',
+    '.srx-x{width:36px;height:36px;border-radius:10px;border:1px solid #24303d;background:#151d26;',
+    'color:#cbd6e2;font-size:18px;line-height:1;cursor:pointer}',
+    '.srx-x:active{transform:scale(.96)}',
+    '.srx-body{flex:1;overflow-y:auto;padding:14px 14px 110px;-webkit-overflow-scrolling:touch}',
+    '.srx-card{background:#121a22;border:1px solid #1e2833;border-radius:14px;padding:14px;margin-bottom:12px}',
+    '.srx-card h3{margin:0 0 10px;font-size:14px;font-weight:700;color:#9fb0c2;text-transform:uppercase;letter-spacing:.6px}',
+    '.srx-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;',
+    'padding:11px 14px;border-radius:11px;border:1px solid #26323f;background:#182230;color:#e8eef5;',
+    'font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}',
+    '.srx-btn:active{transform:scale(.98)}',
+    '.srx-btn.primary{background:linear-gradient(135deg,#f97316,#ea580c);border-color:#f97316;color:#fff}',
+    '.srx-btn.green{background:linear-gradient(135deg,#22c55e,#16a34a);border-color:#22c55e;color:#06210f}',
+    '.srx-btn.ghost{background:transparent}',
+    '.srx-btn.danger{background:#2a1417;border-color:#5b1f26;color:#ff8a95}',
+    '.srx-btn.sm{padding:7px 10px;font-size:12.5px;border-radius:9px}',
+    '.srx-row{display:flex;gap:8px;align-items:center}',
+    '.srx-row.wrap{flex-wrap:wrap}',
+    '.srx-grow{flex:1;min-width:0}',
+    '.srx-muted{color:#7d8ea3;font-size:12.5px}',
+    '.srx-input,.srx-select,.srx-textarea{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;',
+    'border:1px solid #24303d;background:#0e151c;color:#e8eef5;font-size:14px;font-family:inherit;outline:none}',
+    '.srx-input:focus,.srx-select:focus,.srx-textarea:focus{border-color:#f97316}',
+    '.srx-label{display:block;font-size:12px;color:#8b9cb0;margin:10px 0 6px;font-weight:600}',
+    '.srx-grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}',
+    '.srx-grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}',
+    '.srx-empty{text-align:center;padding:34px 14px;color:#6c7d90;font-size:13.5px;line-height:1.6}',
+    '.srx-list-item{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid #1a232d}',
+    '.srx-list-item:last-child{border-bottom:0}',
+    '.srx-thumb{width:44px;height:44px;border-radius:11px;object-fit:cover;background:#1a232d;flex:0 0 auto;',
+    'display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden}',
+    '.srx-name{font-size:14.5px;font-weight:600;line-height:1.25}',
+    '.srx-sub{font-size:12px;color:#7d8ea3;margin-top:2px}',
+    '.srx-ex-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}',
+    '.srx-ex-card{background:#121a22;border:1px solid #1e2833;border-radius:13px;overflow:hidden;cursor:pointer}',
+    '.srx-ex-card:active{transform:scale(.985)}',
+    '.srx-ex-photo{width:100%;height:96px;object-fit:cover;display:block;background:#182230}',
+    '.srx-ex-photo.ph{display:flex;align-items:center;justify-content:center;font-size:30px;color:#2f3d4c}',
+    '.srx-ex-info{padding:8px 10px 10px}',
+    '.srx-chips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}',
+    '.srx-chips::-webkit-scrollbar{display:none}',
+    '.srx-chip{flex:0 0 auto;padding:7px 12px;border-radius:999px;border:1px solid #26323f;background:#141d26;',
+    'color:#9fb0c2;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit}',
+    '.srx-chip.on{background:#f97316;border-color:#f97316;color:#fff}',
+    '.srx-timer{text-align:center;padding:8px 0 4px}',
+    '.srx-phase{font-size:13px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#f97316}',
+    '.srx-phase.rest{color:#38bdf8}.srx-phase.prep{color:#a78bfa}.srx-phase.done{color:#22c55e}',
+    '.srx-clock{font-size:64px;font-weight:800;line-height:1.05;letter-spacing:-2px;',
+    'font-variant-numeric:tabular-nums;margin:6px 0}',
+    '.srx-progress{height:7px;border-radius:99px;background:#1b2530;overflow:hidden;margin:12px 0 6px}',
+    '.srx-progress > i{display:block;height:100%;width:0;border-radius:99px;',
+    'background:linear-gradient(90deg,#f97316,#fbbf24);transition:width .25s linear}',
+    '.srx-chart-box{position:relative;height:230px;margin-top:6px}',
+    '.srx-kpi{display:grid;grid-template-columns:1fr 1fr;gap:10px}',
+    '.srx-kpi > div{background:#0e151c;border:1px solid #1c2632;border-radius:12px;padding:11px 12px}',
+    '.srx-kpi b{display:block;font-size:19px;font-weight:800;margin-top:3px}',
+    '.srx-kpi span{font-size:11.5px;color:#7d8ea3;text-transform:uppercase;letter-spacing:.5px}',
+    '.srx-modal{position:fixed;inset:0;z-index:10000;display:none;align-items:flex-end;',
+    'background:rgba(3,7,12,.72);backdrop-filter:blur(3px)}',
+    '.srx-modal.open{display:flex}',
+    '.srx-sheet{width:100%;max-height:88vh;overflow-y:auto;background:#101821;border-radius:18px 18px 0 0;',
+    'border-top:1px solid #24303d;padding:16px 16px 26px;animation:srx-up .18s ease-out}',
+    '@keyframes srx-up{from{transform:translateY(24px);opacity:.4}to{transform:none;opacity:1}}',
+    '.srx-toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);',
+    'background:#182230;border:1px solid #2a3746;color:#e8eef5;padding:11px 16px;border-radius:11px;',
+    'font-size:13px;z-index:10001;opacity:0;transition:.22s;max-width:88vw;text-align:center}',
+    '.srx-toast.on{opacity:1;transform:translateX(-50%) translateY(0)}',
+    '.srx-dash-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:10px;',
+    'background:#182230;border:1px solid #26323f;color:#e8eef5;font-size:13px;font-weight:600;',
+    'cursor:pointer;font-family:inherit}',
+    '.srx-dash-btn:active{transform:scale(.97)}'
+  ].join('');
+
+  function injectCSS() {
+    if ($('#srx-style')) return;
+    var st = document.createElement('style');
+    st.id = 'srx-style';
+    st.textContent = CSS;
+    document.head.appendChild(st);
+  }
+
+  /* ==========================================================================
+     10. TOAST
+     ========================================================================== */
+  var toastEl = null, toastTimer = null;
+  function toast(msg) {
+    if (!toastEl) {
+      toastEl = document.createElement('div');
+      toastEl.className = 'srx-toast';
+      document.body.appendChild(toastEl);
+    }
+    toastEl.textContent = msg;
+    toastEl.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('on'); }, 2600);
+  }
+
+  /* ==========================================================================
+     11. ОБОЛОЧКА UI
+     ========================================================================== */
+  var root = null, headTitle = null, bodyEl = null;
+  var state = { view: 'lists', params: {} };
+  var chartRegistry = [];
+
+  function buildShell() {
+    if (root) return;
+    root = document.createElement('div');
+    root.className = 'srx-root';
+    root.id = 'srx-root';
+    root.innerHTML =
+      '<div class="srx-head">' +
+        '<button class="srx-x" data-act="close">✕</button>' +
+        '<h2 data-ref="title">Тренировки</h2>' +
+        '<button class="srx-x" data-act="library" title="Упражнения">📚</button>' +
       '</div>' +
-      '<div style="margin-top:10px;font-size:12px;color:#fff;">Баланс (съедено − сожжено): <b style="color:' + (sumE - sumB > 0 ? '#ff3b30' : '#34c759') + '">' + (sumE - sumB) + ' ккал</b></div>';
+      '<div class="srx-body" data-ref="body"></div>';
+    document.body.appendChild(root);
+    headTitle = $('[data-ref="title"]', root);
+    bodyEl = $('[data-ref="body"]', root);
 
-    /* корреляции */
-    var balance = labels.map(function (_, i) { return eaten[i] - burned[i]; });
-    document.getElementById('exa-corr').innerHTML =
-      'Сожжённые ↔ вес: <b style="color:#fff;">' + corrWord(pearson(burned, weight)) + '</b><br>' +
-      'Сожжённые ↔ еда: <b style="color:#fff;">' + corrWord(pearson(burned, eaten)) + '</b><br>' +
-      'Сожжённые ↔ вода: <b style="color:#fff;">' + corrWord(pearson(burned, water)) + '</b><br>' +
-      'Баланс калорий в среднем: <b style="color:#fff;">' + Math.round(balance.reduce(function (a, b) { return a + b; }, 0) / days) + ' ккал/день</b>';
+    root.addEventListener('click', onClick);
+  }
 
-    var grid = { color: 'rgba(255,255,255,0.08)' };
-    var ticks = { color: '#8e8e93', font: { size: 10 } };
+  function openRoot(view, params) {
+    buildShell();
+    root.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    go(view || 'lists', params || {});
+  }
 
-    function mk(id, cfg) {
-      if (charts[id]) charts[id].destroy();
-      charts[id] = new Chart(document.getElementById(id).getContext('2d'), cfg);
+  function closeRoot() {
+    if (!root) return;
+    root.classList.remove('open');
+    document.body.style.overflow = '';
+    destroyCharts();
+    stopTimer(true);
+  }
+
+  function go(view, params) {
+    state.view = view;
+    state.params = params || {};
+    destroyCharts();
+    render();
+    if (bodyEl) bodyEl.scrollTop = 0;
+  }
+
+  function destroyCharts() {
+    chartRegistry.forEach(function (c) { try { c.destroy(); } catch (e) {} });
+    chartRegistry = [];
+  }
+
+  function setTitle(t) { if (headTitle) headTitle.textContent = t; }
+
+  function render() {
+    if (!bodyEl) return;
+    var v = state.view;
+    if (v === 'lists') return renderLists();
+    if (v === 'library') return renderLibrary();
+    if (v === 'listEdit') return renderListEdit(state.params.id);
+    if (v === 'run') return renderRun();
+    if (v === 'analysis') return renderAnalysis();
+    if (v === 'session') return renderSession(state.params.id);
+    renderLists();
+  }
+
+  /* ==========================================================================
+     12. ЭКРАН: СПИСКИ ТРЕНИРОВОК
+     ========================================================================== */
+  function renderLists() {
+    setTitle('Тренировки');
+    var lists = workoutLists();
+    var html = '';
+
+    html += '<div class="srx-kpi" style="margin-bottom:14px">' +
+      '<div><span>Тренировок</span><b>' + sessions().length + '</b></div>' +
+      '<div><span>Списков</span><b>' + lists.length + '</b></div>' +
+      '</div>';
+
+    html += '<div class="srx-row" style="margin-bottom:12px">' +
+      '<button class="srx-btn primary srx-grow" data-act="newList">＋ Новый список</button>' +
+      '<button class="srx-btn" data-act="analysis">📊</button>' +
+      '</div>';
+
+    if (!lists.length) {
+      html += '<div class="srx-empty">Списков пока нет.<br>Создай первый — и добавь в него упражнения из библиотеки.</div>';
+    } else {
+      html += '<div class="srx-card"><h3>Мои списки</h3>';
+      lists.forEach(function (l) {
+        var count = (l.items || []).length;
+        var totalMin = (l.items || []).reduce(function (a, it) {
+          var sets = num(it.sets) || 1;
+          var work = (num(it.timeSec) || 40) * sets;
+          var rest = (num(it.restSec) || 20) * Math.max(0, sets - 1);
+          return a + work + rest;
+        }, 0) / 60;
+
+        html += '<div class="srx-list-item">' +
+          '<div class="srx-thumb">🏋️</div>' +
+          '<div class="srx-grow">' +
+            '<div class="srx-name">' + esc(l.name || 'Без названия') + '</div>' +
+            '<div class="srx-sub">' + count + ' упр. · ~' + Math.round(totalMin) + ' мин</div>' +
+          '</div>' +
+          '<button class="srx-btn sm green" data-act="startList" data-id="' + esc(l.id) + '">▶</button>' +
+          '<button class="srx-btn sm" data-act="editList" data-id="' + esc(l.id) + '">✎</button>' +
+          '</div>';
+      });
+      html += '</div>';
     }
 
-    mk('exa-chart1', {
-      type: 'bar',
-      data: {
-        labels: labels,
-        datasets: [
-          { label: 'Сожжено', data: burned, backgroundColor: '#ff9f0a', borderRadius: 4, yAxisID: 'y' },
-          { label: 'Съедено', data: eaten, type: 'line', borderColor: '#ff3b30', backgroundColor: '#ff3b3033', borderWidth: 2, pointRadius: 2, tension: 0.3, fill: false, yAxisID: 'y' }
-        ]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { labels: { color: '#fff', font: { size: 10 } } }, title: { display: true, text: 'Сожжено vs Съедено (ккал)', color: '#fff' } },
-        scales: { x: { ticks: ticks, grid: grid }, y: { beginAtZero: true, ticks: ticks, grid: grid } }
-      }
-    });
+    var hist = sessions().slice(0, 8);
+    if (hist.length) {
+      html += '<div class="srx-card"><h3>Последние тренировки</h3>';
+      hist.forEach(function (s) {
+        html += '<div class="srx-list-item">' +
+          '<div class="srx-thumb">✅</div>' +
+          '<div class="srx-grow">' +
+            '<div class="srx-name">' + esc(s.listName || 'Тренировка') + '</div>' +
+            '<div class="srx-sub">' + esc(String(s.date || '').slice(0, 10)) + ' · ' +
+              humanDur(s.durationSec || 0) + ' · ' + Math.round(num(s.kcal)) + ' ккал</div>' +
+          '</div>' +
+          '<button class="srx-btn sm ghost" data-act="openSession" data-id="' + esc(s.id) + '">›</button>' +
+          '</div>';
+      });
+      html += '</div>';
+    }
 
-    mk('exa-chart2', {
-      type: 'line',
-      data: {
-        labels: labels,
-        datasets: [{ label: 'Баланс', data: balance, borderColor: '#af52de', backgroundColor: '#af52de33', borderWidth: 2, pointRadius: 2, tension: 0.3, fill: true }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false }, title: { display: true, text: 'Баланс калорий (съедено − сожжено)', color: '#fff' } },
-        scales: { x: { ticks: ticks, grid: grid }, y: { ticks: ticks, grid: grid } }
-      }
-    });
+    bodyEl.innerHTML = html;
+  }
 
-    mk('exa-chart3', {
-      type: 'bar',
-      data: {
-        labels: labels,
-        datasets: [
-          { label: 'Сожжено', data: burned, backgroundColor: 'rgba(255,159,10,0.65)', borderRadius: 4, yAxisID: 'y' },
-          { label: 'Вес, кг', data: weight, type: 'line', borderColor: '#ffcc00', borderWidth: 2, pointRadius: 2, tension: 0.3, fill: false, yAxisID: 'y1' }
-        ]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { labels: { color: '#fff', font: { size: 10 } } }, title: { display: true, text: 'Сожжённые калории и вес', color: '#fff' } },
-        scales: {
-          x: { ticks: ticks, grid: grid },
-          y: { beginAtZero: true, position: 'left', ticks: ticks, grid: grid },
-          y1: { position: 'right', ticks: ticks, grid: { drawOnChartArea: false } }
-        }
-      }
-    });
+  /* ==========================================================================
+     13. ЭКРАН: РЕДАКТОР СПИСКА
+     ========================================================================== */
+  function renderListEdit(id) {
+    var lists = workoutLists();
+    var list = null;
+    for (var i = 0; i < lists.length; i++) if (lists[i].id === id) list = lists[i];
 
-    mk('exa-chart4', {
-      type: 'bar',
-      data: {
-        labels: labels,
-        datasets: [
-          { label: 'Вода, мл', data: water, backgroundColor: 'rgba(90,200,250,0.55)', borderRadius: 4, yAxisID: 'y' },
-          { label: 'Сожжено', data: burned, type: 'line', borderColor: '#ff9f0a', borderWidth: 2, pointRadius: 2, tension: 0.3, fill: false, yAxisID: 'y1' }
-        ]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { labels: { color: '#fff', font: { size: 10 } } }, title: { display: true, text: 'Вода и сожжённые калории', color: '#fff' } },
-        scales: {
-          x: { ticks: ticks, grid: grid },
-          y: { beginAtZero: true, position: 'left', ticks: ticks, grid: grid },
-          y1: { beginAtZero: true, position: 'right', ticks: ticks, grid: { drawOnChartArea: false } }
-        }
-      }
-    });
+    if (!list) {
+      if (id) { toast('Список не найден'); go('lists'); return; }
+      list = { id: uid(), name: '', items: [], createdAt: new Date().toISOString() };
+      lists.push(list);
+      persist(true);
+    }
 
-    /* история тренировок */
-    var inRange = log.filter(function (w) { return w.date >= from && w.date <= to; });
-    var logBox = document.getElementById('exa-log');
-    if (!inRange.length) {
-      logBox.innerHTML = '<div class="exb-empty">За этот период тренировок нет. Запустите тренировку из списка — и здесь появится статистика.</div>';
+    setTitle('Список');
+
+    var html = '<div class="srx-card">' +
+      '<label class="srx-label">Название</label>' +
+      '<input class="srx-input" data-ref="listName" value="' + esc(list.name) + '" placeholder="Например: День ног">' +
+      '</div>';
+
+    html += '<div class="srx-card"><h3>Упражнения (' + (list.items || []).length + ')</h3>';
+
+    if (!(list.items || []).length) {
+      html += '<div class="srx-muted" style="padding:8px 0 12px">Пока пусто. Добавь упражнения ниже.</div>';
     } else {
-      logBox.innerHTML = inRange.map(function (w) {
-        return '<div class="exb-card" style="padding:10px 12px;"><div class="exb-row">' +
-          '<div class="exb-thumb" style="width:38px;height:38px;">🔥</div>' +
-          '<div style="min-width:0;flex:1;"><div class="exb-name" style="font-size:13px;">' + esc(w.name) + '</div>' +
-          '<div class="exb-sub">' + w.date.split('-').reverse().join('.') + ' · ' + (w.minutes || 0) + ' мин · ' + (w.sets || 0) + ' подходов</div></div>' +
-          '<div class="exb-kcal">' + num(w.kcal, 0) + ' ккал</div>' +
-          '</div></div>';
+      (list.items || []).forEach(function (it, idx) {
+        var ex = findExercise(it.exId);
+        var thumb = ex && ex.photo
+          ? '<img class="srx-thumb" src="' + ex.photo + '" alt="">'
+          : '<div class="srx-thumb">' + (ex ? ex.icon : '⭐') + '</div>';
+
+        html += '<div class="srx-list-item" style="align-items:flex-start;flex-wrap:wrap">' +
+          thumb +
+          '<div class="srx-grow">' +
+            '<div class="srx-name">' + esc(it.name || (ex && ex.name) || 'Упражнение') + '</div>' +
+            '<div class="srx-grid3" style="margin-top:8px">' +
+              '<div><div class="srx-muted" style="font-size:10.5px">ПОДХОДЫ</div>' +
+                '<input class="srx-input" style="padding:7px 8px" type="number" min="1" max="20" ' +
+                'data-act="itemField" data-id="' + esc(list.id) + '" data-idx="' + idx + '" data-field="sets" ' +
+                'value="' + (num(it.sets) || 3) + '"></div>' +
+              '<div><div class="srx-muted" style="font-size:10.5px">РАБОТА, с</div>' +
+                '<input class="srx-input" style="padding:7px 8px" type="number" min="5" max="1200" step="5" ' +
+                'data-act="itemField" data-id="' + esc(list.id) + '" data-idx="' + idx + '" data-field="timeSec" ' +
+                'value="' + (num(it.timeSec) || 40) + '"></div>' +
+              '<div><div class="srx-muted" style="font-size:10.5px">ОТДЫХ, с</div>' +
+                '<input class="srx-input" style="padding:7px 8px" type="number" min="0" max="600" step="5" ' +
+                'data-act="itemField" data-id="' + esc(list.id) + '" data-idx="' + idx + '" data-field="restSec" ' +
+                'value="' + (num(it.restSec) || 20) + '"></div>' +
+            '</div>' +
+          '</div>' +
+          '<button class="srx-btn sm danger" data-act="delItem" data-id="' + esc(list.id) + '" data-idx="' + idx + '">✕</button>' +
+          '</div>';
+      });
+    }
+
+    html += '<button class="srx-btn ghost" style="width:100%;margin-top:12px" data-act="pickerOpen" data-id="' +
+      esc(list.id) + '">＋ Добавить упражнение</button></div>';
+
+    html += '<div class="srx-row" style="margin-bottom:20px">' +
+      '<button class="srx-btn green srx-grow" data-act="startList" data-id="' + esc(list.id) + '">▶ Начать</button>' +
+      '<button class="srx-btn danger" data-act="delList" data-id="' + esc(list.id) + '">Удалить</button>' +
+      '</div>';
+
+    bodyEl.innerHTML = html;
+  }
+
+  /* ==========================================================================
+     14. ЭКРАН: БИБЛИОТЕКА УПРАЖНЕНИЙ
+     ========================================================================== */
+  var libFilter = 'Все';
+
+  function renderLibrary() {
+    setTitle('Упражнения');
+    var all = allExercises();
+    var groups = ['Все'].concat(MUSCLES);
+    var filtered = libFilter === 'Все' ? all : all.filter(function (e) { return e.group === libFilter; });
+
+    var html = '<div class="srx-chips">';
+    groups.forEach(function (g) {
+      var has = g === 'Все' || all.some(function (e) { return e.group === g; });
+      if (!has) return;
+      html += '<button class="srx-chip' + (g === libFilter ? ' on' : '') + '" data-act="libFilter" data-g="' +
+        esc(g) + '">' + esc(g) + '</button>';
+    });
+    html += '</div>';
+
+    html += '<button class="srx-btn primary" style="width:100%;margin:4px 0 14px" data-act="newExercise">' +
+      '＋ Своё упражнение с фото</button>';
+
+    html += '<div class="srx-ex-grid">';
+    filtered.forEach(function (e) {
+      var img = e.photo
+        ? '<img class="srx-ex-photo" src="' + e.photo + '" alt="">'
+        : '<div class="srx-ex-photo ph">' + esc(e.icon || '⭐') + '</div>';
+      html += '<div class="srx-ex-card" data-act="exInfo" data-id="' + esc(e.id) + '">' +
+        img +
+        '<div class="srx-ex-info">' +
+          '<div class="srx-name" style="font-size:13.5px">' + esc(e.name) + '</div>' +
+          '<div class="srx-sub">' + esc(e.group) + ' · MET ' + e.met +
+            (e.custom ? ' · своё' : '') + '</div>' +
+        '</div></div>';
+    });
+    html += '</div>';
+
+    bodyEl.innerHTML = html;
+  }
+
+  /* ==========================================================================
+     15. ЭКРАН: ТАЙМЕР ТРЕНИРОВКИ
+     ========================================================================== */
+  var T = {
+    active: false, phase: 'idle', left: 0, total: 0,
+    items: [], idx: 0, set: 0, listId: null, listName: '',
+    startedAt: null, tick: null, restAfterLast: false
+  };
+
+  function startWorkout(listId) {
+    var lists = workoutLists();
+    var list = null;
+    for (var i = 0; i < lists.length; i++) if (lists[i].id === listId) list = lists[i];
+    if (!list) { toast('Список не найден'); return; }
+    if (!(list.items || []).length) { toast('В списке нет упражнений'); return; }
+
+    T.items = list.items.map(function (it) {
+      var ex = findExercise(it.exId);
+      return {
+        exId: it.exId, name: it.name || (ex && ex.name) || 'Упражнение',
+        met: ex ? ex.met : 5, icon: ex ? ex.icon : '⭐', photo: ex ? ex.photo : null,
+        sets: Math.max(1, num(it.sets) || 1),
+        timeSec: Math.max(5, num(it.timeSec) || 40),
+        restSec: Math.max(0, num(it.restSec) || 20)
+      };
+    });
+    T.listId = list.id;
+    T.listName = list.name || 'Тренировка';
+    T.idx = 0; T.set = 1;
+    T.startedAt = new Date().toISOString();
+    T.active = true;
+    T.phase = 'prep';
+    T.total = 10;
+    T.left = 10;
+    go('run');
+    startTick();
+    beep(660, 120);
+  }
+
+  function startTick() {
+    stopTickOnly();
+    T.tick = setInterval(tickFn, 1000);
+  }
+  function stopTickOnly() { if (T.tick) { clearInterval(T.tick); T.tick = null; } }
+
+  function tickFn() {
+    if (!T.active) return;
+    T.left--;
+    if (T.left <= 0) advancePhase();
+    paintTimer();
+  }
+
+  function advancePhase() {
+    if (T.phase === 'prep') { enterWork(); return; }
+
+    if (T.phase === 'work') {
+      var cur = T.items[T.idx];
+      var isLastSet = T.set >= cur.sets;
+      var isLastItem = T.idx >= T.items.length - 1;
+
+      if (isLastSet && isLastItem && !T.restAfterLast) { finishWorkout(); return; }
+      if (cur.restSec > 0 && !(isLastSet && isLastItem)) {
+        T.phase = 'rest'; T.total = cur.restSec; T.left = cur.restSec;
+        beep(520, 150);
+        return;
+      }
+      nextWork();
+      return;
+    }
+
+    if (T.phase === 'rest') { nextWork(); return; }
+  }
+
+  function nextWork() {
+    var cur = T.items[T.idx];
+    if (T.set < cur.sets) {
+      T.set++;
+    } else {
+      if (T.idx >= T.items.length - 1) { finishWorkout(); return; }
+      T.idx++; T.set = 1;
+    }
+    enterWork();
+  }
+
+  function enterWork() {
+    var cur = T.items[T.idx];
+    T.phase = 'work';
+    T.total = cur.timeSec;
+    T.left = cur.timeSec;
+    beep(980, 200);
+  }
+
+  function finishWorkout() {
+    stopTickOnly();
+    T.active = false;
+
+    var kg = userWeight();
+    var workSeconds = 0, kcal = 0;
+    var detail = T.items.map(function (it) {
+      var sec = it.sets * it.timeSec;
+      workSeconds += sec;
+      var k = kcalFor(it.met, sec / 60, kg);
+      kcal += k;
+      return { exId: it.exId, name: it.name, sets: it.sets, timeSec: it.timeSec, kcal: round1(k) };
+    });
+
+    var durSec = T.startedAt ? Math.round((Date.now() - new Date(T.startedAt).getTime()) / 1000) : workSeconds;
+
+    var session = {
+      id: uid(),
+      listId: T.listId,
+      listName: T.listName,
+      date: todayISO(),
+      startedAt: T.startedAt,
+      finishedAt: new Date().toISOString(),
+      durationSec: durSec,
+      workSec: workSeconds,
+      kcal: round1(kcal),
+      bodyWeight: kg,
+      exercises: detail
+    };
+
+    var p = profileData();
+    if (p) {
+      p[K.sessions].push(session);
+      persist();
+    }
+
+    T.phase = 'done';
+    paintTimer();
+    beep(1200, 320);
+    setTimeout(function () {
+      toast('Готово: ' + Math.round(session.kcal) + ' ккал за ' + humanDur(durSec));
+      go('lists');
+    }, 900);
+  }
+
+  function stopTimer(silent) {
+    stopTickOnly();
+    if (!T.active) return;
+    if (!silent) {
+      if (!confirm('Прервать тренировку? Результат не сохранится.')) {
+        startTick();
+        return;
+      }
+    }
+    T.active = false;
+  }
+
+  function renderRun() {
+    setTitle('Тренировка');
+
+    if (!T.active && T.phase !== 'done') {
+      bodyEl.innerHTML = '<div class="srx-empty">Тренировка не запущена.</div>' +
+        '<button class="srx-btn primary" style="width:100%" data-act="backToList">← К спискам</button>';
+      return;
+    }
+
+    var cur = T.items[T.idx] || {};
+    var next = T.items[T.idx + 1] || null;
+
+    var html = '<div class="srx-card">' +
+      '<div class="srx-timer">' +
+        '<div class="srx-phase" data-ref="phase">' + phaseText() + '</div>' +
+        '<div class="srx-clock" data-ref="clock">' + mmss(T.left) + '</div>' +
+        '<div class="srx-muted" data-ref="exname">' + esc(cur.name || '') + '</div>' +
+        '<div class="srx-progress"><i data-ref="bar"></i></div>' +
+        '<div class="srx-muted" data-ref="meta">' + metaText() + '</div>' +
+      '</div>' +
+      '</div>';
+
+    html += '<div class="srx-row" style="margin-bottom:12px">' +
+      '<button class="srx-btn srx-grow" data-act="skipPhase">Пропустить →</button>' +
+      '<button class="srx-btn danger" data-act="abortRun">Стоп</button>' +
+      '</div>';
+
+    html += '<div class="srx-card"><h3>План</h3>';
+    T.items.forEach(function (it, i) {
+      var active = i === T.idx;
+      var done = i < T.idx;
+      html += '<div class="srx-list-item" style="opacity:' + (done ? .45 : 1) + '">' +
+        '<div class="srx-thumb">' + (it.photo ? '<img class="srx-thumb" src="' + it.photo + '" alt="">' : esc(it.icon || '⭐')) + '</div>' +
+        '<div class="srx-grow">' +
+          '<div class="srx-name"' + (active ? ' style="color:#f97316"' : '') + '>' +
+            esc(it.name) + '</div>' +
+          '<div class="srx-sub">' + it.sets + ' × ' + it.timeSec + ' с · отдых ' + it.restSec + ' с</div>' +
+        '</div>' +
+        (done ? '<div class="srx-sub">✓</div>' : '') +
+        '</div>';
+    });
+    html += '</div>';
+
+    bodyEl.innerHTML = html;
+    paintTimer();
+  }
+
+  function phaseText() {
+    if (T.phase === 'prep') return 'Приготовься';
+    if (T.phase === 'work') return 'Работа';
+    if (T.phase === 'rest') return 'Отдых';
+    if (T.phase === 'done') return 'Финиш';
+    return '—';
+  }
+
+  function metaText() {
+    var cur = T.items[T.idx];
+    if (!cur) return '';
+    if (T.phase === 'rest') {
+      var nxt = (T.set < cur.sets) ? cur : (T.items[T.idx + 1] || null);
+      return nxt ? 'Далее: ' + esc(nxt.name) : '';
+    }
+    return 'Подход ' + T.set + ' из ' + cur.sets + ' · ' + (T.idx + 1) + '/' + T.items.length;
+  }
+
+  function paintTimer() {
+    if (!bodyEl || state.view !== 'run') return;
+    var ph = $('[data-ref="phase"]', bodyEl);
+    var cl = $('[data-ref="clock"]', bodyEl);
+    var bar = $('[data-ref="bar"]', bodyEl);
+    var ex = $('[data-ref="exname"]', bodyEl);
+    var mt = $('[data-ref="meta"]', bodyEl);
+
+    if (ph) {
+      ph.textContent = phaseText();
+      ph.className = 'srx-phase' + (T.phase === 'rest' ? ' rest' : T.phase === 'prep' ? ' prep' : T.phase === 'done' ? ' done' : '');
+    }
+    if (cl) cl.textContent = T.phase === 'done' ? 'ГОТОВО' : mmss(T.left);
+    if (bar) {
+      var pct = T.total > 0 ? clamp((1 - T.left / T.total) * 100, 0, 100) : 0;
+      bar.style.width = pct + '%';
+    }
+    var cur = T.items[T.idx];
+    if (ex && cur) ex.textContent = cur.name;
+    if (mt) mt.textContent = metaText();
+  }
+
+  /* ==========================================================================
+     16. ЭКРАН: ДЕТАЛИ ТРЕНИРОВКИ
+     ========================================================================== */
+  function renderSession(id) {
+    setTitle('Тренировка');
+    var s = null;
+    sessions().forEach(function (x) { if (x.id === id) s = x; });
+    if (!s) { bodyEl.innerHTML = '<div class="srx-empty">Не найдено</div>'; return; }
+
+    var html = '<div class="srx-card">' +
+      '<div class="srx-name" style="font-size:16px">' + esc(s.listName || 'Тренировка') + '</div>' +
+      '<div class="srx-sub">' + esc(String(s.date || s.startedAt || '').slice(0, 10)) + '</div>' +
+      '<div class="srx-kpi" style="margin-top:12px">' +
+        '<div><span>Длительность</span><b>' + humanDur(s.durationSec || 0) + '</b></div>' +
+        '<div><span>Сожжено</span><b>' + Math.round(num(s.kcal)) + ' ккал</b></div>' +
+      '</div></div>';
+
+    html += '<div class="srx-card"><h3>Упражнения</h3>';
+    (s.exercises || []).forEach(function (e) {
+      html += '<div class="srx-list-item">' +
+        '<div class="srx-grow"><div class="srx-name">' + esc(e.name) + '</div>' +
+        '<div class="srx-sub">' + e.sets + ' подходов · ' + e.timeSec + ' с</div></div>' +
+        '<div class="srx-sub">' + Math.round(num(e.kcal)) + ' ккал</div>' +
+        '</div>';
+    });
+    html += '</div>';
+
+    html += '<button class="srx-btn danger" style="width:100%" data-act="delSession" data-id="' +
+      esc(s.id) + '">Удалить тренировку</button>';
+
+    bodyEl.innerHTML = html;
+  }
+
+  /* ==========================================================================
+     17. ЭКРАН: АНАЛИТИКА
+     ========================================================================== */
+  var rangeDays = 30;
+
+  function renderAnalysis() {
+    setTitle('Анализ');
+
+    var to = todayISO();
+    var from = daysAgoYmd(rangeDays - 1);
+    var data = buildSeries(from, to);
+
+    var sumEaten = 0, sumBurned = 0, sumWater = 0;
+    var wFirst = null, wLast = null;
+    var pairs = [];
+
+    data.forEach(function (d) {
+      sumEaten += d.eaten;
+      sumBurned += d.burned;
+      sumWater += d.water;
+      if (d.weight > 0) {
+        if (wFirst == null) wFirst = d.weight;
+        wLast = d.weight;
+      }
+      if (d.hasEaten) pairs.push(d);
+    });
+
+    var balance = sumEaten - sumBurned;
+    var daysWithEaten = data.filter(function (d) { return d.hasEaten; }).length || 1;
+
+    var html = '<div class="srx-chips">';
+    [7, 30, 90, 365].forEach(function (n) {
+      html += '<button class="srx-chip' + (rangeDays === n ? ' on' : '') + '" data-act="range" data-n="' + n + '">' +
+        (n === 365 ? 'Год' : n + ' дней') + '</button>';
+    });
+    html += '</div>';
+
+    html += '<div class="srx-kpi" style="margin-bottom:12px">' +
+      '<div><span>Съедено / день</span><b>' + Math.round(sumEaten / daysWithEaten) + '</b></div>' +
+      '<div><span>Сожжено / день</span><b>' + Math.round(sumBurned / rangeDays) + '</b></div>' +
+      '<div><span>Баланс</span><b style="color:' + (balance > 0 ? '#ff8a95' : '#22c55e') + '">' +
+        (balance > 0 ? '+' : '') + Math.round(balance) + '</b></div>' +
+      '<div><span>Вода / день</span><b>' + Math.round(sumWater / rangeDays) + ' мл</b></div>' +
+      '</div>';
+
+    if (wFirst != null && wLast != null) {
+      var dw = round1(wLast - wFirst);
+      html += '<div class="srx-card"><h3>Вес за период</h3>' +
+        '<div class="srx-row"><div class="srx-grow"><div class="srx-name">' +
+        wFirst + ' → ' + wLast + ' кг</div>' +
+        '<div class="srx-sub">' + (dw === 0 ? 'без изменений' : (dw > 0 ? '+' : '') + dw + ' кг') + '</div>' +
+        '</div></div></div>';
+    }
+
+    html += '<div class="srx-card"><h3>Калории: съедено vs сожжено</h3>' +
+      '<div class="srx-chart-box"><canvas id="srx-c1"></canvas></div></div>';
+
+    html += '<div class="srx-card"><h3>Баланс калорий</h3>' +
+      '<div class="srx-chart-box"><canvas id="srx-c2"></canvas></div></div>';
+
+    html += '<div class="srx-card"><h3>Вода и вес</h3>' +
+      '<div class="srx-chart-box"><canvas id="srx-c3"></canvas></div></div>';
+
+    html += '<div class="srx-card"><h3>Корреляции</h3>' +
+      '<div class="srx-chart-box"><canvas id="srx-c4"></canvas></div>' +
+      '<div data-ref="corrText" class="srx-muted" style="margin-top:10px"></div></div>';
+
+    html += '<div class="srx-card"><h3>Тренировки</h3>' +
+      '<div data-ref="trainText"></div></div>';
+
+    bodyEl.innerHTML = html;
+
+    /* Статистика тренировок */
+    var ss = sessions().filter(function (s) {
+      var d = String(s.date || s.startedAt || '').slice(0, 10);
+      return d >= from && d <= to;
+    });
+    var sKcal = ss.reduce(function (a, s) { return a + num(s.kcal); }, 0);
+    var sDur = ss.reduce(function (a, s) { return a + num(s.durationSec); }, 0);
+    var tt = $('[data-ref="trainText"]', bodyEl);
+    if (tt) {
+      tt.innerHTML = ss.length
+        ? '<div class="srx-kpi">' +
+            '<div><span>Тренировок</span><b>' + ss.length + '</b></div>' +
+            '<div><span>Всего времени</span><b>' + humanDur(sDur) + '</b></div>' +
+            '<div><span>Сожжено</span><b>' + Math.round(sKcal) + '</b></div>' +
+            '<div><span>В среднем</span><b>' + Math.round(sKcal / ss.length) + ' ккал</b></div>' +
+          '</div>'
+        : '<div class="srx-muted">За этот период тренировок нет.</div>';
+    }
+
+    drawCharts(data, from, to);
+  }
+
+  function ensureChart(cb) {
+    if (window.Chart) { cb(null); return; }
+    var existing = $('#srx-chartjs');
+    if (existing) {
+      existing.addEventListener('load', function () { cb(null); });
+      return;
+    }
+    var s = document.createElement('script');
+    s.id = 'srx-chartjs';
+    s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
+    s.onload = function () { cb(null); };
+    s.onerror = function () { cb(new Error('CDN недоступен')); };
+    document.head.appendChild(s);
+  }
+
+  function drawCharts(data, from, to) {
+    ensureChart(function (err) {
+      if (err || !window.Chart) {
+        $$('.srx-chart-box', bodyEl).forEach(function (b) {
+          b.innerHTML = '<div class="srx-empty" style="padding:20px">Графики недоступны: нет Chart.js и нет сети.<br>' +
+            'Подключи chart.js локально, если нужен офлайн.</div>';
+        });
+        return;
+      }
+
+      destroyCharts();
+
+      var labels = data.map(function (d) { return d.date.slice(5); });
+      var grid = { color: 'rgba(255,255,255,.06)' };
+      var ticks = { color: '#7d8ea3', font: { size: 10 } };
+      var baseOpts = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#9fb0c2', boxWidth: 12, font: { size: 11 } } } },
+        scales: {
+          x: { grid: grid, ticks: ticks, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 },
+          y: { grid: grid, ticks: ticks, beginAtZero: true }
+        }
+      };
+
+      function deep(o) { return JSON.parse(JSON.stringify(o)); }
+
+      /* --- 1. Съедено vs сожжено --- */
+      var c1 = $('#srx-c1');
+      if (c1) {
+        chartRegistry.push(new Chart(c1, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: 'Съедено',
+                data: data.map(function (d) { return d.hasEaten ? Math.round(d.eaten) : null; }),
+                borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,.14)',
+                fill: true, tension: .3, pointRadius: 2, spanGaps: true
+              },
+              {
+                label: 'Сожжено',
+                data: data.map(function (d) { return d.hasBurned ? Math.round(d.burned) : null; }),
+                borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,.12)',
+                fill: true, tension: .3, pointRadius: 2, spanGaps: true
+              }
+            ]
+          },
+          options: deep(baseOpts)
+        }));
+      }
+
+      /* --- 2. Баланс --- */
+      var c2 = $('#srx-c2');
+      if (c2) {
+        var bal = data.map(function (d) {
+          if (!d.hasEaten) return null;
+          return Math.round(d.eaten - d.burned);
+        });
+        chartRegistry.push(new Chart(c2, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Баланс, ккал',
+              data: bal,
+              backgroundColor: bal.map(function (v) {
+                if (v == null) return 'rgba(125,142,163,.25)';
+                return v > 0 ? 'rgba(239,68,68,.65)' : 'rgba(34,197,94,.65)';
+              }),
+              borderRadius: 4
+            }]
+          },
+          options: (function () {
+            var o = deep(baseOpts);
+            o.scales.y.beginAtZero = false;
+            return o;
+          })()
+        }));
+      }
+
+      /* --- 3. Вода и вес --- */
+      var c3 = $('#srx-c3');
+      if (c3) {
+        chartRegistry.push(new Chart(c3, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: 'Вода, мл',
+                data: data.map(function (d) { return d.hasWater ? Math.round(d.water) : null; }),
+                borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,.12)',
+                fill: true, tension: .3, pointRadius: 2, yAxisID: 'y', spanGaps: true
+              },
+              {
+                label: 'Вес, кг',
+                data: data.map(function (d) { return d.hasWeight ? round1(d.weight) : null; }),
+                borderColor: '#a78bfa', backgroundColor: 'transparent',
+                tension: .3, pointRadius: 2, borderWidth: 2, yAxisID: 'y1', spanGaps: true
+              }
+            ]
+          },
+          options: (function () {
+            var o = deep(baseOpts);
+            o.scales.y1 = {
+              position: 'right', grid: { drawOnChartArea: false },
+              ticks: { color: '#a78bfa', font: { size: 10 } }
+            };
+            return o;
+          })()
+        }));
+      }
+
+      /* --- 4. Скаттер съедено / вес + Pearson --- */
+      var c4 = $('#srx-c4');
+      var ctext = $('[data-ref="corrText"]', bodyEl);
+      var pts = [], xs = [], ys = [];
+      data.forEach(function (d) {
+        if (d.hasEaten && d.hasWeight && d.weight > 0) {
+          pts.push({ x: Math.round(d.eaten), y: round1(d.weight) });
+          xs.push(d.eaten); ys.push(d.weight);
+        }
+      });
+
+      var rx = pearson(xs, ys);
+
+      /* доп. корреляции по другим парам */
+      var xb = [], yb = [], xw = [], yw = [];
+      data.forEach(function (d) {
+        if (d.hasBurned && d.hasWeight && d.weight > 0) { xb.push(d.burned); yb.push(d.weight); }
+        if (d.hasWater && d.hasWeight && d.weight > 0) { xw.push(d.water); yw.push(d.weight); }
+      });
+      var rb = pearson(xb, yb);
+      var rw = pearson(xw, yw);
+
+      if (c4) {
+        chartRegistry.push(new Chart(c4, {
+          type: 'scatter',
+          data: {
+            datasets: [{
+              label: 'Съедено → вес',
+              data: pts,
+              backgroundColor: 'rgba(249,115,22,.75)',
+              pointRadius: 4
+            }]
+          },
+          options: (function () {
+            var o = deep(baseOpts);
+            o.plugins.legend.display = false;
+            o.scales.x.title = { display: true, text: 'Съедено, ккал', color: '#7d8ea3', font: { size: 10 } };
+            o.scales.y.title = { display: true, text: 'Вес, кг', color: '#7d8ea3', font: { size: 10 } };
+            o.scales.y.beginAtZero = false;
+            return o;
+          })()
+        }));
+      }
+
+      if (ctext) {
+        function line(label, r, n) {
+          var v = r == null ? '—' : (r >= 0 ? '+' : '') + r.toFixed(2);
+          return '<div class="srx-list-item" style="padding:7px 0">' +
+            '<div class="srx-grow"><div class="srx-name" style="font-size:13px">' + label + '</div>' +
+            '<div class="srx-sub">' + corrLabel(r) + ' · n=' + n + '</div></div>' +
+            '<div class="srx-sub" style="font-size:14px;color:#e8eef5">' + v + '</div></div>';
+        }
+        ctext.innerHTML =
+          line('Съедено ↔ вес', rx, Math.min(xs.length, ys.length)) +
+          line('Сожжено ↔ вес', rb, Math.min(xb.length, yb.length)) +
+          line('Вода ↔ вес', rw, Math.min(xw.length, yw.length)) +
+          '<div class="srx-muted" style="margin-top:8px;font-size:11.5px;line-height:1.5">' +
+          'Корреляция не доказывает причинность. Для устойчивой оценки нужно ≥ 14 дней данных.</div>';
+      }
+    });
+  }
+
+  /* ==========================================================================
+     18. МОДАЛКИ
+     ========================================================================== */
+  var modalEl = null;
+
+  function openSheet(title, innerHTML) {
+    if (!modalEl) {
+      modalEl = document.createElement('div');
+      modalEl.className = 'srx-modal';
+      modalEl.innerHTML = '<div class="srx-sheet" data-ref="sheet"></div>';
+      document.body.appendChild(modalEl);
+      modalEl.addEventListener('click', function (e) {
+        if (e.target === modalEl) closeSheet();
+      });
+    }
+    var sheet = $('[data-ref="sheet"]', modalEl);
+    sheet.innerHTML =
+      '<div class="srx-row" style="margin-bottom:12px">' +
+        '<div class="srx-grow"><div class="srx-name" style="font-size:16px">' + esc(title) + '</div></div>' +
+        '<button class="srx-x" data-act="sheetClose">✕</button>' +
+      '</div>' + innerHTML;
+    modalEl.classList.add('open');
+  }
+
+  function closeSheet() {
+    if (modalEl) modalEl.classList.remove('open');
+  }
+
+  /* --- пикер упражнений --- */
+  function openPicker(listId) {
+    var all = allExercises();
+    var html = '<input class="srx-input" data-ref="pickSearch" placeholder="Поиск упражнения…" style="margin-bottom:10px">';
+    html += '<div data-ref="pickList" style="max-height:54vh;overflow-y:auto"></div>';
+
+    openSheet('Добавить упражнение', html);
+    var listEl = $('[data-ref="pickList"]', modalEl);
+    var searchEl = $('[data-ref="pickSearch"]', modalEl);
+
+    function paint(q) {
+      q = (q || '').toLowerCase().trim();
+      var filtered = all.filter(function (e) {
+        return !q || e.name.toLowerCase().indexOf(q) >= 0 || e.group.toLowerCase().indexOf(q) >= 0;
+      });
+      if (!filtered.length) {
+        listEl.innerHTML = '<div class="srx-empty">Ничего не найдено</div>';
+        return;
+      }
+      listEl.innerHTML = filtered.map(function (e) {
+        var thumb = e.photo
+          ? '<img class="srx-thumb" src="' + e.photo + '" alt="">'
+          : '<div class="srx-thumb">' + esc(e.icon || '⭐') + '</div>';
+        return '<div class="srx-list-item" data-act="pickAdd" data-list="' + esc(listId) +
+          '" data-ex="' + esc(e.id) + '">' + thumb +
+          '<div class="srx-grow"><div class="srx-name">' + esc(e.name) + '</div>' +
+          '<div class="srx-sub">' + esc(e.group) + ' · MET ' + e.met + '</div></div>' +
+          '<div class="srx-sub">＋</div></div>';
       }).join('');
     }
+
+    paint('');
+    searchEl.addEventListener('input', function () { paint(searchEl.value); });
+    setTimeout(function () { try { searchEl.focus(); } catch (e) {} }, 120);
   }
 
-  /* ---------- инициализация ---------- */
+  /* --- форма своего упражнения --- */
+  var pendingPhoto = null;
+
+  function openExerciseForm() {
+    pendingPhoto = null;
+    var html = '';
+
+    html += '<label class="srx-label">Название</label>' +
+      '<input class="srx-input" data-ref="exName" placeholder="Например: Тяга к поясу">';
+
+    html += '<label class="srx-label">Группа</label>' +
+      '<select class="srx-select" data-ref="exGroup">' +
+      MUSCLES.map(function (m) { return '<option>' + m + '</option>'; }).join('') +
+      '</select>';
+
+    html += '<label class="srx-label">Интенсивность (MET)</label>' +
+      '<input class="srx-input" data-ref="exMet" type="number" min="1" max="20" step="0.1" value="5">' +
+      '<div class="srx-muted" style="margin-top:4px;font-size:11.5px">' +
+      '3–4 — лёгкое · 5–6 — среднее · 7–9 — тяжёлое · 10+ — очень тяжёлое</div>';
+
+    html += '<label class="srx-label">Фото (сжимается автоматически)</label>' +
+      '<div class="srx-row">' +
+        '<div data-ref="photoPrev" class="srx-thumb" style="width:64px;height:64px;font-size:24px">🖼️</div>' +
+        '<button class="srx-btn srx-grow" data-act="pickPhoto">Выбрать фото</button>' +
+      '</div>' +
+      '<input type="file" accept="image/*" data-ref="photoInput" style="display:none">';
+
+    html += '<label class="srx-label">Заметка (необязательно)</label>' +
+      '<textarea class="srx-textarea" data-ref="exNote" rows="2" placeholder="Техника, нюансы…"></textarea>';
+
+    html += '<button class="srx-btn primary" style="width:100%;margin-top:16px" data-act="saveExercise">' +
+      'Сохранить упражнение</button>';
+
+    openSheet('Своё упражнение', html);
+
+    var input = $('[data-ref="photoInput"]', modalEl);
+    input.addEventListener('change', function () {
+      var f = input.files && input.files[0];
+      if (!f) return;
+      var prev = $('[data-ref="photoPrev"]', modalEl);
+      prev.innerHTML = '<div class="srx-muted" style="font-size:10px">…</div>';
+      compressImage(f, 480, 0.72, function (data, err) {
+        if (!data) { toast(err || 'Не удалось загрузить фото'); prev.textContent = '🖼️'; return; }
+        pendingPhoto = data;
+        prev.innerHTML = '<img src="' + data + '" style="width:100%;height:100%;object-fit:cover;border-radius:11px">';
+        toast('Фото сжато: ' + Math.round(data.length / 1024) + ' КБ');
+      });
+    });
+  }
+
+  /* ==========================================================================
+     19. ДЕЙСТВИЯ
+     ========================================================================== */
+  function onClick(e) {
+    var el = e.target.closest ? e.target.closest('[data-act]') : null;
+    if (!el) return;
+    var act = el.getAttribute('data-act');
+
+    switch (act) {
+      case 'close': closeRoot(); break;
+
+      case 'library': go('library'); break;
+      case 'analysis': go('analysis'); break;
+
+      case 'libFilter':
+        libFilter = el.getAttribute('data-g');
+        renderLibrary();
+        break;
+
+      case 'range':
+        rangeDays = num(el.getAttribute('data-n')) || 30;
+        renderAnalysis();
+        break;
+
+      case 'newList':
+        go('listEdit', { id: null });
+        break;
+
+      case 'editList':
+        go('listEdit', { id: el.getAttribute('data-id') });
+        break;
+
+      case 'backToList':
+      case 'lists':
+        go('lists');
+        break;
+
+      case 'startList':
+        startWorkout(el.getAttribute('data-id'));
+        break;
+
+      case 'delList': {
+        var id = el.getAttribute('data-id');
+        if (!confirm('Удалить список?')) break;
+        var p = profileData();
+        if (p) {
+          p[K.lists] = p[K.lists].filter(function (l) { return l.id !== id; });
+          persist();
+        }
+        toast('Список удалён');
+        go('lists');
+        break;
+      }
+
+      case 'delItem': {
+        var lid = el.getAttribute('data-id');
+        var idx = num(el.getAttribute('data-idx'));
+        var pp = profileData();
+        if (pp) {
+          pp[K.lists].forEach(function (l) {
+            if (l.id === lid && l.items) l.items.splice(idx, 1);
+          });
+          persist(true);
+        }
+        renderListEdit(lid);
+        break;
+      }
+
+      case 'pickerOpen':
+        openPicker(el.getAttribute('data-id'));
+        break;
+
+      case 'newExercise':
+        openExerciseForm();
+        break;
+
+      case 'pickPhoto': {
+        var pi = $('[data-ref="photoInput"]', modalEl);
+        if (pi) pi.click();
+        break;
+      }
+
+      case 'sheetClose':
+        closeSheet();
+        break;
+
+      case 'saveExercise': {
+        var nm = ($('[data-ref="exName"]', modalEl) || {}).value || '';
+        nm = nm.trim();
+        if (!nm) { toast('Введи название'); break; }
+        var grp = ($('[data-ref="exGroup"]', modalEl) || {}).value || 'Всё тело';
+        var met = clamp(num(($('[data-ref="exMet"]', modalEl) || {}).value) || 5, 1, 20);
+        var note = ($('[data-ref="exNote"]', modalEl) || {}).value || '';
+
+        var prof = profileData();
+        if (!prof) { toast('Профиль не загружен'); break; }
+
+        prof[K.ex].push({
+          id: 'c_' + uid(),
+          name: nm,
+          group: grp,
+          met: met,
+          photo: pendingPhoto || null,
+          note: note,
+          createdAt: new Date().toISOString()
+        });
+        persist();
+        closeSheet();
+        toast('Упражнение добавлено');
+        if (state.view === 'library') renderLibrary();
+        break;
+      }
+
+      case 'pickAdd': {
+        var listId = el.getAttribute('data-list');
+        var exId = el.getAttribute('data-ex');
+        var ex = findExercise(exId);
+        var pr = profileData();
+        if (!ex || !pr) break;
+        var done = false;
+        pr[K.lists].forEach(function (l) {
+          if (l.id !== listId) return;
+          if (!Array.isArray(l.items)) l.items = [];
+          l.items.push({
+            exId: ex.id, name: ex.name,
+            sets: 3,
+            timeSec: ex.group === 'Кардио' ? 300 : 40,
+            restSec: ex.group === 'Кардио' ? 0 : 60
+          });
+          done = true;
+        });
+        if (done) {
+          persist(true);
+          toast(ex.name + ' добавлено');
+          closeSheet();
+          renderListEdit(listId);
+        }
+        break;
+      }
+
+      case 'exInfo': {
+        var eid = el.getAttribute('data-id');
+        var exx = findExercise(eid);
+        if (!exx) break;
+        var body = '';
+        if (exx.photo) body += '<img src="' + exx.photo + '" style="width:100%;border-radius:13px;margin-bottom:12px">';
+        body += '<div class="srx-kpi">' +
+          '<div><span>Группа</span><b style="font-size:15px">' + esc(exx.group) + '</b></div>' +
+          '<div><span>MET</span><b>' + exx.met + '</b></div></div>';
+        if (exx.note) body += '<div class="srx-muted" style="margin-top:12px;line-height:1.55">' + esc(exx.note) + '</div>';
+        if (exx.custom) {
+          body += '<button class="srx-btn danger" style="width:100%;margin-top:14px" data-act="delExercise" data-id="' +
+            esc(eid) + '">Удалить упражнение</button>';
+        }
+        openSheet(exx.name, body);
+        break;
+      }
+
+      case 'delExercise': {
+        var did = el.getAttribute('data-id');
+        if (!confirm('Удалить упражнение?')) break;
+        var pd = profileData();
+        if (pd) {
+          pd[K.ex] = pd[K.ex].filter(function (x) { return x.id !== did; });
+          persist();
+        }
+        closeSheet();
+        renderLibrary();
+        break;
+      }
+
+      case 'openSession':
+        go('session', { id: el.getAttribute('data-id') });
+        break;
+
+      case 'delSession': {
+        var sid = el.getAttribute('data-id');
+        if (!confirm('Удалить тренировку?')) break;
+        var pdd = profileData();
+        if (pdd) {
+          pdd[K.sessions] = pdd[K.sessions].filter(function (s) { return s.id !== sid; });
+          persist();
+        }
+        go('lists');
+        break;
+      }
+
+      case 'skipPhase':
+        if (T.active) { advancePhase(); paintTimer(); }
+        break;
+
+      case 'abortRun':
+        if (T.active) {
+          if (confirm('Прервать тренировку?')) {
+            T.active = false;
+            stopTickOnly();
+            go('lists');
+          }
+        } else go('lists');
+        break;
+    }
+  }
+
+  /* поля ввода внутри редактора списка */
+  document.addEventListener('input', function (e) {
+    var t = e.target;
+    if (!t || !t.getAttribute) return;
+
+    var act = t.getAttribute('data-act');
+
+    if (act === 'itemField') {
+      var lid = t.getAttribute('data-id');
+      var idx = num(t.getAttribute('data-idx'));
+      var field = t.getAttribute('data-field');
+      var val = num(t.value);
+      var p = profileData();
+      if (!p) return;
+      p[K.lists].forEach(function (l) {
+        if (l.id !== lid) return;
+        if (!l.items || !l.items[idx]) return;
+        l.items[idx][field] = Math.max(0, val);
+      });
+      persist(true);
+      return;
+    }
+
+    if (t.getAttribute('data-ref') === 'listName') {
+      var id = state.params.id;
+      var pp = profileData();
+      if (!pp) return;
+      pp[K.lists].forEach(function (l) { if (l.id === id) l.name = t.value; });
+      persist(true);
+    }
+  });
+
+  /* ==========================================================================
+     20. ВСТРАИВАНИЕ В ДАШБОРД
+     ========================================================================== */
+  function injectDashButtons() {
+    var row = $('.dash-subrow');
+    if (!row) return false;
+    if (row.getAttribute('data-srx') === '1') return true;
+
+    var b1 = document.createElement('button');
+    b1.className = 'srx-dash-btn';
+    b1.type = 'button';
+    b1.innerHTML = '🏋️ Тренировки';
+    b1.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); openRoot('lists'); });
+
+    var b2 = document.createElement('button');
+    b2.className = 'srx-dash-btn';
+    b2.type = 'button';
+    b2.innerHTML = '📊 Анализ';
+    b2.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); openRoot('analysis'); });
+
+    row.appendChild(b1);
+    row.appendChild(b2);
+    row.setAttribute('data-srx', '1');
+    return true;
+  }
+
+  function watchDash() {
+    injectDashButtons();
+
+    var mo = new MutationObserver(function () {
+      if (!root || !root.classList.contains('open')) injectDashButtons();
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+
+    var tries = 0;
+    var iv = setInterval(function () {
+      tries++;
+      if (injectDashButtons() || tries > 40) clearInterval(iv);
+    }, 500);
+  }
+
+  /* ==========================================================================
+     21. СЛИЯНИЕ ЧЕРНОВИКА
+     ========================================================================== */
+  function mergeDraft() {
+    var p = getProfile();
+    if (!p) return;
+    ensureSchema(p);
+
+    var hasData = p[K.ex].length || p[K.lists].length || p[K.sessions].length;
+    if (hasData) return;
+
+    try {
+      var raw = localStorage.getItem(LS.draft);
+      if (!raw) return;
+      var d = JSON.parse(raw);
+      var dp = d && d.profile ? d.profile : (d && d[K.ex] ? d : null);
+      if (!dp) return;
+      if (Array.isArray(dp[K.ex]) && dp[K.ex].length) p[K.ex] = dp[K.ex];
+      if (Array.isArray(dp[K.lists]) && dp[K.lists].length) p[K.lists] = dp[K.lists];
+      if (Array.isArray(dp[K.sessions]) && dp[K.sessions].length) p[K.sessions] = dp[K.sessions];
+      persist(true);
+    } catch (e) {}
+  }
+
+  /* ==========================================================================
+     22. ИНИЦИАЛИЗАЦИЯ
+     ========================================================================== */
   function init() {
-    injectStyles();
-    injectScreens();
-    injectDashboardButton();
+    injectCSS();
+    buildShell();
+    watchDash();
+
+    var merged = false;
+    var tryMerge = setInterval(function () {
+      if (getProfile()) {
+        if (!merged) { mergeDraft(); merged = true; }
+        clearInterval(tryMerge);
+      }
+    }, 700);
+    setTimeout(function () { clearInterval(tryMerge); }, 20000);
+
+    window.addEventListener('beforeunload', function () {
+      if (T.active) {
+        try { localStorage.setItem('srx_interrupted', JSON.stringify({ ts: Date.now(), list: T.listName })); } catch (e) {}
+      }
+    });
   }
 
-  window.exOpen = exOpen;
-  window.exOpenEditor = exOpenEditor;
-  window.exSaveExercise = exSaveExercise;
-  window.exDeleteExercise = exDeleteExercise;
-  window.exOnPhoto = exOnPhoto;
-  window.exClearPhoto = exClearPhoto;
-  window.exCreateList = exCreateList;
-  window.exDeleteList = exDeleteList;
-  window.exOpenList = exOpenList;
-  window.exAddToList = exAddToList;
-  window.exQuickAdd = exQuickAdd;
-  window.exSets = exSets;
-  window.exRemoveItem = exRemoveItem;
-  window.exStartWorkout = exStartWorkout;
-  window.exTogglePause = exTogglePause;
-  window.exSkipPhase = exSkipPhase;
-  window.exFinishNow = exFinishNow;
-  window.exLeaveWorkout = exLeaveWorkout;
-  window.exOpenAnalysis = exOpenAnalysis;
-  window.exSetPeriod = exSetPeriod;
-  window.exRenderAnalysis = exRenderAnalysis;
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-  else init();
+  /* Публичный API — для отладки в консоли */
+  window.SRX = {
+    version: VERSION,
+    open: openRoot,
+    close: closeRoot,
+    reload: function () { mergeDraft(); render(); },
+    data: function () {
+      return {
+        customExercises: customExercises(),
+        workoutLists: workoutLists(),
+        workoutSessions: sessions()
+      };
+    },
+    series: function (days) { return buildSeries(daysAgoYmd((days || 30) - 1), todayISO()); },
+    kcalFor: kcalFor
+  };
+
+  console.log('[SRX] exercises.js v' + VERSION + ' loaded');
+
 })();
