@@ -322,6 +322,26 @@ const levelsData={
 
 let currentXP=0,totalBurnedCalories=0,userGender='male',currentProfileData=null,currentLevelIndex=-1;
 
+const EXTRA_PROFILE_KEYS=['customExercises','workoutLists','workoutSessions'];
+
+function keepExtras(prof){
+  if(!prof||!currentProfileData||prof===currentProfileData)return prof;
+  EXTRA_PROFILE_KEYS.forEach(function(k){
+    if(prof[k]===undefined&&currentProfileData[k]!==undefined)prof[k]=currentProfileData[k];
+  });
+  return prof;
+}
+
+var extrasSaveTimer=null;
+window.addEventListener('srx:profile-changed',function(){
+  clearTimeout(extrasSaveTimer);
+  extrasSaveTimer=setTimeout(function(){
+    if(!currentProfileData)return;
+    localStorage.setItem('cachedProfile',JSON.stringify(currentProfileData));
+    saveProgressToCloud(localStorage.getItem('tgId'),localStorage.getItem('linkedEmail')||localStorage.getItem('currentEmail'),localStorage.getItem('userName'),currentProfileData,currentXP,totalBurnedCalories);
+  },800);
+});
+
 function calculateNutrition(p){
   if(p.custom_calories&&p.custom_calories>0){
     return {calories:parseInt(p.custom_calories),protein:parseInt(p.custom_protein)||0,fat:parseInt(p.custom_fat)||0,carbs:parseInt(p.custom_carbs)||0};
@@ -883,7 +903,9 @@ function saveCustomNormFromModal(){
 }
 
 function renderProfile(profile){
+  keepExtras(profile);
   currentProfileData=profile;
+  window.currentProfileData=profile;
   userGender=profile.gender||'male';
   document.body.className=userGender==='female'?'female-theme':'male-theme';
   currentXP=parseInt(localStorage.getItem('cachedXP')||0);
@@ -1079,6 +1101,7 @@ async function saveProfile(){
   var newW=parseFloat(weight);
   if(oldW&&oldW!==newW)saveWeightToHistory(newW);
   var prof={age:age,gender:gender,weight:weight,height:height,goal:goal,custom_calories:cc,custom_protein:cp,custom_fat:cf,custom_carbs:ccar,custom_water_goal:parseInt(cw)||2000,food_preference:pref};
+  keepExtras(prof);
   localStorage.setItem('cachedProfile',JSON.stringify(prof));
   await saveProgressToCloud(localStorage.getItem('tgId'),localStorage.getItem('currentEmail'),localStorage.getItem('userName'),prof,currentXP,totalBurnedCalories);
   renderProfile(prof);
