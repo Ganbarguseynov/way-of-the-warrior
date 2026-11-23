@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html>
 <head>
@@ -682,7 +683,8 @@ function scheduleEndingAt(name, msBeforeEnd, shiftSec, phaseName){
   const len = s.to - s.from;
   const delay = Math.max(30, msBeforeEnd - len * 1000 + shiftSec * 1000);
   cueTimers.push(setTimeout(function(){
-    if (running && phase === phaseName) cue(name);
+    if (name === 'workAfterRest') fireRestEnd();
+    else if (running && phase === phaseName) cue(name);
   }, delay));
 }
 
@@ -1190,3 +1192,4 @@ updateLockIcon();
 </script>
 </body>
 </html>
+```
