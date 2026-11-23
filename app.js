@@ -148,15 +148,7 @@ async function saveProfile(){var age=document.getElementById('age').value;var ge
 
 async function logout(){if(!confirm('Выйти из аккаунта? Прогресс сохранен.'))return;localStorage.clear();sessionStorage.clear();await supabaseClient.auth.signOut();location.reload();}
 
-function openExercisesScreen(){renderExercisesList();openScreen('exercises-screen');}
-
-function renderExercisesList(){var custom=getUserExercises();var html='';if(custom.length===0){html='<p style="text-align: center; color: #8e8e93;">Вы ещё не создали своих упражнений</p>';}else{custom.forEach(function(ex){html+='<div style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;"><div><p style="margin: 0; font-weight: bold; color: #fff;">'+ex.name+'</p><p style="margin: 2px 0 0 0; font-size: 12px; color: #8e8e93;">'+ex.caloriesPerMin+' ккал/мин</p></div><button onclick="deleteCustomExercise(\''+ex.id+'\'); renderExercisesList();" style="background: rgba(255,59,48,0.2); border: 1px solid #ff3b30; color: #ff3b30; border-radius: 6px; padding: 5px 10px; cursor: pointer; font-size: 12px;">Удалить</button></div>';});}document.getElementById('exercises-list').innerHTML=html;}
-
-function openExerciseLibrary(){var lib=getExerciseLibrary();var html='';lib.forEach(function(ex){html+='<div style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 10px; margin-bottom: 8px;"><p style="margin: 0; font-weight: bold; color: #fff;">'+ex.name+'</p><p style="margin: 2px 0 0 0; font-size: 12px; color: #8e8e93;">'+ex.caloriesPerMin+' ккал/мин · '+ex.difficulty+'</p></div>';});document.getElementById('library-list').innerHTML=html;openScreen('exercise-library-screen');}
-
-function openCreateExercise(){document.getElementById('new-ex-name').value='';document.getElementById('new-ex-cal').value='';document.getElementById('new-ex-photo').value='';openScreen('create-exercise-screen');}
-
-function saveNewExercise(){var name=document.getElementById('new-ex-name').value.trim();var cal=document.getElementById('new-ex-cal').value;var diff=document.getElementById('new-ex-diff').value;var photo=document.getElementById('new-ex-photo').value.trim();if(!name||!cal){tg.showAlert('Заполните название и калории!');return;}createCustomExercise(name,cal,diff,photo||null);tg.showAlert('Упражнение создано!');closeScreen('create-exercise-screen');renderExercisesList();}
+function getAllExercises(){return getExerciseLibrary().concat(getUserExercises());}
 
 function openWorkoutBuilder(){currentWorkoutSession=[];var select=document.getElementById('workout-ex-select');var html='<option value="">-- Выберите --</option>';var all=getAllExercises();all.forEach(function(ex){html+='<option value="'+ex.id+'">'+ex.name+'</option>';});select.innerHTML=html;renderCurrentWorkout();openScreen('workout-builder-screen');}
 
