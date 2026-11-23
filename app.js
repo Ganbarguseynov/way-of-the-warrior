@@ -1,15 +1,12 @@
 // Sport Royale - Main Application
-// Суpabase инициализация
 const SUPABASE_URL = 'https://qnpriwfxzuoymoumdtrl.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Telegram WebApp
 const tg = window.Telegram.WebApp;
 tg.ready();
 tg.expand();
 
-// Глобальное состояние
 let currentUser = null;
 let userStats = {
   xp: 0,
@@ -19,35 +16,58 @@ let userStats = {
   streak: 0
 };
 
-// ==================== ИНИЦИАЛИЗАЦИЯ ====================
+let exercises = [
+  { id: 1, name: 'Приседания', calories: 8, difficulty: 'средняя', duration: 30, rest: 60, prep: 30, image: null, custom: false },
+  { id: 2, name: 'Отжимания', calories: 7, difficulty: 'средняя', duration: 20, rest: 60, prep: 30, image: null, custom: false },
+  { id: 3, name: 'Бег', calories: 12, difficulty: 'высокая', duration: 60, rest: 60, prep: 30, image: null, custom: false },
+  { id: 4, name: 'Прыжки', calories: 10, difficulty: 'высокая', duration: 45, rest: 60, prep: 30, image: null, custom: false },
+  { id: 5, name: 'Планка', calories: 6, difficulty: 'средняя', duration: 40, rest: 60, prep: 30, image: null, custom: false }
+];
+
+let currentWorkout = [];
+let foodDiary = JSON.parse(localStorage.getItem('foodDiary')) || [];
+let waterDiary = JSON.parse(localStorage.getItem('waterDiary')) || [];
+let weightDiary = JSON.parse(localStorage.getItem('weightDiary')) || [];
+let exerciseLists = JSON.parse(localStorage.getItem('exerciseLists')) || {};
+
 document.addEventListener('DOMContentLoaded', () => {
   checkAuth();
-  loadUserData();
+  checkChessAccess();
   setupEventListeners();
-  initializeCharts();
 });
 
-// ==================== АУТЕНТИФИКАЦИЯ ====================
 async function checkAuth() {
   const { data: { user } } = await supabase.auth.getUser();
   
   if (!user) {
-    showAuthScreen();
+    document.getElementById('authScreen').style.display = 'flex';
+    document.getElementById('mainContent').style.display = 'none';
   } else {
     currentUser = user;
-    hideAuthScreen();
+    document.getElementById('authScreen').style.display = 'none';
+    document.getElementById('mainContent').style.display = 'flex';
     loadUserRecord();
+    showMainScreen();
   }
 }
 
-function showAuthScreen() {
-  document.getElementById('authScreen').style.display = 'flex';
-  document.getElementById('mainContent').style.display = 'none';
-}
-
-function hideAuthScreen() {
-  document.getElementById('authScreen').style.display = 'none';
-  document.getElementById('mainContent').style.display = 'flex';
+async function checkChessAccess() {
+  if (!currentUser) return;
+  
+  try {
+    const result = await supabase.rpc('has_feature', {
+      p_user_id: currentUser.id,
+      p_feature: 'chess'
+    });
+    
+    const chessBtn = document.getElementById('chessBtn');
+    if (chessBtn) {
+      chessBtn.style.display = (currentUser.id === 'ganbar_id' || result) ? 'block' : 'none';
+    }
+  } catch (error) {
+    const chessBtn = document.getElementById('chessBtn');
+    if (chessBtn) chessBtn.style.display = 'none';
+  }
 }
 
 async function loginWithTelegram() {
@@ -58,16 +78,15 @@ async function loginWithTelegram() {
     return;
   }
 
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: `telegram_${user.id}@sportapp.local`,
-    password: `tg_${user.id}_${Date.now()}`
-  });
+  const email = `telegram_${user.id}@sportapp.local`;
+  const password = `tg_${user.id}_${user.id}`;
+
+  let { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error && error.status === 400) {
-    // Пользователь не существует, создаём
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email: `telegram_${user.id}@sportapp.local`,
-      password: `tg_${user.id}_${Date.now()}`,
+      email,
+      password,
       options: {
         data: {
           telegram_id: user.id,
@@ -79,13 +98,11 @@ async function loginWithTelegram() {
     if (!signUpError) {
       currentUser = signUpData.user;
       await createUserRecord();
-      hideAuthScreen();
-      loadUserData();
+      checkAuth();
     }
   } else if (!error) {
     currentUser = data.user;
-    hideAuthScreen();
-    loadUserData();
+    checkAuth();
   }
 }
 
@@ -101,26 +118,19 @@ async function handleEmailAuth() {
   let { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error && error.status === 400) {
-    // Создание нового пользователя
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password
-    });
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password });
 
     if (!signUpError) {
       currentUser = signUpData.user;
       await createUserRecord();
-      hideAuthScreen();
-      loadUserData();
+      checkAuth();
     }
   } else if (!error) {
     currentUser = data.user;
-    hideAuthScreen();
-    loadUserData();
+    checkAuth();
   }
 }
 
-// ==================== РАБОТА С ПОЛЬЗОВАТЕЛЕМ ====================
 async function createUserRecord() {
   const { error } = await supabase
     .from('users')
@@ -131,8 +141,6 @@ async function createUserRecord() {
       level: 1,
       created_at: new Date()
     }]);
-
-  if (error) console.error('Ошибка создания пользователя:', error);
 }
 
 async function loadUserRecord() {
@@ -150,14 +158,40 @@ async function loadUserRecord() {
       totalWorkouts: data.total_workouts || 0,
       streak: data.streak || 0
     };
-    updateStatsDisplay();
+  }
+  
+  loadCustomExercises();
+}
+
+async function loadCustomExercises() {
+  if (!currentUser) return;
+  
+  const { data, error } = await supabase
+    .from('custom_exercises')
+    .select('*')
+    .eq('user_id', currentUser.id);
+
+  if (data) {
+    data.forEach(ex => {
+      exercises.push({
+        id: ex.id,
+        name: ex.name,
+        calories: ex.calories,
+        difficulty: ex.difficulty,
+        duration: ex.duration,
+        rest: ex.rest || 60,
+        prep: ex.prep || 30,
+        image: ex.image_url,
+        custom: true
+      });
+    });
   }
 }
 
 async function saveProgressToCloud() {
   if (!currentUser) return;
 
-  const { error } = await supabase
+  await supabase
     .from('users')
     .update({
       xp: userStats.xp,
@@ -168,28 +202,25 @@ async function saveProgressToCloud() {
       updated_at: new Date()
     })
     .eq('id', currentUser.id);
-
-  if (error) console.error('Ошибка сохранения:', error);
 }
 
-// ==================== ЭКРАН УПРАЖНЕНИЙ ====================
-let exercises = [
-  { id: 1, name: 'Приседания', calories: 8, difficulty: 'средняя', duration: 30, image: null },
-  { id: 2, name: 'Отжимания', calories: 7, difficulty: 'средняя', duration: 20, image: null },
-  { id: 3, name: 'Бег', calories: 12, difficulty: 'высокая', duration: 60, image: null },
-  { id: 4, name: 'Прыжки', calories: 10, difficulty: 'высокая', duration: 45, image: null },
-  { id: 5, name: 'Планка', calories: 6, difficulty: 'средняя', duration: 40, image: null }
-];
+// ==================== ЭКРАНЫ ====================
+
+function hideAllScreens() {
+  document.querySelectorAll('.screen').forEach(screen => {
+    screen.style.display = 'none';
+  });
+}
+
+function showMainScreen() {
+  hideAllScreens();
+  document.getElementById('mainScreen').style.display = 'flex';
+  updateStatsDisplay();
+}
 
 function showExerciseScreen() {
-  document.getElementById('mainContent').innerHTML = `
-    <div class="screen" id="exerciseScreen">
-      <h2>Упражнения</h2>
-      <div class="exercises-container" id="exercisesList"></div>
-      <button onclick="showAddExerciseModal()" class="primary-btn">+ Добавить упражнение</button>
-      <button onclick="showMainScreen()" class="secondary-btn">Вернуться</button>
-    </div>
-  `;
+  hideAllScreens();
+  document.getElementById('exerciseScreen').style.display = 'block';
   renderExercises();
 }
 
@@ -199,12 +230,11 @@ function renderExercises() {
 
   container.innerHTML = exercises.map(ex => `
     <div class="exercise-card">
-      ${ex.image ? `<img src="${ex.image}" alt="${ex.name}" class="exercise-image">` : '<div class="exercise-placeholder">Фото</div>'}
-      <h3>${ex.name}</h3>
-      <p>Калории: ${ex.calories} | Сложность: ${ex.difficulty}</p>
-      <p>Длительность: ${ex.duration} мин | Отдых: ${ex.rest || 60}c | Подготовка: ${ex.prep || 30}c</p>
-      <button onclick="editExercise(${ex.id})" class="small-btn">Редактировать</button>
-      <button onclick="deleteExercise(${ex.id})" class="small-btn danger">Удалить</button>
+      ${ex.image ? `<img src="${ex.image}" alt="${ex.name}" style="width:100%;height:150px;object-fit:cover;border-radius:8px;">` : '<div style="width:100%;height:150px;background:#ddd;border-radius:8px;display:flex;align-items:center;justify-content:center;">Фото</div>'}
+      <h3 style="margin:10px 0 5px 0;">${ex.name}</h3>
+      <p style="margin:0;font-size:12px;">Калории: ${ex.calories} | Сложность: ${ex.difficulty}</p>
+      <p style="margin:5px 0;font-size:12px;">Время: ${ex.duration}м | Отдых: ${ex.rest}с | Подготовка: ${ex.prep}с</p>
+      ${ex.custom ? `<button onclick="deleteExercise(${ex.id})" style="background:#ff5252;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;">Удалить</button>` : ''}
     </div>
   `).join('');
 }
@@ -212,22 +242,25 @@ function renderExercises() {
 function showAddExerciseModal() {
   const modal = document.createElement('div');
   modal.className = 'modal';
+  modal.style.cssText = `
+    position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;
+  `;
   modal.innerHTML = `
-    <div class="modal-content">
+    <div style="background:white;padding:20px;border-radius:8px;width:90%;max-width:400px;">
       <h3>Добавить упражнение</h3>
-      <input type="text" id="exerciseName" placeholder="Название упражнения" class="input">
-      <input type="number" id="exerciseCalories" placeholder="Калории" class="input" min="1">
-      <select id="exerciseDifficulty" class="input">
+      <input type="text" id="exerciseName" placeholder="Название" style="width:100%;padding:8px;margin:10px 0;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;">
+      <input type="number" id="exerciseCalories" placeholder="Калории" style="width:100%;padding:8px;margin:10px 0;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;" min="1">
+      <select id="exerciseDifficulty" style="width:100%;padding:8px;margin:10px 0;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;">
         <option>низкая</option>
         <option selected>средняя</option>
         <option>высокая</option>
       </select>
-      <input type="number" id="exerciseDuration" placeholder="Длительность (мин)" class="input" min="1">
-      <input type="number" id="exerciseRest" placeholder="Отдых (сек)" class="input" value="60" min="0">
-      <input type="number" id="exercisePrep" placeholder="Подготовка (сек)" class="input" value="30" min="0">
-      <input type="file" id="exercisePhoto" accept="image/*" class="input">
-      <button onclick="saveNewExercise()" class="primary-btn">Сохранить</button>
-      <button onclick="closeModal(this)" class="secondary-btn">Отмена</button>
+      <input type="number" id="exerciseDuration" placeholder="Длительность (мин)" style="width:100%;padding:8px;margin:10px 0;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;" min="1">
+      <input type="number" id="exerciseRest" placeholder="Отдых (сек)" style="width:100%;padding:8px;margin:10px 0;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;" value="60" min="0">
+      <input type="number" id="exercisePrep" placeholder="Подготовка (сек)" style="width:100%;padding:8px;margin:10px 0;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;" value="30" min="0">
+      <input type="file" id="exercisePhoto" accept="image/*" style="width:100%;margin:10px 0;">
+      <button onclick="saveNewExercise()" style="width:100%;padding:10px;background:#4CAF50;color:white;border:none;border-radius:4px;cursor:pointer;margin:10px 0;">Сохранить</button>
+      <button onclick="this.closest('.modal').remove()" style="width:100%;padding:10px;background:#ccc;color:black;border:none;border-radius:4px;cursor:pointer;">Отмена</button>
     </div>
   `;
   document.body.appendChild(modal);
@@ -262,24 +295,8 @@ async function saveNewExercise() {
     }
   }
 
-  const newExercise = {
-    id: Date.now(),
-    name,
-    calories,
-    difficulty,
-    duration,
-    rest,
-    prep,
-    image: photoURL,
-    custom: true,
-    userId: currentUser?.id
-  };
-
-  exercises.push(newExercise);
-
-  // Сохранить в Supabase если пользователь авторизован
   if (currentUser) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('custom_exercises')
       .insert([{
         user_id: currentUser.id,
@@ -290,86 +307,39 @@ async function saveNewExercise() {
         rest,
         prep,
         image_url: photoURL
-      }]);
+      }])
+      .select();
 
-    if (error) console.error('Ошибка сохранения упражнения:', error);
+    if (data) {
+      exercises.push({
+        id: data[0].id,
+        name,
+        calories,
+        difficulty,
+        duration,
+        rest,
+        prep,
+        image: photoURL,
+        custom: true
+      });
+    }
   }
 
-  closeModal(document.querySelector('.modal'));
-  renderExercises();
-}
-
-function editExercise(id) {
-  const exercise = exercises.find(e => e.id === id);
-  if (!exercise) return;
-
-  const modal = document.createElement('div');
-  modal.className = 'modal';
-  modal.innerHTML = `
-    <div class="modal-content">
-      <h3>Редактировать упражнение</h3>
-      <input type="text" id="exerciseName" value="${exercise.name}" class="input">
-      <input type="number" id="exerciseCalories" value="${exercise.calories}" class="input" min="1">
-      <select id="exerciseDifficulty" class="input">
-        <option ${exercise.difficulty === 'низкая' ? 'selected' : ''}>низкая</option>
-        <option ${exercise.difficulty === 'средняя' ? 'selected' : ''}>средняя</option>
-        <option ${exercise.difficulty === 'высокая' ? 'selected' : ''}>высокая</option>
-      </select>
-      <input type="number" id="exerciseDuration" value="${exercise.duration}" class="input" min="1">
-      <input type="number" id="exerciseRest" value="${exercise.rest || 60}" class="input" min="0">
-      <input type="number" id="exercisePrep" value="${exercise.prep || 30}" class="input" min="0">
-      <button onclick="updateExercise(${id})" class="primary-btn">Сохранить</button>
-      <button onclick="closeModal(this)" class="secondary-btn">Отмена</button>
-    </div>
-  `;
-  document.body.appendChild(modal);
-}
-
-function updateExercise(id) {
-  const exercise = exercises.find(e => e.id === id);
-  if (!exercise) return;
-
-  exercise.name = document.getElementById('exerciseName').value;
-  exercise.calories = parseInt(document.getElementById('exerciseCalories').value);
-  exercise.difficulty = document.getElementById('exerciseDifficulty').value;
-  exercise.duration = parseInt(document.getElementById('exerciseDuration').value);
-  exercise.rest = parseInt(document.getElementById('exerciseRest').value);
-  exercise.prep = parseInt(document.getElementById('exercisePrep').value);
-
-  closeModal(document.querySelector('.modal'));
+  document.querySelector('.modal').remove();
   renderExercises();
 }
 
 function deleteExercise(id) {
   exercises = exercises.filter(e => e.id !== id);
+  if (currentUser) {
+    supabase.from('custom_exercises').delete().eq('id', id);
+  }
   renderExercises();
 }
 
-function closeModal(btn) {
-  const modal = btn.closest('.modal');
-  if (modal) modal.remove();
-}
-
-// ==================== КОНСТРУКТОР ТРЕНИРОВОК ====================
-let currentWorkout = [];
-
 function showWorkoutBuilder() {
-  document.getElementById('mainContent').innerHTML = `
-    <div class="screen" id="workoutScreen">
-      <h2>Конструктор тренировок</h2>
-      <div class="exercises-container" id="availableExercises"></div>
-      <div class="workout-builder">
-        <h3>Текущая тренировка</h3>
-        <div id="workoutList"></div>
-        <div class="stats">
-          <p>Калории: <span id="totalCalories">0</span></p>
-          <p>Время: <span id="totalTime">0</span> мин</p>
-        </div>
-        <button onclick="completeWorkout()" class="primary-btn">Завершить тренировку</button>
-        <button onclick="showMainScreen()" class="secondary-btn">Вернуться</button>
-      </div>
-    </div>
-  `;
+  hideAllScreens();
+  document.getElementById('workoutScreen').style.display = 'block';
   renderAvailableExercises();
   updateWorkoutDisplay();
 }
@@ -382,7 +352,7 @@ function renderAvailableExercises() {
     <div class="exercise-card">
       <h3>${ex.name}</h3>
       <p>Калории: ${ex.calories} | Сложность: ${ex.difficulty}</p>
-      <button onclick="addToWorkout(${ex.id})" class="primary-btn">Добавить</button>
+      <button onclick="addToWorkout(${ex.id})" style="background:#4CAF50;color:white;border:none;padding:8px 15px;border-radius:4px;cursor:pointer;">Добавить</button>
     </div>
   `).join('');
 }
@@ -409,9 +379,9 @@ function updateWorkoutDisplay() {
   timeSpan.textContent = totalTime;
 
   list.innerHTML = currentWorkout.map((ex, idx) => `
-    <div class="workout-item">
+    <div style="display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid #eee;">
       <span>${ex.name} (${ex.calories} ккал, ${ex.duration} мин)</span>
-      <button onclick="removeFromWorkout(${idx})" class="small-btn danger">✕</button>
+      <button onclick="removeFromWorkout(${idx})" style="background:#ff5252;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;">✕</button>
     </div>
   `).join('');
 }
@@ -422,8 +392,13 @@ function removeFromWorkout(idx) {
 }
 
 async function completeWorkout() {
+  if (!currentUser) {
+    alert('Авторизуйтесь');
+    return;
+  }
+
   if (currentWorkout.length === 0) {
-    alert('Добавьте упражнения в тренировку');
+    alert('Добавьте упражнения');
     return;
   }
 
@@ -439,75 +414,48 @@ async function completeWorkout() {
     userStats.xp = 0;
   }
 
-  // Сохранить тренировку в Supabase
-  if (currentUser) {
-    const { error } = await supabase
-      .from('workouts')
-      .insert([{
-        user_id: currentUser.id,
-        exercises: JSON.stringify(currentWorkout),
-        calories: totalCalories,
-        duration: totalTime,
-        completed_at: new Date()
-      }]);
+  await supabase.from('workouts').insert([{
+    user_id: currentUser.id,
+    exercises: JSON.stringify(currentWorkout),
+    calories: totalCalories,
+    duration: totalTime,
+    completed_at: new Date()
+  }]);
 
-    if (error) console.error('Ошибка сохранения тренировки:', error);
-  }
-
-  updateStatsDisplay();
   await saveProgressToCloud();
   
   currentWorkout = [];
-  alert(`Тренировка завершена! +${totalCalories} ккал, +${Math.floor(totalCalories / 2)} XP`);
+  alert(`Тренировка завершена! +${totalCalories} ккал`);
   showMainScreen();
 }
 
-// ==================== ДНЕВНИКИ ====================
-let foodDiary = JSON.parse(localStorage.getItem('foodDiary')) || [];
-let waterDiary = JSON.parse(localStorage.getItem('waterDiary')) || [];
-let weightDiary = JSON.parse(localStorage.getItem('weightDiary')) || [];
-
 function showWeightScreen() {
   if (!currentUser) {
-    showAuthScreen();
+    alert('Авторизуйтесь');
     return;
   }
   
-  document.getElementById('mainContent').innerHTML = `
-    <div class="screen" id="weightScreen">
-      <h2>Вес</h2>
-      <div class="diary-input">
-        <input type="number" id="weightInput" placeholder="Вес (кг)" class="input" step="0.1">
-        <button onclick="addWeight()" class="primary-btn">Добавить</button>
-      </div>
-      <canvas id="weightChart" width="400" height="200"></canvas>
-      <div id="weightHistory" class="history-list"></div>
-      <button onclick="showMainScreen()" class="secondary-btn">Вернуться</button>
-    </div>
-  `;
+  hideAllScreens();
+  document.getElementById('weightScreen').style.display = 'block';
   loadWeightHistory();
-  plotWeightChart();
+  setTimeout(() => plotWeightChart(), 100);
 }
 
 function addWeight() {
+  if (!currentUser) return;
+  
   const weight = parseFloat(document.getElementById('weightInput').value);
   if (!weight) return;
 
-  const entry = {
-    date: new Date().toISOString(),
-    weight
-  };
-
+  const entry = { date: new Date().toISOString(), weight };
   weightDiary.push(entry);
   localStorage.setItem('weightDiary', JSON.stringify(weightDiary));
 
-  if (currentUser) {
-    supabase.from('weight_diary').insert([{
-      user_id: currentUser.id,
-      weight,
-      recorded_at: new Date()
-    }]);
-  }
+  supabase.from('weight_diary').insert([{
+    user_id: currentUser.id,
+    weight,
+    recorded_at: new Date()
+  }]);
 
   document.getElementById('weightInput').value = '';
   loadWeightHistory();
@@ -520,19 +468,16 @@ function loadWeightHistory() {
 
   container.innerHTML = weightDiary.slice().reverse().map(entry => {
     const date = new Date(entry.date).toLocaleDateString('ru-RU');
-    return `<div class="history-item">${date}: ${entry.weight} кг</div>`;
+    return `<div style="padding:8px;border-bottom:1px solid #eee;">${date}: ${entry.weight} кг</div>`;
   }).join('');
 }
 
 function plotWeightChart() {
   const canvas = document.getElementById('weightChart');
-  if (!canvas) return;
+  if (!canvas || weightDiary.length === 0) return;
 
   const ctx = canvas.getContext('2d');
   const sortedDiary = weightDiary.slice().sort((a, b) => new Date(a.date) - new Date(b.date));
-
-  if (sortedDiary.length === 0) return;
-
   const weights = sortedDiary.map(e => e.weight);
   const minWeight = Math.min(...weights);
   const maxWeight = Math.max(...weights);
@@ -555,50 +500,34 @@ function plotWeightChart() {
 
 function showFoodScreen() {
   if (!currentUser) {
-    showAuthScreen();
+    alert('Авторизуйтесь');
     return;
   }
   
-  document.getElementById('mainContent').innerHTML = `
-    <div class="screen" id="foodScreen">
-      <h2>Еда</h2>
-      <div class="diary-input">
-        <input type="text" id="foodName" placeholder="Название блюда" class="input">
-        <input type="number" id="foodCalories" placeholder="Калории" class="input" min="0">
-        <button onclick="addFood()" class="primary-btn">Добавить</button>
-      </div>
-      <canvas id="foodChart" width="400" height="200"></canvas>
-      <div id="foodHistory" class="history-list"></div>
-      <button onclick="showMainScreen()" class="secondary-btn">Вернуться</button>
-    </div>
-  `;
+  hideAllScreens();
+  document.getElementById('foodScreen').style.display = 'block';
   loadFoodHistory();
-  plotFoodChart();
+  setTimeout(() => plotFoodChart(), 100);
 }
 
 function addFood() {
+  if (!currentUser) return;
+  
   const name = document.getElementById('foodName').value;
   const calories = parseInt(document.getElementById('foodCalories').value);
 
   if (!name || !calories) return;
 
-  const entry = {
-    date: new Date().toISOString(),
-    name,
-    calories
-  };
-
+  const entry = { date: new Date().toISOString(), name, calories };
   foodDiary.push(entry);
   localStorage.setItem('foodDiary', JSON.stringify(foodDiary));
 
-  if (currentUser) {
-    supabase.from('food_diary').insert([{
-      user_id: currentUser.id,
-      name,
-      calories,
-      recorded_at: new Date()
-    }]);
-  }
+  supabase.from('food_diary').insert([{
+    user_id: currentUser.id,
+    name,
+    calories,
+    recorded_at: new Date()
+  }]);
 
   document.getElementById('foodName').value = '';
   document.getElementById('foodCalories').value = '';
@@ -614,10 +543,10 @@ function loadFoodHistory() {
   const todayFood = foodDiary.filter(e => new Date(e.date).toDateString() === today);
   const totalCalories = todayFood.reduce((sum, e) => sum + e.calories, 0);
 
-  container.innerHTML = `<div class="total">Сегодня: ${totalCalories} ккал</div>` +
+  container.innerHTML = `<div style="padding:10px;background:#f5f5f5;border-radius:4px;margin:10px 0;"><strong>Сегодня: ${totalCalories} ккал</strong></div>` +
     foodDiary.slice().reverse().map(entry => {
       const date = new Date(entry.date).toLocaleDateString('ru-RU');
-      return `<div class="history-item">${date}: ${entry.name} (${entry.calories} ккал)</div>`;
+      return `<div style="padding:8px;border-bottom:1px solid #eee;">${date}: ${entry.name} (${entry.calories} ккал)</div>`;
     }).join('');
 }
 
@@ -651,45 +580,31 @@ function plotFoodChart() {
 
 function showWaterScreen() {
   if (!currentUser) {
-    showAuthScreen();
+    alert('Авторизуйтесь');
     return;
   }
   
-  document.getElementById('mainContent').innerHTML = `
-    <div class="screen" id="waterScreen">
-      <h2>Вода</h2>
-      <div class="diary-input">
-        <input type="number" id="waterAmount" placeholder="Количество (мл)" class="input" min="0" value="250">
-        <button onclick="addWater()" class="primary-btn">Добавить стакан</button>
-      </div>
-      <canvas id="waterChart" width="400" height="200"></canvas>
-      <div id="waterHistory" class="history-list"></div>
-      <button onclick="showMainScreen()" class="secondary-btn">Вернуться</button>
-    </div>
-  `;
+  hideAllScreens();
+  document.getElementById('waterScreen').style.display = 'block';
   loadWaterHistory();
-  plotWaterChart();
+  setTimeout(() => plotWaterChart(), 100);
 }
 
 function addWater() {
+  if (!currentUser) return;
+  
   const amount = parseInt(document.getElementById('waterAmount').value);
   if (!amount) return;
 
-  const entry = {
-    date: new Date().toISOString(),
-    amount
-  };
-
+  const entry = { date: new Date().toISOString(), amount };
   waterDiary.push(entry);
   localStorage.setItem('waterDiary', JSON.stringify(waterDiary));
 
-  if (currentUser) {
-    supabase.from('water_diary').insert([{
-      user_id: currentUser.id,
-      amount,
-      recorded_at: new Date()
-    }]);
-  }
+  supabase.from('water_diary').insert([{
+    user_id: currentUser.id,
+    amount,
+    recorded_at: new Date()
+  }]);
 
   loadWaterHistory();
   plotWaterChart();
@@ -703,10 +618,10 @@ function loadWaterHistory() {
   const todayWater = waterDiary.filter(e => new Date(e.date).toDateString() === today);
   const totalWater = todayWater.reduce((sum, e) => sum + e.amount, 0);
 
-  container.innerHTML = `<div class="total">Сегодня: ${totalWater} мл (${(totalWater / 250).toFixed(1)} стаканов)</div>` +
+  container.innerHTML = `<div style="padding:10px;background:#f5f5f5;border-radius:4px;margin:10px 0;"><strong>Сегодня: ${totalWater} мл (${(totalWater / 250).toFixed(1)} стаканов)</strong></div>` +
     waterDiary.slice().reverse().map(entry => {
       const time = new Date(entry.date).toLocaleTimeString('ru-RU');
-      return `<div class="history-item">${time}: +${entry.amount} мл</div>`;
+      return `<div style="padding:8px;border-bottom:1px solid #eee;">${time}: +${entry.amount} мл</div>`;
     }).join('');
 }
 
@@ -738,78 +653,37 @@ function plotWaterChart() {
   });
 }
 
-// ==================== АНАЛИЗ КАЛОРИЙ ====================
 function showAnalysis() {
   if (!currentUser) {
-    showAuthScreen();
+    alert('Авторизуйтесь');
     return;
   }
   
-  document.getElementById('mainContent').innerHTML = `
-    <div class="screen" id="analysisScreen">
-      <h2>Анализ калорий</h2>
-      <div class="analysis-stats">
-        <div class="stat-card">
-          <h3>Сожженные калории</h3>
-          <p class="big-number">${userStats.totalCalories}</p>
-          <p>за все тренировки</p>
-        </div>
-        <div class="stat-card">
-          <h3>Потребленные калории</h3>
-          <p class="big-number">${foodDiary.reduce((sum, e) => sum + e.calories, 0)}</p>
-          <p>всего</p>
-        </div>
-        <div class="stat-card">
-          <h3>Баланс</h3>
-          <p class="big-number">${userStats.totalCalories - foodDiary.reduce((sum, e) => sum + e.calories, 0)}</p>
-          <p>дефицит/профицит</p>
-        </div>
-      </div>
+  hideAllScreens();
+  document.getElementById('analysisScreen').style.display = 'block';
+  updateAnalysisStats();
+  setTimeout(() => {
+    plotCaloriesChart();
+    plotCorrelationChart();
+    plotTripleCorrelationChart();
+  }, 100);
+}
 
-      <h3>Динамика сожженных калорий за 7 дней</h3>
-      <canvas id="caloriesChart" width="400" height="200"></canvas>
-
-      <h3>Корреляция: Калории ↔ Вес</h3>
-      <canvas id="correlationChart" width="400" height="200"></canvas>
-
-      <h3>Корреляция: Калории ↔ Еда ↔ Вода</h3>
-      <canvas id="tripleChart" width="400" height="200"></canvas>
-
-      <button onclick="showMainScreen()" class="secondary-btn">Вернуться</button>
-    </div>
-  `;
-  plotCaloriesChart();
-  plotCorrelationChart();
-  plotTripleCorrelationChart();
+function updateAnalysisStats() {
+  document.getElementById('burnedCaloriesTotal').textContent = userStats.totalCalories;
+  const consumed = foodDiary.reduce((sum, e) => sum + e.calories, 0);
+  document.getElementById('consumedCaloriesTotal').textContent = consumed;
+  document.getElementById('caloriesBalance').textContent = userStats.totalCalories - consumed;
 }
 
 function plotCaloriesChart() {
   const canvas = document.getElementById('caloriesChart');
   if (!canvas) return;
 
-  // Получить данные о тренировках за последние 7 дней
-  const last7Days = [];
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    // Это упрощение, в реальном приложении нужно получать из Supabase
-    last7Days.push(Math.random() * 500);
-  }
-
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = '#4CAF50';
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-
-  last7Days.forEach((cal, idx) => {
-    const x = (idx / 6) * (canvas.width - 40) + 20;
-    const y = canvas.height - (cal / 500) * (canvas.height - 40) - 20;
-    if (idx === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-
-  ctx.stroke();
+  ctx.fillStyle = '#4CAF50';
+  ctx.fillText('Динамика калорий за 7 дней', 10, 20);
 }
 
 function plotCorrelationChart() {
@@ -818,22 +692,10 @@ function plotCorrelationChart() {
 
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // Показать соотношение между сожженными калориями и изменением веса
   ctx.fillStyle = '#FF5252';
-  ctx.font = '14px Arial';
-  ctx.fillText('Больше калорий', 20, 30);
-  ctx.fillText('↓ вес', 20, 50);
-  ctx.fillText('↑ вес', 20, canvas.height - 30);
-  ctx.fillText('Меньше калорий', canvas.width - 150, canvas.height - 30);
-
-  // Нарисовать диагональную линию
-  ctx.strokeStyle = '#FF5252';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(20, 60);
-  ctx.lineTo(canvas.width - 20, canvas.height - 40);
-  ctx.stroke();
+  ctx.font = '12px Arial';
+  ctx.fillText('Больше калорий → ↓ вес', 10, 30);
+  ctx.fillText('Меньше калорий → ↑ вес', 10, canvas.height - 10);
 }
 
 function plotTripleCorrelationChart() {
@@ -842,82 +704,9 @@ function plotTripleCorrelationChart() {
 
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // Трехсторонняя корреляция: калории (зелень), еда (красный), вода (синий)
-  const colors = ['#4CAF50', '#FF5252', '#2196F3'];
-  const labels = ['Тренировки', 'Еда', 'Вода'];
-
-  labels.forEach((label, idx) => {
-    ctx.fillStyle = colors[idx];
-    const x = 50 + idx * 110;
-    const y = 50;
-    ctx.fillRect(x, y, 80, 80);
-    ctx.fillStyle = '#000';
-    ctx.font = 'bold 12px Arial';
-    ctx.fillText(label, x + 10, y + 110);
-  });
-
-  // Линии связи
-  ctx.strokeStyle = '#ccc';
-  ctx.lineWidth = 1;
-  ctx.setLineDash([5, 5]);
-  ctx.beginPath();
-  ctx.moveTo(130, 130);
-  ctx.lineTo(160, 130);
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.moveTo(130, 130);
-  ctx.lineTo(100, 180);
-  ctx.stroke();
-
-  ctx.setLineDash([]);
-}
-
-function initializeCharts() {
-  // Инициализация графиков при загрузке
-}
-
-// ==================== ОСНОВНОЙ ЭКРАН ====================
-function showMainScreen() {
-  document.getElementById('mainContent').innerHTML = `
-    <div class="screen main-screen">
-      <h1>Sport Royale</h1>
-      
-      <div class="stats-container">
-        <div class="stat-box">
-          <h3>Уровень</h3>
-          <p id="displayLevel">${userStats.level}</p>
-        </div>
-        <div class="stat-box">
-          <h3>XP</h3>
-          <p id="displayXP">${userStats.xp}/${userStats.level * 100}</p>
-        </div>
-        <div class="stat-box">
-          <h3>Калории</h3>
-          <p id="displayCalories">${userStats.totalCalories}</p>
-        </div>
-      </div>
-
-      <div class="menu-buttons">
-        <button onclick="showExerciseScreen()" class="menu-btn">🏋️ Упражнения</button>
-        <button onclick="showWorkoutBuilder()" class="menu-btn">🎯 Тренировка</button>
-        <button onclick="showWeightScreen()" class="menu-btn">⚖️ Вес</button>
-        <button onclick="showFoodScreen()" class="menu-btn">🍎 Еда</button>
-        <button onclick="showWaterScreen()" class="menu-btn">💧 Вода</button>
-        <button onclick="showAnalysis()" class="menu-btn">📊 Анализ</button>
-      </div>
-
-      <div id="bottomNav" class="bottom-nav">
-        <a href="camera.html" class="nav-btn">📷</a>
-        <a href="workout.html" class="nav-btn">🏃</a>
-        <a href="clan.html" class="nav-btn">👥</a>
-        <a href="leaderboard.html" class="nav-btn">🏆</a>
-        <a href="chess-main.html" class="nav-btn">♟️</a>
-      </div>
-    </div>
-  `;
-  updateStatsDisplay();
+  ctx.fillStyle = '#2196F3';
+  ctx.font = '12px Arial';
+  ctx.fillText('Калории ↔ Еда ↔ Вода: Корреляция данных', 10, 30);
 }
 
 function updateStatsDisplay() {
@@ -930,20 +719,7 @@ function updateStatsDisplay() {
   if (caloriesEl) caloriesEl.textContent = userStats.totalCalories;
 }
 
-function loadUserData() {
-  if (currentUser) {
-    loadUserRecord();
-  }
-}
-
 function setupEventListeners() {
   document.getElementById('loginTelegramBtn')?.addEventListener('click', loginWithTelegram);
   document.getElementById('loginEmailBtn')?.addEventListener('click', handleEmailAuth);
 }
-
-// Показать главный экран при загрузке
-setTimeout(() => {
-  if (currentUser) {
-    showMainScreen();
-  }
-}, 100);
