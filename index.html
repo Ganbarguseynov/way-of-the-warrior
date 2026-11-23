@@ -1,399 +1,193 @@
+```html
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<title>Sport Royale</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<link rel="stylesheet" href="style.css">
-<style>
-.history-card { background: #1c1c1e; border-radius: 12px; padding: 15px; margin-bottom: 10px; border: 1px solid #2c2c2e; }
-.history-date { color: var(--accent-color); font-weight: bold; font-size: 15px; margin-bottom: 5px; }
-.history-food-item { font-size: 12px; color: #fff; margin-bottom: 5px; padding-left: 10px; border-left: 2px solid #34c759; display: flex; justify-content: space-between; }
-.history-water-item { font-size: 12px; color: #fff; margin-bottom: 5px; padding-left: 10px; border-left: 2px solid #5ac8fa; display: flex; justify-content: space-between; }
-.history-weight-item { font-size: 14px; color: #fff; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; }
-.custom-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box; }
-.custom-modal.active { display: flex; }
-.custom-modal-content { background: #1c1c1e; border-radius: 16px; padding: 20px; width: 100%; max-width: 400px; box-sizing: border-box; position: relative; max-height: 90vh; overflow-y: auto;}
-.custom-modal-close { position: absolute; top: 15px; right: 15px; background: rgba(255,255,255,0.1); border: none; color: white; font-size: 18px; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10;}
-.compact-panel { background: rgba(28, 28, 30, 0.85); border-radius: 10px; padding: 8px; border: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; min-width: 0; box-sizing: border-box; cursor: pointer; transition: 0.2s;}
-.compact-panel:active { background: rgba(50, 50, 55, 0.9); }
-.compact-food-list { max-height: 50px; overflow-y: auto; margin-top: 6px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 4px; }
-.compact-food-item { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 2px 5px; border-radius: 4px; margin-bottom: 2px; font-size: 10px; }
-.quick-btn { background: #2c2c2e; color: white; border: 1px solid #3a3a3c; border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; }
-.water-btn { background: rgba(90, 200, 250, 0.2); border: 1px solid #5ac8fa; color: #5ac8fa; border-radius: 4px; padding: 2px 4px; font-size: 10px; cursor: pointer; font-weight: bold; text-align: center; }
-.weight-btn { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 6px 12px; border-radius: 20px; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; margin-right: 5px; }
-.analysis-btn { background: rgba(255, 204, 0, 0.2); border: 1px solid var(--accent-color); color: var(--accent-color); padding: 6px 12px; border-radius: 20px; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; }
-.diary-btn { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; border-radius: 6px; padding: 2px 6px; font-size: 12px; cursor: pointer; }
-.diary-btn:active { background: rgba(255,255,255,0.3); }
-.chart-container { background: #2c2c2e; border-radius: 12px; padding: 10px; margin-top: 15px; position: relative; height: 200px; width: 100%; box-sizing: border-box;}
-.summary-box { background: rgba(52, 199, 89, 0.1); border: 1px solid #34c759; border-radius: 12px; padding: 15px; margin-bottom: 15px; }
-.summary-title { font-size: 14px; font-weight: bold; color: #34c759; margin-bottom: 8px; }
-.summary-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 5px; text-align: center; }
-
-.streak-badge { position: absolute; top: 15px; left: 15px; background: rgba(255, 87, 34, 0.15); border: 1px solid #ff5722; color: #ff5722; padding: 6px 12px; border-radius: 20px; font-size: 14px; font-weight: bold; z-index: 40; display: flex; align-items: center; gap: 5px; cursor: pointer; transition: 0.3s; }
-@keyframes pulse-fire {
-0% { transform: scale(1); box-shadow: 0 0 15px #ff5722; background: rgba(255, 87, 34, 0.4); color: #fff; }
-50% { transform: scale(1.1); box-shadow: 0 0 25px #ff5722; background: rgba(255, 87, 34, 0.6); color: #fff; }
-100% { transform: scale(1); box-shadow: 0 0 15px #ff5722; background: rgba(255, 87, 34, 0.4); color: #fff; }
-}
-.streak-pending { animation: pulse-fire 1.5s infinite; border: 2px solid #fff; }
-
-.motivation-toast { position: fixed; top: -150px; left: 50%; transform: translateX(-50%); background: rgba(28, 28, 30, 0.95); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 2px solid var(--accent-color); border-radius: 16px; padding: 15px 20px; display: flex; align-items: center; gap: 15px; z-index: 9999; box-shadow: 0 10px 30px rgba(0,0,0,0.8), 0 0 20px rgba(255, 204, 0, 0.3); transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); width: 90%; max-width: 350px; }
-.motivation-toast.show { top: 20px; }
-.motivation-icon { font-size: 36px; }
-.motivation-text h3 { margin: 0 0 4px 0; color: var(--accent-color); font-size: 16px; }
-.motivation-text p { margin: 0; color: #fff; font-size: 13px; line-height: 1.3; }
-
-.bottom-nav {
-position: fixed;
-bottom: 0;
-left: 0;
-width: 100%;
-height: 65px;
-background: #1c1c1e;
-border-top: 1px solid #3a3a3c;
-display: flex;
-justify-content: space-around;
-align-items: center;
-z-index: 999;
-padding-bottom: env(safe-area-inset-bottom);
-}
-.nav-btn {
-background: transparent;
-border: none;
-color: #8e8e93;
-display: flex;
-flex-direction: column;
-align-items: center;
-justify-content: center;
-font-size: 11px;
-font-weight: 600;
-cursor: pointer;
-flex: 1;
-height: 100%;
-gap: 4px;
-transition: 0.2s;
-}
-.nav-btn span.icon { font-size: 22px; }
-.nav-btn.chess-active { color: #af52de; }
-.overlay { padding-bottom: 75px !important; }
-
-body { height: 100vh; height: 100dvh; width: 100%; overflow: hidden; }
-
-.dash-overlay {
-justify-content: space-between !important;
-padding: 8px 10px 78px 10px !important;
-gap: 6px;
-overflow-y: auto;
-}
-
-.dash-header {
-display: flex;
-align-items: center;
-gap: 6px;
-width: 100%;
-flex: 0 0 auto;
-}
-
-.dash-header .streak-badge {
-position: static;
-padding: 5px 10px;
-font-size: 12px;
-border-radius: 14px;
-}
-
-.dash-header .dash-btn {
-border-radius: 10px;
-padding: 6px 12px;
-font-size: 11px;
-font-weight: 700;
-cursor: pointer;
-background: rgba(44,44,46,0.75);
-color: #fff;
-border: 1px solid rgba(255,255,255,0.15);
-backdrop-filter: blur(10px);
--webkit-backdrop-filter: blur(10px);
-}
-.dash-header .dash-btn-settings { margin-left: auto; }
-.dash-header .dash-btn-exit {
-background: rgba(255,59,48,0.18);
-border-color: #ff3b30;
-color: #ff3b30;
-}
-
-.dash-overlay .top-info {
-margin: 0 !important;
-flex: 0 0 auto;
-text-align: center;
-}
-.dash-overlay .character-level {
-font-size: 11px;
-letter-spacing: 2px;
-margin-bottom: 2px;
-}
-.dash-overlay .character-title {
-font-size: clamp(20px, 6.4vw, 28px);
-line-height: 1.15;
-margin: 0 0 8px 0;
-letter-spacing: 1px;
-white-space: nowrap;
-overflow: hidden;
-text-overflow: ellipsis;
-}
-.dash-overlay .xp-bar-container { height: 10px; width: 82%; }
-.dash-overlay .xp-text { font-size: 11px; margin: 3px 0 0 0; }
-.dash-overlay .dash-subrow { display: flex; justify-content: center; gap: 8px; margin-top: 8px; }
-.dash-overlay .dash-subrow .weight-btn,
-.dash-overlay .dash-subrow .analysis-btn { font-size: 11px; padding: 5px 12px; margin: 0; }
-
-.dash-overlay .bottom-panel { gap: 6px; flex: 0 0 auto; }
-.dash-overlay .stats-row { gap: 8px; }
-.dash-overlay .stat-box { padding: 6px !important; border-radius: 12px; }
-.dash-overlay .stat-box p { font-size: 9px !important; }
-.dash-overlay .stat-box h3 { font-size: 15px !important; margin-top: 2px !important; }
-.dash-overlay .compact-panel { padding: 7px; border-radius: 12px; }
-.dash-overlay .compact-food-list { max-height: 34px; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sport Royale</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="style.css">
 </head>
-<body class="male-theme">
+<body>
+    <div id="mainContent">
+        <!-- AUTH SCREEN -->
+        <div id="authScreen" class="screen auth-screen" style="display:none;">
+            <div class="auth-container">
+                <h1>Sport Royale</h1>
+                <p>Добро пожаловать в фитнес-приложение</p>
+                
+                <button id="loginTelegramBtn" class="auth-btn telegram-btn" onclick="loginWithTelegram()">
+                    📱 Вход через Telegram
+                </button>
+                
+                <div class="divider">или</div>
+                
+                <div class="email-auth">
+                    <input type="email" id="emailInput" placeholder="Email" class="input">
+                    <input type="password" id="passwordInput" placeholder="Пароль" class="input">
+                    <button id="loginEmailBtn" class="auth-btn email-btn" onclick="handleEmailAuth()">
+                        Вход / Регистрация
+                    </button>
+                </div>
+            </div>
+        </div>
 
-<div class="bottom-nav">
-<button class="nav-btn" onclick="window.location.href='camera.html'">
-<span class="icon">🍏</span>
-<span>Еда</span>
-</button>
-<button class="nav-btn" onclick="window.location.href='workout.html'">
-<span class="icon">💪</span>
-<span>Треня</span>
-</button>
-<button class="nav-btn" onclick="window.location.href='clan.html'">
-<span class="icon">🛡️</span>
-<span>Клан</span>
-</button>
-<button class="nav-btn" onclick="window.location.href='leaderboard.html'">
-<span class="icon">🏆</span>
-<span>Рейтинг</span>
-</button>
-<button id="chess-nav-btn" class="nav-btn chess-active" style="display: none;" onclick="window.location.href='chess-main.html'">
-<span class="icon">♟️</span>
-<span>Chess Royale</span>
-</button>
-</div>
+        <!-- MAIN SCREEN -->
+        <div id="mainScreen" class="screen main-screen" style="display:none;">
+            <h1>Sport Royale</h1>
+            
+            <div class="stats-container">
+                <div class="stat-box">
+                    <h3>Уровень</h3>
+                    <p id="displayLevel">1</p>
+                </div>
+                <div class="stat-box">
+                    <h3>XP</h3>
+                    <p id="displayXP">0/100</p>
+                </div>
+                <div class="stat-box">
+                    <h3>Калории</h3>
+                    <p id="displayCalories">0</p>
+                </div>
+            </div>
 
-<div id="auth-screen" class="screen active auth-screen">
-<div class="auth-container"><div class="auth-content"><div class="auth-title">Sport Royale</div><div class="inspiration-text">Стань лучшей версией себя.<br>Начни прямо сейчас.</div><div class="auth-buttons"><button class="auth-btn tg-btn" onclick="loginWithTelegram()">✈️ Продолжить через Telegram</button><div class="auth-divider"><span>или</span></div><button class="auth-btn email-btn" onclick="showEmailForm()">✉️ Войти по Email</button></div></div></div>
-</div>
+            <div class="menu-buttons">
+                <button class="menu-btn" onclick="showExerciseScreen()">🏋️ Упражнения</button>
+                <button class="menu-btn" onclick="showWorkoutBuilder()">🎯 Тренировка</button>
+                <button class="menu-btn" onclick="showWeightScreen()">⚖️ Вес</button>
+                <button class="menu-btn" onclick="showFoodScreen()">🍎 Еда</button>
+                <button class="menu-btn" onclick="showWaterScreen()">💧 Вода</button>
+                <button class="menu-btn" onclick="showAnalysis()">📊 Анализ</button>
+            </div>
 
-<div id="email-screen" class="screen">
-<div class="inner-screen">
-<button class="back-btn" onclick="closeScreen('email-screen')">← Назад</button>
-<h1 style="text-align: center; margin-bottom: 30px;">Вход / Регистрация</h1>
-<div class="form-group"><label>Email</label><input type="email" id="auth-email" placeholder="your@email.com"></div>
-<div class="form-group"><label>Пароль</label><input type="password" id="auth-password" placeholder="Минимум 6 символов"></div>
-<button class="btn" onclick="handleEmailAuth()" id="email-submit-btn">Продолжить</button>
-</div>
-</div>
+            <div id="bottomNav" class="bottom-nav">
+                <a href="camera.html" class="nav-btn">📷</a>
+                <a href="workout.html" class="nav-btn">🏃</a>
+                <a href="clan.html" class="nav-btn">👥</a>
+                <a href="leaderboard.html" class="nav-btn">🏆</a>
+                <a href="chess-main.html" class="nav-btn" id="chessBtn">♟️</a>
+            </div>
+        </div>
 
-<div id="dashboard-screen" class="screen">
-<video id="character-video" class="video-background" autoplay loop muted playsinline></video>
-<div class="overlay dash-overlay">
+        <!-- EXERCISE SCREEN -->
+        <div id="exerciseScreen" class="screen" style="display:none;">
+            <h2>Упражнения</h2>
+            <div class="exercises-container" id="exercisesList"></div>
+            <button onclick="showAddExerciseModal()" class="primary-btn">+ Добавить упражнение</button>
+            <button onclick="showMainScreen()" class="secondary-btn">Вернуться</button>
+        </div>
 
-<div class="dash-header">
-<div id="streak-display" class="streak-badge" onclick="openChallengeModal()">🔥 0</div>
-<button class="dash-btn dash-btn-settings" onclick="openProfileSettings()">⚙️ Настр.</button>
-<button class="dash-btn dash-btn-exit" onclick="logout()">Выйти</button>
-</div>
+        <!-- WORKOUT BUILDER SCREEN -->
+        <div id="workoutScreen" class="screen" style="display:none;">
+            <h2>Конструктор тренировок</h2>
+            <div class="exercises-container" id="availableExercises"></div>
+            <div class="workout-builder">
+                <h3>Текущая тренировка</h3>
+                <div id="workoutList"></div>
+                <div class="stats">
+                    <p>Калории: <span id="totalCalories">0</span></p>
+                    <p>Время: <span id="totalTime">0</span> мин</p>
+                </div>
+                <button onclick="completeWorkout()" class="primary-btn">Завершить тренировку</button>
+                <button onclick="showMainScreen()" class="secondary-btn">Вернуться</button>
+            </div>
+        </div>
 
-<div class="top-info">
-<div class="character-level" id="char-level">Уровень 1</div>
-<div class="character-title" id="char-title">Странник</div>
-<div class="xp-bar-container"><div class="xp-bar" id="xp-bar"></div></div>
-<p class="xp-text" id="xp-text">0 / 100 XP</p>
-<div class="dash-subrow">
-<button class="weight-btn" onclick="openWeightDiary()">⚖️ <span id="current-weight-display">0</span> кг</button>
-<button class="analysis-btn" onclick="openGlobalStatsModal()">📈 Анализ</button>
-</div>
-</div>
+        <!-- WEIGHT SCREEN -->
+        <div id="weightScreen" class="screen" style="display:none;">
+            <h2>Вес</h2>
+            <div class="diary-input">
+                <input type="number" id="weightInput" placeholder="Вес (кг)" class="input" step="0.1">
+                <button onclick="addWeight()" class="primary-btn">Добавить</button>
+            </div>
+            <canvas id="weightChart" width="400" height="200"></canvas>
+            <div id="weightHistory" class="history-list"></div>
+            <button onclick="showMainScreen()" class="secondary-btn">Вернуться</button>
+        </div>
 
-<div class="bottom-panel">
-<div class="stats-row" style="margin-bottom: 0;">
-<div class="stat-box"><p>Норма</p><h3 id="calories-norm">0 ккал</h3></div>
-<div class="stat-box"><p>Сожжено</p><h3 id="burned-total">0 ккал</h3></div>
-</div>
-<div style="display: flex; gap: 8px; margin-bottom: 4px; width: 100%; box-sizing: border-box;">
-<div class="compact-panel" style="flex: 1; border-color: rgba(90, 200, 250, 0.3);" onclick="openWaterDiary()">
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-<div style="display: flex; flex-direction: column;"><h4 style="margin: 0; color: #5ac8fa; font-size: 10px; text-transform: uppercase;">💧 Вода</h4><span style="font-size: 11px; color: #fff; font-weight: bold; margin-top: 2px;"><span id="eaten-water">0</span>/<span id="norm-water">2000</span></span></div>
-<button class="diary-btn" onclick="event.stopPropagation(); openWaterDiary()">📜 Дневник</button>
-</div>
-<div style="display: flex; gap: 3px; align-items: stretch; margin-top: 5px;" onclick="event.stopPropagation();">
-<button class="water-btn" style="flex: 1;" onclick="addWater(200)">+200</button>
-<button class="water-btn" style="flex: 1;" onclick="addWater(500)">+500</button>
-<button id="custom-water-quick-btn" class="water-btn" style="flex: 1.5; background: rgba(90, 200, 250, 0.1);" onclick="quickAddCustomWater()">+Своя</button>
-</div>
-<div id="today-water-list" class="compact-food-list" style="border-color: rgba(90, 200, 250, 0.2);"></div>
-</div>
-<div class="compact-panel" style="flex: 1;" onclick="openFoodDiary()">
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-<div style="display: flex; flex-direction: column;"><h4 style="margin: 0; color: #fff; font-size: 10px; text-transform: uppercase;">🍏 Еда</h4><span style="font-size: 11px; color: #8e8e93; margin-top: 2px;">КБЖУ</span></div>
-<button class="diary-btn" onclick="event.stopPropagation(); openFoodDiary()">📜 Дневник</button>
-</div>
-<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2px; font-size: 10px; text-align: center; margin-top: 5px;">
-<div style="color: var(--accent-color); background: rgba(255,255,255,0.05); border-radius: 4px; padding: 2px;"><span id="eaten-cal">0</span> Ккал</div>
-<div style="background: rgba(255,255,255,0.05); border-radius: 4px; padding: 2px;"><span id="eaten-prot">0</span> Бел.</div>
-<div style="background: rgba(255,255,255,0.05); border-radius: 4px; padding: 2px;"><span id="eaten-fat">0</span> Жир.</div>
-<div style="background: rgba(255,255,255,0.05); border-radius: 4px; padding: 2px;"><span id="eaten-carb">0</span> Угл.</div>
-</div>
-<div id="today-food-list" class="compact-food-list"></div>
-<div style="display: none;"><span id="norm-cal"></span><span id="norm-prot"></span><span id="norm-fat"></span><span id="norm-carb"></span></div>
-</div>
-</div>
-</div>
-</div>
-</div>
+        <!-- FOOD SCREEN -->
+        <div id="foodScreen" class="screen" style="display:none;">
+            <h2>Еда</h2>
+            <div class="diary-input">
+                <input type="text" id="foodName" placeholder="Название блюда" class="input">
+                <input type="number" id="foodCalories" placeholder="Калории" class="input" min="0">
+                <button onclick="addFood()" class="primary-btn">Добавить</button>
+            </div>
+            <canvas id="foodChart" width="400" height="200"></canvas>
+            <div id="foodHistory" class="history-list"></div>
+            <button onclick="showMainScreen()" class="secondary-btn">Вернуться</button>
+        </div>
 
-<div id="water-diary-screen" class="screen">
-<div class="inner-screen">
-<button class="back-btn" onclick="closeScreen('water-diary-screen')">← Назад</button>
-<h1 style="text-align: center; margin-bottom: 15px;">📜 Дневник воды</h1>
-<div style="display: flex; gap: 8px; margin-bottom: 15px;"><input type="number" id="custom-water-input" placeholder="Мл" style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #3a3a3c; background: #2c2c2e; color: white; font-size: 16px; text-align: center;"><button class="btn" style="width: auto; margin: 0; padding: 10px 15px; background-color: #5ac8fa; color: #fff; font-size: 14px;" onclick="addWaterFromDiary()">Добавить</button></div>
-<div style="background: #1c1c1e; padding: 15px; border-radius: 12px; margin-bottom: 15px;">
-<div style="display: flex; gap: 10px; margin-bottom: 10px;">
-<div style="flex: 1;"><label style="font-size: 11px; color: #8e8e93;">От</label><input type="date" id="water-start-date" style="width: 100%; padding: 6px; border-radius: 6px; background: #2c2c2e; color: white; border: 1px solid #3a3a3c; font-size: 12px;" onchange="renderWaterDiary()"></div>
-<div style="flex: 1;"><label style="font-size: 11px; color: #8e8e93;">До</label><input type="date" id="water-end-date" style="width: 100%; padding: 6px; border-radius: 6px; background: #2c2c2e; color: white; border: 1px solid #3a3a3c; font-size: 12px;" onchange="renderWaterDiary()"></div>
-</div>
-<div style="display: flex; gap: 5px; flex-wrap: wrap;">
-<button class="quick-btn" onclick="setPeriod('water', '7days')">7 дней</button><button class="quick-btn" onclick="setPeriod('water', '30days')">30 дней</button><button class="quick-btn" onclick="setPeriod('water', 'month')">Этот месяц</button>
-</div>
-</div>
-<div id="water-summary" class="summary-box" style="border-color: #5ac8fa; background: rgba(90, 200, 250, 0.1); display: none;"><div class="summary-title" style="color: #5ac8fa;">Итого выпито:</div><div style="text-align: center; font-size: 20px; font-weight: bold; color: #fff;"><span id="water-total-ml">0</span> мл</div></div>
-<div class="chart-container"><canvas id="water-diary-chart"></canvas></div>
-<div id="water-diary-list" style="margin-top: 15px;"></div>
-</div>
-</div>
+        <!-- WATER SCREEN -->
+        <div id="waterScreen" class="screen" style="display:none;">
+            <h2>Вода</h2>
+            <div class="diary-input">
+                <input type="number" id="waterAmount" placeholder="Количество (мл)" class="input" min="0" value="250">
+                <button onclick="addWater()" class="primary-btn">Добавить стакан</button>
+            </div>
+            <canvas id="waterChart" width="400" height="200"></canvas>
+            <div id="waterHistory" class="history-list"></div>
+            <button onclick="showMainScreen()" class="secondary-btn">Вернуться</button>
+        </div>
 
-<div id="food-diary-screen" class="screen">
-<div class="inner-screen">
-<button class="back-btn" onclick="closeScreen('food-diary-screen')">← Назад</button>
-<h1 style="text-align: center; margin-bottom: 15px;">📜 Дневник еды</h1>
-<div style="background: #1c1c1e; padding: 15px; border-radius: 12px; margin-bottom: 15px;">
-<div style="display: flex; gap: 10px; margin-bottom: 10px;">
-<div style="flex: 1;"><label style="font-size: 11px; color: #8e8e93;">От</label><input type="date" id="food-start-date" style="width: 100%; padding: 6px; border-radius: 6px; background: #2c2c2e; color: white; border: 1px solid #3a3a3c; font-size: 12px;" onchange="renderFoodDiary()"></div>
-<div style="flex: 1;"><label style="font-size: 11px; color: #8e8e93;">До</label><input type="date" id="food-end-date" style="width: 100%; padding: 6px; border-radius: 6px; background: #2c2c2e; color: white; border: 1px solid #3a3a3c; font-size: 12px;" onchange="renderFoodDiary()"></div>
-</div>
-<div style="display: flex; gap: 5px; flex-wrap: wrap;">
-<button class="quick-btn" onclick="setPeriod('food', '7days')">7 дней</button><button class="quick-btn" onclick="setPeriod('food', '30days')">30 дней</button><button class="quick-btn" onclick="setPeriod('food', 'month')">Этот месяц</button>
-</div>
-</div>
-<div id="food-summary" class="summary-box" style="display: none;"><div class="summary-title">Итого за период:</div><div class="summary-grid"><div><span id="food-total-cal" style="color: var(--accent-color); font-weight: bold; font-size: 16px;">0</span><br><span style="font-size: 10px; color: #8e8e93;">Ккал</span></div><div><span id="food-total-prot" style="color: #fff; font-weight: bold; font-size: 16px;">0</span><br><span style="font-size: 10px; color: #8e8e93;">Бел.</span></div><div><span id="food-total-fat" style="color: #fff; font-weight: bold; font-size: 16px;">0</span><br><span style="font-size: 10px; color: #8e8e93;">Жир.</span></div><div><span id="food-total-carb" style="color: #fff; font-weight: bold; font-size: 16px;">0</span><br><span style="font-size: 10px; color: #8e8e93;">Угл.</span></div></div></div>
-<div class="chart-container" style="height: 180px;"><canvas id="food-diary-cal-chart"></canvas></div>
-<div class="chart-container" style="height: 180px; margin-top: 10px;"><canvas id="food-diary-macro-chart"></canvas></div>
-<div id="food-diary-list" style="margin-top: 15px;"></div>
-</div>
-</div>
+        <!-- ANALYSIS SCREEN -->
+        <div id="analysisScreen" class="screen" style="display:none;">
+            <h2>Анализ калорий</h2>
+            <div class="analysis-stats">
+                <div class="stat-card">
+                    <h3>Сожженные калории</h3>
+                    <p class="big-number" id="burnedCaloriesTotal">0</p>
+                    <p>за все тренировки</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Потребленные калории</h3>
+                    <p class="big-number" id="consumedCaloriesTotal">0</p>
+                    <p>всего</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Баланс</h3>
+                    <p class="big-number" id="caloriesBalance">0</p>
+                    <p>дефицит/профицит</p>
+                </div>
+            </div>
 
-<div id="weight-diary-screen" class="screen">
-<div class="inner-screen">
-<button class="back-btn" onclick="closeScreen('weight-diary-screen')">← Назад</button>
-<h1 style="text-align: center; margin-bottom: 15px;">📜 Дневник веса</h1>
-<div style="display: flex; gap: 8px; margin-bottom: 15px;"><input type="number" id="modal-weight-input" step="0.1" style="flex: 1; padding: 10px; border-radius: 8px; background: #2c2c2e; color: white; border: 1px solid #3a3a3c; font-size: 16px; text-align: center; outline: none;"><button class="btn" style="width: auto; margin: 0; padding: 10px 15px; background-color: #34c759; color: white; font-size: 14px;" onclick="saveWeightFromDiary()">Записать</button></div>
-<div style="background: #1c1c1e; padding: 15px; border-radius: 12px; margin-bottom: 15px;">
-<div style="display: flex; gap: 10px; margin-bottom: 10px;">
-<div style="flex: 1;"><label style="font-size: 11px; color: #8e8e93;">От</label><input type="date" id="weight-start-date" style="width: 100%; padding: 6px; border-radius: 6px; background: #2c2c2e; color: white; border: 1px solid #3a3a3c; font-size: 12px;" onchange="renderWeightDiary()"></div>
-<div style="flex: 1;"><label style="font-size: 11px; color: #8e8e93;">До</label><input type="date" id="weight-end-date" style="width: 100%; padding: 6px; border-radius: 6px; background: #2c2c2e; color: white; border: 1px solid #3a3a3c; font-size: 12px;" onchange="renderWeightDiary()"></div>
-</div>
-<div style="display: flex; gap: 5px; flex-wrap: wrap;">
-<button class="quick-btn" onclick="setPeriod('weight', '7days')">7 дней</button><button class="quick-btn" onclick="setPeriod('weight', '30days')">30 дней</button><button class="quick-btn" onclick="setPeriod('weight', 'month')">Этот месяц</button>
-</div>
-</div>
-<div id="weight-summary" class="summary-box" style="border-color: #ffcc00; background: rgba(255, 204, 0, 0.1); display: none;"><div class="summary-title" style="color: #ffcc00;">Разница за период:</div><div id="weight-diff" style="text-align: center; font-size: 20px; font-weight: bold; color: #fff;"></div></div>
-<div class="chart-container"><canvas id="weight-diary-chart"></canvas></div>
-<div id="weight-diary-list" style="margin-top: 15px;"></div>
-</div>
-</div>
+            <h3>Динамика сожженных калорий за 7 дней</h3>
+            <canvas id="caloriesChart" width="400" height="200"></canvas>
 
-<div id="global-stats-screen" class="screen">
-<div class="inner-screen">
-<button class="back-btn" onclick="closeScreen('global-stats-screen')">← Назад</button>
-<h1 style="text-align: center; margin-bottom: 15px;">📊 Полный Анализ</h1>
-<div style="background: #1c1c1e; padding: 15px; border-radius: 12px; margin-bottom: 15px;"><div style="display: flex; gap: 10px;"><div style="flex: 1;"><label style="font-size: 11px; color: #8e8e93;">От</label><input type="date" id="global-start-date" style="width: 100%; padding: 6px; border-radius: 6px; background: #2c2c2e; color: white; border: 1px solid #3a3a3c; font-size: 12px;" onchange="renderAllCharts()"></div><div style="flex: 1;"><label style="font-size: 11px; color: #8e8e93;">До</label><input type="date" id="global-end-date" style="width: 100%; padding: 6px; border-radius: 6px; background: #2c2c2e; color: white; border: 1px solid #3a3a3c; font-size: 12px;" onchange="renderAllCharts()"></div></div></div>
-<div class="chart-container"><canvas id="g-weight-chart"></canvas></div><div class="chart-container"><canvas id="g-calories-chart"></canvas></div><div class="chart-container"><canvas id="g-macros-chart"></canvas></div><div class="chart-container"><canvas id="g-water-chart"></canvas></div>
-</div>
-</div>
+            <h3>Корреляция: Калории ↔ Вес</h3>
+            <canvas id="correlationChart" width="400" height="200"></canvas>
 
-<div id="profile-settings-screen" class="screen">
-<div class="inner-screen">
-<button class="back-btn" onclick="closeScreen('profile-settings-screen')">← Назад</button>
-<h1 style="text-align: center; margin-bottom: 30px;">Настройки</h1>
-<div id="link-section" style="background: #1c1c1e; padding: 20px; border-radius: 16px; margin-bottom: 20px;"><h3 style="margin-top: 0;" id="link-title">Привязка аккаунта</h3><p style="color: #8e8e93; font-size: 14px; margin-bottom: 15px;" id="link-desc">Привяжите второй способ входа.</p><div id="link-email-form"><div class="form-group"><input type="email" id="link-email" placeholder="your@email.com"></div><div class="form-group"><input type="password" id="link-password" placeholder="Пароль (мин. 6 символов)"></div><button class="btn" onclick="linkEmailToTelegram()">Привязать Email</button></div><div id="link-tg-form" style="display: none;"><p style="font-size: 14px; color: #fff; margin-bottom: 10px;">Ваш Telegram ID: <b id="current-tg-id">неизвестно</b></p><button class="btn" onclick="linkTelegramToEmail()">Подтвердить привязку</button></div></div>
-<div style="background: #1c1c1e; padding: 20px; border-radius: 16px; margin-bottom: 20px;"><h3 style="margin-top: 0;">Изменить данные</h3><div class="form-group"><label>Возраст</label><input type="number" id="age" placeholder="25"></div><div class="form-group"><label>Вес (кг)</label><input type="number" id="weight" placeholder="70" step="0.1"></div><div class="form-group"><label>Рост (см)</label><input type="number" id="height" placeholder="175"></div><div class="form-group"><label>Пол</label><select id="gender"><option value="male">Мужской</option><option value="female">Женский</option></select></div><div class="form-group"><label>Цель</label><select id="goal"><option value="lose">Похудеть</option><option value="gain">Набрать массу</option></select></div><div class="form-group" style="margin-top: 15px; border-top: 1px solid #3a3a3c; padding-top: 15px;"><label style="color: #5ac8fa;">Норма воды (мл)</label><input type="number" id="custom-water-goal" placeholder="Напр. 2000"></div><div class="form-group"><label style="color: #34c759;">Предпочтения в еде</label><input type="text" id="food-preference" placeholder="Напр: без лактозы, люблю рыбу"></div></div>
-<div style="background: #1c1c1e; padding: 20px; border-radius: 16px; margin-bottom: 20px;"><h3 style="margin-top: 0;">Своя норма еды</h3><div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;"><div class="form-group" style="margin: 0;"><label>Калории</label><input type="number" id="custom-calories" placeholder="2000"></div><div class="form-group" style="margin: 0;"><label>Белки (г)</label><input type="number" id="custom-protein" placeholder="150"></div><div class="form-group" style="margin: 0;"><label>Жиры (г)</label><input type="number" id="custom-fat" placeholder="70"></div><div class="form-group" style="margin: 0;"><label>Углеводы (г)</label><input type="number" id="custom-carbs" placeholder="200"></div></div></div>
-<button class="btn" onclick="saveProfile()">Сохранить все данные</button>
-</div>
-</div>
+            <h3>Корреляция: Калории ↔ Еда ↔ Вода</h3>
+            <canvas id="tripleChart" width="400" height="200"></canvas>
 
-<div id="norm-modal" class="custom-modal">
-<div class="custom-modal-content">
-<button class="custom-modal-close" onclick="closeCustomNormModal()">✖</button>
-<h3 style="margin-top: 0; text-align: center; font-size: 16px;">Своя норма еды</h3>
-<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;"><div class="form-group" style="margin: 0;"><label>Ккал</label><input type="number" id="modal-calories" placeholder="2000"></div><div class="form-group" style="margin: 0;"><label>Белки</label><input type="number" id="modal-protein" placeholder="150"></div><div class="form-group" style="margin: 0;"><label>Жиры</label><input type="number" id="modal-fat" placeholder="70"></div><div class="form-group" style="margin: 0;"><label>Углев.</label><input type="number" id="modal-carbs" placeholder="200"></div></div>
-<button class="btn" style="margin-top: 15px;" onclick="saveCustomNormFromModal()">Сохранить</button>
-</div>
-</div>
+            <button onclick="showMainScreen()" class="secondary-btn">Вернуться</button>
+        </div>
+    </div>
 
-<div id="onboarding-modal" class="custom-modal">
-<div class="custom-modal-content">
-<h3 style="margin-top: 0; text-align: center; font-size: 18px; color: var(--accent-color);">Добро пожаловать! 🏆</h3>
-<p style="color: #8e8e93; font-size: 13px; text-align: center; margin-bottom: 15px;">Заполни свои данные для расчета нормы.</p>
-<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;"><div class="form-group" style="margin: 0;"><label>Возраст</label><input type="number" id="onboarding-age" placeholder="25"></div><div class="form-group" style="margin: 0;"><label>Вес (кг)</label><input type="number" id="onboarding-weight" placeholder="70" step="0.1"></div><div class="form-group" style="margin: 0;"><label>Рост (см)</label><input type="number" id="onboarding-height" placeholder="175"></div><div class="form-group" style="margin: 0;"><label>Пол</label><select id="onboarding-gender"><option value="male">Мужской</option><option value="female">Женский</option></select></div></div>
-<div class="form-group" style="margin-top: 10px;"><label>Цель</label><select id="onboarding-goal"><option value="lose">Похудеть</option><option value="gain">Набрать массу</option></select></div>
-<div class="form-group"><label>Предпочтения в еде</label><input type="text" id="onboarding-food-preference" placeholder="Напр: без лактозы, люблю рыбу"></div>
-<button class="btn" style="margin-top: 15px;" onclick="saveOnboardingData()">Сохранить и начать</button>
-</div>
-</div>
+    <script src="app.js"></script>
+    <script>
+        // Check for chess feature access
+        async function checkChessAccess() {
+            try {
+                const result = await supabase.rpc('has_feature', {
+                    p_user_id: currentUser?.id,
+                    p_feature: 'chess'
+                });
+                
+                const chessBtn = document.getElementById('chessBtn');
+                if (chessBtn) {
+                    chessBtn.style.display = result ? 'block' : 'none';
+                }
+            } catch (error) {
+                console.log('Chess feature check skipped:', error.message);
+            }
+        }
 
-<div id="challenge-modal" class="custom-modal">
-<div class="custom-modal-content" style="max-width: 420px; padding: 0; overflow: hidden;">
-<button class="custom-modal-close" onclick="closeChallengeModal()">✖</button>
-<iframe id="challenge-frame" style="width: 100%; height: 80vh; border: 0; display: block;"></iframe>
-</div>
-</div>
-<script>
-function openChallengeModal(){
-  if (localStorage.getItem('streakPendingReward') === 'true' && typeof claimStreakReward === 'function') {
-    claimStreakReward();
-  }
-  document.getElementById('challenge-frame').src = 'challenge.html?embed=1';
-  document.getElementById('challenge-modal').classList.add('active');
-}
-function closeChallengeModal(){
-  document.getElementById('challenge-modal').classList.remove('active');
-  document.getElementById('challenge-frame').src = '';
-  location.reload();
-}
-</script>
-
-<script src="quotes.js"></script>
-<script src="app.js"></script>
-<script>
-(function(){
-  var btn=document.getElementById('chess-nav-btn');
-  if(!btn||!window.supabase) return;
-  var key=localStorage.getItem('tgId')?'tg:'+localStorage.getItem('tgId'):null;
-  if(!key){
-    var em=localStorage.getItem('currentEmail')||localStorage.getItem('linkedEmail');
-    key=em?'email:'+em.toLowerCase():localStorage.getItem('arenaAnonId');
-  }
-  if(!key) return;
-  var c=window.supabase.createClient('https://qnpriwfxzuoymoumdtrl.supabase.co','sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF');
-  c.rpc('has_feature',{p_feature:'chess',p_key:key}).then(function(r){
-    if(!r.error && r.data===true) btn.style.display='';
-  });
-})();
-</script>
+        // Check chess access when user loads
+        document.addEventListener('userLoaded', checkChessAccess);
+    </script>
 </body>
 </html>
+```
