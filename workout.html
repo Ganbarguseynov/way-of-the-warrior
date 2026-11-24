@@ -14,7 +14,7 @@
 *{ -webkit-tap-highlight-color:transparent; box-sizing:border-box; }
 
 /* ================= НАСТРОЙКА ================= */
-.tabs{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:4px 0 18px; }
+.tabs{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin:4px 0 18px; }
 .tab{
   padding:13px; border-radius:12px;
   border:1px solid rgba(255,255,255,.14);
@@ -162,6 +162,50 @@
   color:#000; font-weight:800; font-size:13px; cursor:pointer;
 }
 .pl-status{ font-size:12px; color:#ff8a80; min-height:16px; margin-top:6px; }
+
+/* ================= СВОИ УПРАЖНЕНИЯ ================= */
+.field{ margin-bottom:12px; }
+.field label{
+  display:block; font-size:12px; color:#8e8e93;
+  margin-bottom:6px; font-weight:600;
+}
+.inp{
+  width:100%; padding:11px 12px; border-radius:11px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(0,0,0,.3); color:#fff;
+  font-size:14px; outline:none; min-width:0;
+}
+.inp::placeholder{ color:#5b5b60; }
+.c-row{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.c-row .c-main{
+  flex:1 1 auto; min-width:0; display:flex; align-items:center; gap:10px;
+  padding:8px 10px; border-radius:12px; text-align:left;
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.05); color:#fff; cursor:pointer;
+}
+.c-thumb{
+  flex:0 0 auto; width:40px; height:40px; border-radius:10px;
+  background:rgba(0,0,0,.35); overflow:hidden;
+  display:flex; align-items:center; justify-content:center; font-size:18px;
+}
+.c-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+.c-info{ min-width:0; }
+.c-info b{
+  display:block; font-size:14px; margin-bottom:2px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.c-info span{ font-size:11px; color:#8e8e93; }
+.mini{
+  flex:0 0 auto; width:40px; height:40px; border-radius:11px;
+  border:1px solid rgba(255,204,0,.4);
+  background:rgba(255,204,0,.12); color:#ffcc00;
+  font-size:16px; font-weight:800; cursor:pointer;
+}
+.mini:active{ background:rgba(255,204,0,.25); }
+.mini.del{
+  border-color:rgba(255,59,48,.35);
+  background:rgba(255,59,48,.12); color:#ff3b30;
+}
 
 /* ================= ЭКРАН ТАЙМЕРА ================= */
 .run{
@@ -314,6 +358,7 @@
 <div class="tabs">
   <button id="tabCardio" class="tab" onclick="setTab('cardio')">Кардио</button>
   <button id="tabTimer" class="tab on" onclick="setTab('timer')">Таймер</button>
+  <button id="tabCustom" class="tab" onclick="setTab('custom')">Свои</button>
 </div>
 
 <div id="paneCardio" class="pane">
@@ -394,6 +439,42 @@
   <div class="wk-sec">
     <div class="wk-sec-title">Мои таймеры</div>
     <div id="presetList"></div>
+  </div>
+</div>
+
+<div id="paneCustom" class="pane">
+  <div class="wk-sec">
+    <div class="wk-sec-title">Своё упражнение</div>
+    <div class="field">
+      <label>Название</label>
+      <input id="cName" class="inp" type="text" maxlength="40" placeholder="Например, Бёрпи">
+    </div>
+    <div class="field">
+      <label>Фото (ссылка, необязательно)</label>
+      <input id="cPhoto" class="inp" type="url" placeholder="https://...">
+    </div>
+    <div class="field">
+      <label>Мет (необязательно)</label>
+      <input id="cMet" class="inp" type="text" maxlength="20" placeholder="например, HIIT">
+    </div>
+    <div class="field">
+      <label>Таймер, в секундах (необязательно, по умолчанию текущие настройки)</label>
+      <div class="wk-custom" style="grid-template-columns:repeat(4,1fr)">
+        <input id="cPrep" class="inp" type="number" min="0" inputmode="numeric" placeholder="подг.">
+        <input id="cWork" class="inp" type="number" min="0" inputmode="numeric" placeholder="работа">
+        <input id="cRest" class="inp" type="number" min="0" inputmode="numeric" placeholder="отдых">
+        <input id="cRounds" class="inp" type="number" min="1" inputmode="numeric" placeholder="подходы">
+      </div>
+    </div>
+    <button class="wk-start" id="btn-main" onclick="saveCustom()">Сохранить упражнение</button>
+    <div class="pl-status" id="customStatus"></div>
+  </div>
+
+  <div class="wk-sec">
+    <div class="wk-sec-title">Мои упражнения</div>
+    <div class="wk-hint">▶ — запустить одно упражнение. ▶▶ — запустить весь список подряд (с отдыхом между упражнениями).</div>
+    <button class="wk-start" onclick="startList()">▶▶ Запустить весь список</button>
+    <div id="customList"></div>
   </div>
 </div>
 </div>
@@ -499,7 +580,7 @@ const sb = supabase.createClient(
   'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF'
 );
 
-const EXERCISE = null;
+let EXERCISE = null;
 const XP_PER_ROUND = 15;
 const XP_BONUS = 20;
 const PREP_OPTIONS = [3, 5, 6, 10, 15];
@@ -548,6 +629,9 @@ const cfg = {
 let presets = [];
 try { presets = JSON.parse(localStorage.getItem('wkPresets11') || '[]'); } catch (e) { presets = []; }
 
+let custom = [];
+try { custom = JSON.parse(localStorage.getItem('wkCustom11') || '[]'); } catch (e) { custom = []; }
+
 let phase = 'prep';
 let round = 1;
 let totalMs = 0;
@@ -561,6 +645,11 @@ let soundOn = localStorage.getItem('wkSound') !== 'off';
 let wakeLock = null;
 let locked = false;
 let restEndFired = false;
+
+/* очередь для варианта Б: список упражнений подряд */
+let queue = [];
+let queueIndex = 0;
+let queueTotalXP = 0;
 
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2, '0');
@@ -697,8 +786,10 @@ function fireRestEnd(){
 function setTab(which){
   $('tabCardio').classList.toggle('on', which === 'cardio');
   $('tabTimer').classList.toggle('on', which === 'timer');
+  $('tabCustom').classList.toggle('on', which === 'custom');
   $('paneCardio').classList.toggle('on', which === 'cardio');
   $('paneTimer').classList.toggle('on', which === 'timer');
+  $('paneCustom').classList.toggle('on', which === 'custom');
 }
 
 function fmtSec(sec){
@@ -866,6 +957,164 @@ function deletePreset(i){
   renderPresets();
 }
 
+/* ================= СВОИ УПРАЖНЕНИЯ ================= */
+
+function setCustomStatus(text){
+  $('customStatus').textContent = text || '';
+}
+
+function readTimer(){
+  const v = function(id, def){
+    const n = parseInt($(id).value, 10);
+    return n > 0 ? n : def;
+  };
+  return {
+    prep: v('cPrep', cfg.prep),
+    work: v('cWork', cfg.work),
+    rest: v('cRest', cfg.rest),
+    rounds: v('cRounds', cfg.rounds)
+  };
+}
+
+function saveCustom(){
+  const name = $('cName').value.trim();
+  if (!name){ setCustomStatus('Введите название упражнения'); return; }
+  const photo = $('cPhoto').value.trim();
+  const met = $('cMet').value.trim();
+  const timer = readTimer();
+  custom.push({
+    id: 'c' + Date.now() + Math.floor(Math.random() * 1000),
+    name: name,
+    photo: photo,
+    met: met,
+    timer: timer
+  });
+  localStorage.setItem('wkCustom11', JSON.stringify(custom));
+  $('cName').value = '';
+  $('cPhoto').value = '';
+  $('cMet').value = '';
+  $('cPrep').value = '';
+  $('cWork').value = '';
+  $('cRest').value = '';
+  $('cRounds').value = '';
+  setCustomStatus('Упражнение «' + name + '» сохранено');
+  renderCustom();
+}
+
+function renderCustom(){
+  const box = $('customList');
+  box.innerHTML = '';
+  if (custom.length === 0){
+    const e = document.createElement('div');
+    e.className = 'pl-empty';
+    e.textContent = 'Пока пусто. Заполните форму выше и нажмите «Сохранить упражнение».';
+    box.appendChild(e);
+    return;
+  }
+  custom.forEach(function(c){
+    const row = document.createElement('div');
+    row.className = 'c-row';
+
+    const main = document.createElement('button');
+    main.className = 'c-main';
+    main.onclick = function(){ startCustom(c.id); };
+
+    const thumb = document.createElement('div');
+    thumb.className = 'c-thumb';
+    if (c.photo){
+      const img = document.createElement('img');
+      img.src = c.photo;
+      img.alt = '';
+      img.onerror = function(){ thumb.textContent = '🏋️'; };
+      thumb.appendChild(img);
+    } else {
+      thumb.textContent = '🏋️';
+    }
+
+    const info = document.createElement('div');
+    info.className = 'c-info';
+    const b = document.createElement('b');
+    b.textContent = c.name;
+    const s = document.createElement('span');
+    const t = c.timer || {};
+    s.textContent = (c.met ? c.met + ' · ' : '') +
+      (t.rounds || cfg.rounds) + ' ' + word(t.rounds || cfg.rounds) +
+      ' · ' + fmtSec(t.work || cfg.work) + ' / ' + fmtSec(t.rest || cfg.rest);
+    info.appendChild(b);
+    info.appendChild(s);
+
+    main.appendChild(thumb);
+    main.appendChild(info);
+
+    const play = document.createElement('button');
+    play.className = 'mini';
+    play.textContent = '▶';
+    play.setAttribute('aria-label', 'Запустить таймер');
+    play.onclick = function(){ startCustom(c.id); };
+
+    const del = document.createElement('button');
+    del.className = 'mini del';
+    del.textContent = '✕';
+    del.setAttribute('aria-label', 'Удалить');
+    del.onclick = function(){ deleteCustom(c.id); };
+
+    row.appendChild(main);
+    row.appendChild(play);
+    row.appendChild(del);
+    box.appendChild(row);
+  });
+}
+
+function deleteCustom(id){
+  const i = custom.findIndex(function(x){ return x.id === id; });
+  if (i < 0) return;
+  if (!confirm('Удалить упражнение «' + custom[i].name + '»?')) return;
+  custom.splice(i, 1);
+  localStorage.setItem('wkCustom11', JSON.stringify(custom));
+  renderCustom();
+}
+
+function applyTimerToCfg(t){
+  cfg.prep = t.prep || cfg.prep;
+  cfg.work = t.work || cfg.work;
+  cfg.rest = t.rest || cfg.rest;
+  cfg.rounds = t.rounds || cfg.rounds;
+  saveCfg();
+  $('roundsInput').value = cfg.rounds;
+  renderChips();
+  updateSummary();
+}
+
+function startCustom(id){
+  const c = custom.find(function(x){ return x.id === id; });
+  if (!c) return;
+  queue = [];
+  queueIndex = 0;
+  queueTotalXP = 0;
+  applyTimerToCfg(c.timer || {});
+  startSession({ name: c.name, photo: c.photo || null });
+}
+
+function startList(){
+  if (custom.length === 0){
+    tg.showAlert('Сначала добавьте хотя бы одно упражнение');
+    return;
+  }
+  queue = custom.slice();
+  queueIndex = 0;
+  queueTotalXP = 0;
+  runNextInQueue();
+}
+
+function runNextInQueue(){
+  if (queueIndex >= queue.length){ return; }
+  const c = queue[queueIndex];
+  applyTimerToCfg(c.timer || {});
+  startSession({ name: c.name, photo: c.photo || null });
+}
+
+/* ================= ОБЩИЕ ФУНКЦИИ ================= */
+
 async function addXP(delta){
   const tgId = localStorage.getItem('tgId');
   const email = localStorage.getItem('currentEmail') || localStorage.getItem('linkedEmail');
@@ -931,6 +1180,8 @@ function exitSession(){
   stopAllClips();
   releaseWake();
   locked = false;
+  queue = [];
+  queueIndex = 0;
   $('lockOverlay').classList.remove('show');
   updateLockIcon();
   $('run').classList.remove('show');
@@ -948,7 +1199,8 @@ function renderExercise(){
     : '';
 }
 
-function startSession(){
+function startSession(ex){
+  EXERCISE = ex || null;
   ac();
   finished = false;
   locked = false;
@@ -1141,6 +1393,20 @@ function finishSession(){
 
   xpEarned += XP_BONUS;
   awardXP(XP_BONUS);
+  queueTotalXP += xpEarned;
+
+  /* Вариант Б: если есть очередь — идём к следующему упражнению */
+  if (queue.length > 0 && queueIndex < queue.length - 1){
+    queueIndex++;
+    $('run').classList.remove('show');
+    $('finish').classList.remove('show');
+    setTimeout(function(){ runNextInQueue(); }, 400);
+    return;
+  }
+
+  const isQueueDone = queue.length > 0;
+  queue = [];
+  queueIndex = 0;
 
   try {
     const a = new Audio('12. Scroll Win 02.mp3');
@@ -1150,8 +1416,10 @@ function finishSession(){
 
   const total = cfg.prep + cfg.rounds * cfg.work + (cfg.rounds - 1) * cfg.rest;
   $('finStats').innerHTML =
+    (EXERCISE ? EXERCISE.name + '<br>' : '') +
+    (isQueueDone ? 'Список из ' + (queueTotalXP ? '' : '') : '') +
     cfg.rounds + ' ' + word(cfg.rounds) + ' · ≈ ' + Math.round(total / 60) + ' мин';
-  $('finXp').textContent = '+' + xpEarned + ' XP';
+  $('finXp').textContent = '+' + queueTotalXP + ' XP';
 
   let q = { text: 'Ты не проиграл, пока не остановился.', author: 'Майк Тайсон' };
   if (typeof allQuotes !== 'undefined' && allQuotes.length){
@@ -1184,6 +1452,7 @@ function goBackToMain(){
 $('roundsInput').value = cfg.rounds;
 $('roundsInput').addEventListener('change', function(){ setRounds(this.value); });
 renderPresets();
+renderCustom();
 renderChips();
 updateSummary();
 updateSoundIcon();
