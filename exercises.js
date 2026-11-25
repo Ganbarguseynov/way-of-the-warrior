@@ -68,20 +68,21 @@
   var PROFILE_GETTERS = ['currentProfileData', 'cachedProfile', 'profileData', 'currentProfile'];
 
   function getProfile() {
+    try {
+      if (typeof currentProfileData !== 'undefined' && currentProfileData && typeof currentProfileData === 'object') {
+        return currentProfileData;
+      }
+    } catch (e) { /* app.js ещё не инициализировал переменную */ }
     for (var i = 0; i < PROFILE_GETTERS.length; i++) {
       var p = window[PROFILE_GETTERS[i]];
       if (p && typeof p === 'object' && !Array.isArray(p)) return p;
     }
+    try {
+      var c = JSON.parse(localStorage.getItem('cachedProfile') || 'null');
+      if (c && typeof c === 'object' && !Array.isArray(c)) return c;
+    } catch (e) { /* повреждённый JSON */ }
     return null;
   }
-
-  /* Функции сохранения, которые может экспортировать app.js.
-     Вызываем только те, что не требуют аргументов — чтобы не сломать подпись. */
-  var SAVE_FNS = [
-    'saveProfile', 'saveProfileData', 'persistProfile', 'persistProfileData',
-    'syncProfile', 'pushProfile', 'saveCurrentProfile', 'updateProfileData',
-    'saveUserProfile', 'syncToSupabase', 'saveProfileToSupabase', 'pushToCloud'
-  ];
 
   function persist(silent) {
     var p = getProfile();
@@ -89,32 +90,18 @@
 
     try { localStorage.setItem(LS.draft, JSON.stringify({
       ts: Date.now(), profile: p
-    })); } catch (e) { /* quota */ }
-
-    var called = [];
-    for (var i = 0; i < SAVE_FNS.length; i++) {
-      var name = SAVE_FNS[i];
-      var fn = window[name];
-      if (typeof fn !== 'function') continue;
-      if (fn.length > 0) continue;            // требует аргументов — не трогаем
-      try {
-        var r = fn();
-        if (r && typeof r.catch === 'function') {
-          r.catch(function (err) { console.warn('[SRX] cloud save rejected:', err && err.message); });
-        }
-        called.push(name);
-      } catch (e) {
-        console.warn('[SRX] save fn "' + name + '" failed:', e && e.message);
-      }
+    })); } catch (e) {
+      toast('Не хватает места в памяти телефона: видео упражнения не сохранилось. Выбери файл поменьше.');
+      return false;
     }
 
+    try { localStorage.setItem('cachedProfile', JSON.stringify(p)); } catch (e) { /* quota */ }
+
+    /* Облако: app.js слушает srx:profile-changed и сохраняет профиль с дебаунсом.
+       Прямой вызов saveProgressToCloud здесь не нужен: он давал гонку запросов. */
     try {
-      window.dispatchEvent(new CustomEvent('srx:profile-changed', { detail: { fns: called } }));
+      window.dispatchEvent(new CustomEvent('srx:profile-changed', { detail: { source: 'trainer' } }));
     } catch (e) {}
-
-    if (!silent && !called.length) {
-      toast('Локально сохранено. Облачная синхронизация — при следующем сохранении профиля.');
-    }
     return true;
   }
 
@@ -187,7 +174,8 @@
       return {
         id: e.id, name: e.name, group: e.group || 'Всё тело',
         met: num(e.met) || 5, icon: e.icon || '⭐',
-        photo: e.photo || null, note: e.note || '', custom: true
+        photo: e.photo || null, video: e.video || null, note: e.note || '',
+        mode: e.mode, timeSec: num(e.timeSec) || 0, reps: num(e.reps) || 0, custom: true
       };
     });
     return BUILTIN.map(function (e) {
@@ -495,7 +483,11 @@
     '.srx-dash-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:10px;',
     'background:#182230;border:1px solid #26323f;color:#e8eef5;font-size:13px;font-weight:600;',
     'cursor:pointer;font-family:inherit}',
-    '.srx-dash-btn:active{transform:scale(.97)}'
+    '.srx-dash-btn:active{transform:scale(.97)}',
+    '.srx-emoji-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:6px}',
+    '.srx-emoji-btn{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:22px;',
+    'background:#141d26;border:1px solid #26323f;border-radius:11px;cursor:pointer}',
+    '.srx-emoji-btn.on{border-color:#f97316;background:#2a1a0e}'
   ].join('');
 
   function injectCSS() {
@@ -552,6 +544,7 @@
     bodyEl = $('[data-ref="body"]', root);
 
     root.addEventListener('click', onClick);
+    root.addEventListener('input', onInput);
   }
 
   function openRoot(view, params) {
@@ -602,6 +595,7 @@
     if (v === 'lists') return renderLists();
     if (v === 'library') return renderLibrary();
     if (v === 'listEdit') return renderListEdit(state.params.id);
+    if (v === 'community') return renderCommunity();
     if (v === 'run') return renderRun();
     if (v === 'analysis') return renderAnalysis();
     if (v === 'session') return renderSession(state.params.id);
@@ -621,15 +615,27 @@
       '<div><span>Списков</span><b>' + lists.length + '</b></div>' +
       '</div>';
 
-    html += '<div class="srx-row" style="margin-bottom:12px">' +
+    html += '<div class="srx-row" style="margin-bottom:8px">' +
       '<button class="srx-btn primary srx-grow" data-act="newList">＋ Создать свою тренировку</button>' +
+      '</div>' +
+      '<div class="srx-row" style="margin-bottom:12px">' +
+      '<button class="srx-btn ghost srx-grow" data-act="openCommunity">🌍 Тренировки сообщества</button>' +
       '</div>';
+    if (lists.length) {
+      html += '<input class="srx-input" data-ref="listsQ" placeholder="Поиск по моим тренировкам" value="' +
+        esc(listsQuery) + '" style="margin-bottom:12px">';
+    }
 
     if (!lists.length) {
       html += '<div class="srx-empty">Списков пока нет.<br>Создай первый — и добавь в него упражнения из библиотеки.</div>';
     } else {
       html += '<div class="srx-card"><h3>Мои списки</h3>';
-      lists.forEach(function (l) {
+      var lq = listsQuery.trim().toLowerCase();
+      var shown = lists.filter(function (l) {
+        return !lq || String(l.name || '').toLowerCase().indexOf(lq) !== -1;
+      });
+      if (!shown.length) html += '<div class="srx-muted" style="padding:8px 0">Ничего не найдено.</div>';
+      shown.forEach(function (l) {
         var count = (l.items || []).length;
         var totalMin = (l.items || []).reduce(function (a, it) {
           var sets = num(it.sets) || 1;
@@ -674,6 +680,41 @@
   /* ==========================================================================
      13. ЭКРАН: РЕДАКТОР СПИСКА
      ========================================================================== */
+  function renderCommunity() {
+    setTitle('Сообщество');
+    var q = state.params.q || '';
+    bodyEl.innerHTML = '<div class="srx-card">' +
+      '<button class="srx-btn ghost sm" data-act="lists" style="margin-bottom:12px">← Назад</button>' +
+      '<label class="srx-label">Поиск по названию или автору</label>' +
+      '<div class="srx-row">' +
+        '<input class="srx-input srx-grow" data-ref="commQ" value="' + esc(q) + '" placeholder="Например: Ноги">' +
+        '<button class="srx-btn primary" data-act="commSearch">Найти</button>' +
+      '</div></div>' +
+      '<div id="commResults" class="srx-muted" style="padding:12px 0">Загрузка…</div>';
+
+    var box = $('#commResults', bodyEl);
+    SRXCommunity.search(q).then(function (res) {
+      if (state.view !== 'community' || !box) return;
+      if (!res.rows.length) { box.innerHTML = '<div class="srx-empty">Ничего не найдено. Попробуй другое название.</div>'; return; }
+      box.innerHTML = res.rows.map(function (w) {
+        var mine = res.mine[w.id] || 0;
+        var n = (w.items || []).length;
+        var id = esc(w.id);
+        return '<div class="srx-card"><h3>' + esc(w.title) + '</h3>' +
+          '<div class="srx-sub">Автор: ' + esc(w.author_name) + ' · ' + n + ' упр. · рейтинг ' + w.score + '</div>' +
+          '<div class="srx-row" style="margin-top:10px">' +
+            '<button class="srx-btn sm ' + (mine === 1 ? 'green' : 'ghost') + '" data-act="commVote" data-id="' + id +
+              '" data-v="1" data-cur="' + mine + '">👍 ' + w.likes + '</button>' +
+            '<button class="srx-btn sm ' + (mine === -1 ? 'danger' : 'ghost') + '" data-act="commVote" data-id="' + id +
+              '" data-v="-1" data-cur="' + mine + '">👎 ' + w.dislikes + '</button>' +
+            '<button class="srx-btn sm primary srx-grow" data-act="commImport" data-id="' + id + '">＋ В мои</button>' +
+          '</div></div>';
+      }).join('');
+    }).catch(function (err) {
+      if (box) box.innerHTML = '<div class="srx-empty">Не удалось загрузить: ' + esc(err && err.message || 'ошибка') + '</div>';
+    });
+  }
+
   function renderListEdit(id) {
     var lists = workoutLists();
     var list = null;
@@ -704,19 +745,40 @@
           ? '<img class="srx-thumb" src="' + ex.photo + '" alt="">'
           : '<div class="srx-thumb">' + (ex ? ex.icon : '⭐') + '</div>';
 
+        var mode = it.mode === 'reps' || it.mode === 'both' ? it.mode : 'time';
+        var hasTimer = mode !== 'reps';
+        var hasReps = mode !== 'time';
         html += '<div class="srx-list-item" style="align-items:flex-start;flex-wrap:wrap">' +
           thumb +
           '<div class="srx-grow">' +
             '<div class="srx-name">' + esc(it.name || (ex && ex.name) || 'Упражнение') + '</div>' +
+            '<select class="srx-select" style="margin-top:8px;padding:7px 8px" data-act="itemField" data-id="' +
+              esc(list.id) + '" data-idx="' + idx + '" data-field="mode">' +
+              '<option value="time"' + (mode === 'time' ? ' selected' : '') + '>⏱ По таймеру</option>' +
+              '<option value="reps"' + (mode === 'reps' ? ' selected' : '') + '>🔢 По количеству</option>' +
+              '<option value="both"' + (mode === 'both' ? ' selected' : '') + '>⏱🔢 Таймер и количество</option>' +
+            '</select>' +
             '<div class="srx-grid3" style="margin-top:8px">' +
               '<div><div class="srx-muted" style="font-size:10.5px">ПОДХОДЫ</div>' +
                 '<input class="srx-input" style="padding:7px 8px" type="number" min="1" max="20" ' +
                 'data-act="itemField" data-id="' + esc(list.id) + '" data-idx="' + idx + '" data-field="sets" ' +
                 'value="' + (num(it.sets) || 3) + '"></div>' +
-              '<div><div class="srx-muted" style="font-size:10.5px">РАБОТА, с</div>' +
-                '<input class="srx-input" style="padding:7px 8px" type="number" min="5" max="1200" step="5" ' +
-                'data-act="itemField" data-id="' + esc(list.id) + '" data-idx="' + idx + '" data-field="timeSec" ' +
-                'value="' + (num(it.timeSec) || 40) + '"></div>' +
+              '<div><div class="srx-muted" style="font-size:10.5px">ПОДГОТОВКА, с</div>' +
+                '<input class="srx-input" style="padding:7px 8px" type="number" min="0" max="300" step="5" ' +
+                'data-act="itemField" data-id="' + esc(list.id) + '" data-idx="' + idx + '" data-field="prepSec" ' +
+                'value="' + (it.prepSec === undefined ? 5 : num(it.prepSec)) + '"></div>' +
+              (hasTimer
+                ? '<div><div class="srx-muted" style="font-size:10.5px">ТАЙМЕР, с</div>' +
+                  '<input class="srx-input" style="padding:7px 8px" type="number" min="5" max="1200" step="5" ' +
+                  'data-act="itemField" data-id="' + esc(list.id) + '" data-idx="' + idx + '" data-field="timeSec" ' +
+                  'value="' + (num(it.timeSec) || 40) + '"></div>'
+                : '') +
+              (hasReps
+                ? '<div><div class="srx-muted" style="font-size:10.5px">ПОВТОРЫ</div>' +
+                  '<input class="srx-input" style="padding:7px 8px" type="number" min="1" max="500" ' +
+                  'data-act="itemField" data-id="' + esc(list.id) + '" data-idx="' + idx + '" data-field="reps" ' +
+                  'value="' + (num(it.reps) || 10) + '"></div>'
+                : '') +
               '<div><div class="srx-muted" style="font-size:10.5px">ОТДЫХ, с</div>' +
                 '<input class="srx-input" style="padding:7px 8px" type="number" min="0" max="600" step="5" ' +
                 'data-act="itemField" data-id="' + esc(list.id) + '" data-idx="' + idx + '" data-field="restSec" ' +
@@ -731,10 +793,12 @@
     html += '<button class="srx-btn ghost" style="width:100%;margin-top:12px" data-act="pickerOpen" data-id="' +
       esc(list.id) + '">＋ Добавить упражнение</button></div>';
 
-    html += '<div class="srx-row" style="margin-bottom:20px">' +
+    html += '<div class="srx-row" style="margin-bottom:12px">' +
       '<button class="srx-btn green srx-grow" data-act="startList" data-id="' + esc(list.id) + '">▶ Начать</button>' +
       '<button class="srx-btn danger" data-act="delList" data-id="' + esc(list.id) + '">Удалить</button>' +
-      '</div>';
+      '</div>' +
+      '<button class="srx-btn ghost" style="width:100%;margin-bottom:20px" data-act="publishList" data-id="' +
+      esc(list.id) + '">🌍 Опубликовать в сообщество</button>';
 
     bodyEl.innerHTML = html;
   }
@@ -743,12 +807,69 @@
      14. ЭКРАН: БИБЛИОТЕКА УПРАЖНЕНИЙ
      ========================================================================== */
   var libFilter = 'Все';
+  var libQuery = '';
+  var listsQuery = '';
+
+  function getBasket() {
+    try {
+      var b = JSON.parse(localStorage.getItem('srx_basket') || '[]');
+      return Array.isArray(b) ? b : [];
+    } catch (e) { return []; }
+  }
+
+  function setBasket(b) {
+    try { localStorage.setItem('srx_basket', JSON.stringify(b)); } catch (e) {}
+  }
+
+  function basketToList() {
+    var pr = profileData();
+    var items = basketItems(getBasket());
+    if (!pr || !items.length) return;
+    var list = { id: uid(), name: '', items: items, createdAt: new Date().toISOString() };
+    pr[K.lists].push(list);
+    persist(true);
+    setBasket([]);
+    toast('Комплекс собран — дай ему название');
+    go('listEdit', { id: list.id });
+  }
+
+  function basketItems(ids) {
+    var out = [];
+    ids.forEach(function (id) {
+      var ex = findExercise(id);
+      if (!ex) return;
+      var d = exDefaults(ex);
+      out.push({
+        exId: ex.id, name: ex.name, mode: d.mode, sets: d.sets, prepSec: d.prepSec,
+        timeSec: d.timeSec, reps: d.reps, restSec: d.restSec
+      });
+    });
+    return out;
+  }
+
+  function basketToExisting(listId) {
+    var pr = profileData();
+    var items = basketItems(getBasket());
+    if (!pr || !items.length) return;
+    pr[K.lists].forEach(function (l) {
+      if (l.id !== listId) return;
+      if (!Array.isArray(l.items)) l.items = [];
+      items.forEach(function (it) { l.items.push(it); });
+    });
+    persist(true);
+    setBasket([]);
+    closeSheet();
+    toast('Упражнения добавлены в тренировку');
+    go('listEdit', { id: listId });
+  }
 
   function renderLibrary() {
     setTitle('Упражнения');
     var all = allExercises();
     var groups = ['Все'].concat(MUSCLES);
-    var filtered = libFilter === 'Все' ? all : all.filter(function (e) { return e.group === libFilter; });
+    var qq = libQuery.trim().toLowerCase();
+    var filtered = (libFilter === 'Все' ? all : all.filter(function (e) { return e.group === libFilter; }))
+      .filter(function (e) { return !qq || String(e.name).toLowerCase().indexOf(qq) !== -1; });
 
     var html = '<div class="srx-chips">';
     groups.forEach(function (g) {
@@ -758,6 +879,19 @@
         esc(g) + '">' + esc(g) + '</button>';
     });
     html += '</div>';
+
+    var basket = getBasket();
+    if (basket.length) {
+      html += '<div class="srx-card" style="margin-bottom:12px"><div class="srx-name">🧺 В корзине: ' + basket.length + '</div>' +
+        '<div class="srx-sub" style="margin:4px 0 10px">Собери из них комплекс, добавь в существующую тренировку или начни сразу</div>' +
+        '<div class="srx-row" style="margin-bottom:8px"><button class="srx-btn primary srx-grow" data-act="basketMake">Собрать комплекс</button>' +
+        '<button class="srx-btn ghost srx-grow" data-act="basketToExisting">В существующую</button></div>' +
+        '<div class="srx-row"><button class="srx-btn green srx-grow" data-act="basketStart">▶ Начать сразу</button>' +
+        '<button class="srx-btn ghost" data-act="basketClear">Очистить</button></div></div>';
+    }
+
+    html += '<input class="srx-input" data-ref="libQ" placeholder="Поиск упражнения" value="' + esc(libQuery) +
+      '" style="margin-bottom:10px">';
 
     html += '<button class="srx-btn primary" style="width:100%;margin:4px 0 14px" data-act="newExercise">' +
       '＋ Своё упражнение с фото</button>';
@@ -773,6 +907,10 @@
           '<div class="srx-name" style="font-size:13.5px">' + esc(e.name) + '</div>' +
           '<div class="srx-sub">' + esc(e.group) + ' · MET ' + e.met +
             (e.custom ? ' · своё' : '') + '</div>' +
+        '<div class="srx-row" style="margin-top:6px;gap:6px">' +
+          '<button class="srx-btn sm" data-act="basketAdd" data-id="' + esc(e.id) + '">🧺 ＋ в корзину</button>' +
+          '<button class="srx-btn sm green" data-act="startSingle" data-id="' + esc(e.id) + '">▶ Начать</button>' +
+        '</div>' +
         '</div></div>';
     });
     html += '</div>';
@@ -789,34 +927,42 @@
     startedAt: null, tick: null, restAfterLast: false
   };
 
+  function trainerItems(list) {
+    return (list.items || []).map(function (it) {
+      var ex = findExercise(it.exId);
+      return {
+        name: it.name || (ex && ex.name) || 'Упражнение',
+        icon: ex ? ex.icon : '⭐',
+        photo: ex ? ex.photo : null,
+        video: ex ? ex.video : null,
+        mode: it.mode === 'reps' || it.mode === 'both' ? it.mode : 'time',
+        sets: Math.max(1, num(it.sets) || 1),
+        prepSec: it.prepSec === undefined ? 5 : Math.max(0, num(it.prepSec)),
+        timeSec: Math.max(5, num(it.timeSec) || 40),
+        reps: Math.max(1, num(it.reps) || 10),
+        restSec: Math.max(0, num(it.restSec))
+      };
+    });
+  }
+
   function startWorkout(listId) {
     var lists = workoutLists();
     var list = null;
     for (var i = 0; i < lists.length; i++) if (lists[i].id === listId) list = lists[i];
     if (!list) { toast('Список не найден'); return; }
     if (!(list.items || []).length) { toast('В списке нет упражнений'); return; }
+    runItems(list.name, list.items);
+  }
 
-    T.items = list.items.map(function (it) {
-      var ex = findExercise(it.exId);
-      return {
-        exId: it.exId, name: it.name || (ex && ex.name) || 'Упражнение',
-        met: ex ? ex.met : 5, icon: ex ? ex.icon : '⭐', photo: ex ? ex.photo : null,
-        sets: Math.max(1, num(it.sets) || 1),
-        timeSec: Math.max(5, num(it.timeSec) || 40),
-        restSec: Math.max(0, num(it.restSec) || 20)
-      };
-    });
-    T.listId = list.id;
-    T.listName = list.name || 'Тренировка';
-    T.idx = 0; T.set = 1;
-    T.startedAt = new Date().toISOString();
-    T.active = true;
-    T.phase = 'prep';
-    T.total = 10;
-    T.left = 10;
-    go('run');
-    startTick();
-    beep(660, 120);
+  function runItems(name, rawItems) {
+    var items = trainerItems({ items: rawItems });
+    try {
+      localStorage.setItem('wkTrainerRun', JSON.stringify({ name: name || 'Тренировка', items: items }));
+    } catch (e) {
+      toast('Не хватает места: удали большие фото или видео');
+      return;
+    }
+    window.location.href = 'workout.html?trainer=1';
   }
 
   function startTick() {
@@ -827,10 +973,16 @@
 
   function tickFn() {
     if (!T.active) return;
+    if (T.phase === 'work' && isRepsItem(T.items[T.idx])) { paintTimer(); return; }
     T.left--;
     if (T.left <= 0) advancePhase();
     paintTimer();
   }
+
+  function isRepsItem(it) { return !!it && it.mode === 'reps'; }
+  function hasTimerItem(it) { return !!it && it.mode !== 'reps'; }
+  function hasRepsItem(it) { return !!it && it.mode !== 'time'; }
+  function workSecOf(it) { return isRepsItem(it) ? it.reps * 3 : it.timeSec; }
 
   function advancePhase() {
     if (T.phase === 'prep') { enterWork(); return; }
@@ -867,7 +1019,8 @@
   function enterWork() {
     var cur = T.items[T.idx];
     T.phase = 'work';
-    T.total = cur.timeSec;
+    T.count = 0;
+    T.total = isRepsItem(cur) ? 0 : cur.timeSec;
     T.left = cur.timeSec;
     beep(980, 200);
   }
@@ -879,11 +1032,12 @@
     var kg = userWeight();
     var workSeconds = 0, kcal = 0;
     var detail = T.items.map(function (it) {
-      var sec = it.sets * it.timeSec;
+      var sec = it.sets * workSecOf(it);
       workSeconds += sec;
       var k = kcalFor(it.met, sec / 60, kg);
       kcal += k;
-      return { exId: it.exId, name: it.name, sets: it.sets, timeSec: it.timeSec, kcal: round1(k) };
+      return { exId: it.exId, name: it.name, mode: it.mode, sets: it.sets,
+        timeSec: hasTimerItem(it) ? it.timeSec : 0, reps: hasRepsItem(it) ? it.reps : 0, kcal: round1(k) };
     });
 
     var durSec = T.startedAt ? Math.round((Date.now() - new Date(T.startedAt).getTime()) / 1000) : workSeconds;
@@ -952,7 +1106,9 @@
       '</div>';
 
     html += '<div class="srx-row" style="margin-bottom:12px">' +
-      '<button class="srx-btn srx-grow" data-act="skipPhase">Пропустить →</button>' +
+      (hasRepsItem(cur) && T.phase === 'work'
+        ? '<button class="srx-btn primary srx-grow" data-ref="act" data-act="repsDone">Готово ✓</button>'
+        : '<button class="srx-btn srx-grow" data-ref="act" data-act="skipPhase">Пропустить →</button>') +
       '<button class="srx-btn danger" data-act="abortRun">Стоп</button>' +
       '</div>';
 
@@ -965,7 +1121,8 @@
         '<div class="srx-grow">' +
           '<div class="srx-name"' + (active ? ' style="color:#f97316"' : '') + '>' +
             esc(it.name) + '</div>' +
-          '<div class="srx-sub">' + it.sets + ' × ' + it.timeSec + ' с · отдых ' + it.restSec + ' с</div>' +
+          '<div class="srx-sub">' + it.sets + ' × ' + (it.mode === 'both' ? it.timeSec + ' с или ' + it.reps + ' повт.' : isRepsItem(it) ? it.reps + ' повт.' : it.timeSec + ' с') +
+            ' · отдых ' + it.restSec + ' с</div>' +
         '</div>' +
         (done ? '<div class="srx-sub">✓</div>' : '') +
         '</div>';
@@ -991,7 +1148,8 @@
       var nxt = (T.set < cur.sets) ? cur : (T.items[T.idx + 1] || null);
       return nxt ? 'Далее: ' + esc(nxt.name) : '';
     }
-    return 'Подход ' + T.set + ' из ' + cur.sets + ' · ' + (T.idx + 1) + '/' + T.items.length;
+    var countTxt = cur.mode === 'both' && T.phase === 'work' ? ' · повторы ' + (T.count || 0) + '/' + cur.reps : '';
+    return 'Подход ' + T.set + ' из ' + cur.sets + ' · ' + (T.idx + 1) + '/' + T.items.length + countTxt;
   }
 
   function paintTimer() {
@@ -1006,7 +1164,21 @@
       ph.textContent = phaseText();
       ph.className = 'srx-phase' + (T.phase === 'rest' ? ' rest' : T.phase === 'prep' ? ' prep' : T.phase === 'done' ? ' done' : '');
     }
-    if (cl) cl.textContent = T.phase === 'done' ? 'ГОТОВО' : mmss(T.left);
+    var curItem = T.items[T.idx];
+    var act = $('[data-ref="act"]', bodyEl);
+    if (act) {
+      var repsNow = T.phase === 'work' && hasRepsItem(curItem);
+      act.setAttribute('data-act', repsNow ? 'repsDone' : 'skipPhase');
+      act.className = 'srx-btn srx-grow' + (repsNow ? ' primary' : '');
+      act.textContent = !repsNow ? 'Пропустить →'
+        : hasTimerItem(curItem) ? '+1 повтор (' + (T.count || 0) + '/' + curItem.reps + ')'
+        : 'Готово ✓';
+    }
+    if (cl) {
+      if (T.phase === 'done') cl.textContent = 'ГОТОВО';
+      else if (T.phase === 'work' && isRepsItem(curItem)) cl.textContent = '× ' + curItem.reps;
+      else cl.textContent = mmss(T.left);
+    }
     if (bar) {
       var pct = T.total > 0 ? clamp((1 - T.left / T.total) * 100, 0, 100) : 0;
       bar.style.width = pct + '%';
@@ -1347,7 +1519,8 @@
       modalEl.innerHTML = '<div class="srx-sheet" data-ref="sheet"></div>';
       document.body.appendChild(modalEl);
       modalEl.addEventListener('click', function (e) {
-        if (e.target === modalEl) closeSheet();
+        if (e.target === modalEl) { closeSheet(); return; }
+        onClick(e);
       });
     }
     var sheet = $('[data-ref="sheet"]', modalEl);
@@ -1400,10 +1573,33 @@
   }
 
   /* --- форма своего упражнения --- */
-  var pendingPhoto = null;
+  var SPORT_ICONS = ['🏋️', '🤸', '🏃', '🚴', '🏊', '🥊', '🧘', '🤾', '🏀', '⚽', '🏐', '🎾',
+    '🥋', '🤺', '🧗', '🚣', '🏇', '⛹️', '🤼', '🏌️', '🛹', '🏹', '💪', '🦵', '🔥', '⚡', '🥇', '🎯'];
+  var pendingIcon = SPORT_ICONS[0];
+
+  var pendingMedia = null;
+
+  function exDefaults(ex) {
+    var isCardio = ex.group === 'Кардио';
+    return {
+      mode: ex.mode === 'reps' || ex.mode === 'both' ? ex.mode : 'time',
+      timeSec: num(ex.timeSec) || (isCardio ? 300 : 40),
+      reps: num(ex.reps) || 10,
+      sets: num(ex.sets) || 3,
+      prepSec: ex.prepSec !== undefined ? num(ex.prepSec) : 5,
+      restSec: ex.restSec !== undefined ? num(ex.restSec) : (isCardio ? 0 : 60)
+    };
+  }
+
+  var MODE_HINTS = {
+    time: 'Упражнение идёт, пока не выйдет время таймера.',
+    reps: 'Таймер показывает ∞. Ты сам жмёшь «+1 повтор», пока не сделаешь нужное количество.',
+    both: 'Таймер идёт и считается количество повторов. Упражнение заканчивается, когда выйдет время или сделано нужное количество — что наступит раньше.'
+  };
 
   function openExerciseForm() {
-    pendingPhoto = null;
+    pendingIcon = SPORT_ICONS[0];
+    pendingMedia = null;
     var html = '';
 
     html += '<label class="srx-label">Название</label>' +
@@ -1414,17 +1610,44 @@
       MUSCLES.map(function (m) { return '<option>' + m + '</option>'; }).join('') +
       '</select>';
 
-    html += '<label class="srx-label">Интенсивность (MET)</label>' +
-      '<input class="srx-input" data-ref="exMet" type="number" min="1" max="20" step="0.1" value="5">' +
-      '<div class="srx-muted" style="margin-top:4px;font-size:11.5px">' +
-      '3–4 — лёгкое · 5–6 — среднее · 7–9 — тяжёлое · 10+ — очень тяжёлое</div>';
+    html += '<label class="srx-label">Как выполняем</label>' +
+      '<select class="srx-select" data-ref="exMode">' +
+      '<option value="time">⏱ По таймеру</option>' +
+      '<option value="reps">🔢 По количеству</option>' +
+      '<option value="both">⏱🔢 Таймер и количество</option>' +
+      '</select>' +
+      '<div class="srx-muted" data-ref="exModeHint" style="margin-top:4px;font-size:11.5px"></div>';
 
-    html += '<label class="srx-label">Фото (сжимается автоматически)</label>' +
-      '<div class="srx-row">' +
-        '<div data-ref="photoPrev" class="srx-thumb" style="width:64px;height:64px;font-size:24px">🖼️</div>' +
-        '<button class="srx-btn srx-grow" data-act="pickPhoto">Выбрать фото</button>' +
-      '</div>' +
-      '<input type="file" accept="image/*" data-ref="photoInput" style="display:none">';
+    html += '<div class="srx-grid3" style="margin-top:8px">' +
+      '<div data-ref="exTimeBlock"><label class="srx-label">Таймер, сек</label>' +
+      '<input class="srx-input" data-ref="exTime" type="number" min="5" max="3600" step="5" value="40"></div>' +
+      '<div data-ref="exRepsBlock"><label class="srx-label">Повторы</label>' +
+      '<input class="srx-input" data-ref="exReps" type="number" min="1" max="500" value="10"></div>' +
+      '<div><label class="srx-label">MET</label>' +
+      '<input class="srx-input" data-ref="exMet" type="number" min="1" max="20" step="0.1" value="5"></div>' +
+      '</div>';
+
+    html += '<div class="srx-grid3" style="margin-top:8px">' +
+      '<div><label class="srx-label">Подходы</label>' +
+      '<input class="srx-input" data-ref="exSets" type="number" min="1" max="20" value="3"></div>' +
+      '<div><label class="srx-label">Подготовка, сек</label>' +
+      '<input class="srx-input" data-ref="exPrep" type="number" min="0" max="600" value="5"></div>' +
+      '<div><label class="srx-label">Отдых, сек</label>' +
+      '<input class="srx-input" data-ref="exRest" type="number" min="0" max="3600" value="60"></div>' +
+      '</div>';
+
+    html += '<label class="srx-label">Иконка</label>' +
+      '<div class="srx-emoji-grid" data-ref="emojiGrid">' +
+      SPORT_ICONS.map(function (ic) {
+        return '<button class="srx-emoji-btn' + (ic === pendingIcon ? ' on' : '') + '" data-act="pickIcon" data-icon="' +
+          ic + '">' + ic + '</button>';
+      }).join('') +
+      '</div>';
+
+    html += '<label class="srx-label">Фото или видео (необязательно)</label>' +
+      '<input class="srx-input" data-ref="exMedia" type="file" accept="image/*,video/*" style="padding:8px">' +
+      '<div class="srx-muted" style="margin-top:4px;font-size:11.5px">Фото сжимается автоматически. Видео — до 10 секунд.</div>' +
+      '<div data-ref="mediaPreview" style="margin-top:8px"></div>';
 
     html += '<label class="srx-label">Заметка (необязательно)</label>' +
       '<textarea class="srx-textarea" data-ref="exNote" rows="2" placeholder="Техника, нюансы…"></textarea>';
@@ -1434,24 +1657,113 @@
 
     openSheet('Своё упражнение', html);
 
-    var input = $('[data-ref="photoInput"]', modalEl);
-    input.addEventListener('change', function () {
-      var f = input.files && input.files[0];
-      if (!f) return;
-      var prev = $('[data-ref="photoPrev"]', modalEl);
-      prev.innerHTML = '<div class="srx-muted" style="font-size:10px">…</div>';
-      compressImage(f, 480, 0.72, function (data, err) {
-        if (!data) { toast(err || 'Не удалось загрузить фото'); prev.textContent = '🖼️'; return; }
-        pendingPhoto = data;
-        prev.innerHTML = '<img src="' + data + '" style="width:100%;height:100%;object-fit:cover;border-radius:11px">';
-        toast('Фото сжато: ' + Math.round(data.length / 1024) + ' КБ');
+    var modeEl = $('[data-ref="exMode"]', modalEl);
+    var syncMode = function () {
+      var m = modeEl.value;
+      $('[data-ref="exTimeBlock"]', modalEl).style.display = m === 'reps' ? 'none' : '';
+      $('[data-ref="exRepsBlock"]', modalEl).style.display = m === 'time' ? 'none' : '';
+      $('[data-ref="exModeHint"]', modalEl).textContent = MODE_HINTS[m];
+    };
+    modeEl.addEventListener('change', syncMode);
+    syncMode();
+
+    $('[data-ref="exMedia"]', modalEl).addEventListener('change', function (e) {
+      var file = e.target.files && e.target.files[0];
+      var preview = $('[data-ref="mediaPreview"]', modalEl);
+      pendingMedia = null;
+      preview.innerHTML = '';
+      if (!file) return;
+      readMedia(file, function (err, media) {
+        if (err) { toast(err); e.target.value = ''; return; }
+        pendingMedia = media;
+        preview.innerHTML = media.photo
+          ? '<img src="' + media.photo + '" style="width:100%;max-height:180px;object-fit:cover;border-radius:12px">'
+          : '<video src="' + media.video + '" controls muted style="width:100%;max-height:180px;border-radius:12px"></video>';
       });
     });
+  }
+
+  function readMedia(file, cb) {
+    if (file.type.indexOf('video/') === 0) {
+      if (file.size > 50 * 1024 * 1024) { cb('Видео больше 50 МБ — выбери короче или в меньшем качестве'); return; }
+      var probeUrl = URL.createObjectURL(file);
+      var probe = document.createElement('video');
+      probe.preload = 'metadata';
+      probe.onerror = function () { URL.revokeObjectURL(probeUrl); cb('Не удалось прочитать видео'); };
+      probe.onloadedmetadata = function () {
+        URL.revokeObjectURL(probeUrl);
+        if (isFinite(probe.duration) && probe.duration > 10.05) { cb('Видео длиннее 10 секунд — выбери короче'); return; }
+        cb(null, { videoBlob: file, video: URL.createObjectURL(file) });
+      };
+      probe.src = probeUrl;
+      return;
+    }
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function () {
+      var k = Math.min(1, 720 / Math.max(img.width, img.height));
+      var c = document.createElement('canvas');
+      c.width = Math.round(img.width * k);
+      c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      cb(null, { photo: c.toDataURL('image/jpeg', 0.8) });
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); cb('Не удалось открыть фото'); };
+    img.src = url;
+  }
+
+  function showExerciseDone(ex) {
+    openSheet('Упражнение создано', '<div class="srx-muted" style="margin-bottom:14px">' + esc(ex.name) +
+      ' сохранено в библиотеку. Что дальше?</div>' +
+      '<button class="srx-btn primary" style="width:100%;margin-bottom:8px" data-act="startSingle" data-id="' + esc(ex.id) + '">▶ Начать тренировку</button>' +
+      '<button class="srx-btn" style="width:100%;margin-bottom:8px" data-act="chooseListForEx" data-ex="' + esc(ex.id) + '">📋 Добавить в комплекс</button>' +
+      '<button class="srx-btn" style="width:100%;margin-bottom:8px" data-act="newExercise">＋ Создать ещё одно упражнение</button>' +
+      '<button class="srx-btn" style="width:100%" data-act="sheetClose">Готово</button>');
+  }
+
+  function addExerciseToList(listId, exId) {
+    var ex = findExercise(exId);
+    var pr = profileData();
+    if (!ex || !pr) return;
+    var d = exDefaults(ex);
+    pr[K.lists].forEach(function (l) {
+      if (l.id !== listId) return;
+      if (!Array.isArray(l.items)) l.items = [];
+      l.items.push({
+        exId: ex.id, name: ex.name,
+        mode: d.mode,
+        sets: d.sets,
+        prepSec: d.prepSec,
+        timeSec: d.timeSec,
+        reps: d.reps,
+        restSec: d.restSec
+      });
+    });
+    persist(true);
+    toast(ex.name + ' добавлено');
+    closeSheet();
+    go('listEdit', { id: listId });
   }
 
   /* ==========================================================================
      19. ДЕЙСТВИЯ
      ========================================================================== */
+  /* Поиск: перерисовываем экран и возвращаем фокус и курсор в поле. */
+  function onInput(e) {
+    var t = e.target;
+    var ref = t && t.getAttribute && t.getAttribute('data-ref');
+    if (ref !== 'libQ' && ref !== 'listsQ') return;
+    var caret = t.selectionStart;
+    if (ref === 'libQ') { libQuery = t.value; renderLibrary(); }
+    else { listsQuery = t.value; renderLists(); }
+    var again = $('[data-ref="' + ref + '"]', bodyEl);
+    if (again) {
+      again.focus();
+      try { again.setSelectionRange(caret, caret); } catch (err) {}
+    }
+  }
+
   function onClick(e) {
     var el = e.target.closest ? e.target.closest('[data-act]') : null;
     if (!el) return;
@@ -1479,6 +1791,65 @@
         go('listEdit', { id: null });
         break;
 
+      case 'openCommunity':
+        go('community', { q: '' });
+        break;
+
+      case 'commSearch': {
+        var qInput = $('[data-ref="commQ"]', bodyEl);
+        go('community', { q: qInput ? qInput.value.trim() : '' });
+        break;
+      }
+
+      case 'commVote': {
+        var wid = el.getAttribute('data-id');
+        var vVal = num(el.getAttribute('data-v'));
+        var vCur = num(el.getAttribute('data-cur'));
+        var qNow = state.params.q;
+        SRXCommunity.vote(wid, vVal, vCur).then(function () {
+          if (state.view === 'community') go('community', { q: qNow });
+        }).catch(function (err) { toast('Не получилось проголосовать: ' + (err && err.message || 'ошибка')); });
+        break;
+      }
+
+      case 'commImport': {
+        var iid = el.getAttribute('data-id');
+        SRXCommunity.fetchOne(iid).then(function (w) {
+          var p = profileData();
+          if (!p) throw new Error('Профиль не загружен');
+          var listItems = (w.items || []).map(function (it) {
+            var exId = 'c_' + uid();
+            p[K.ex].push({
+              id: exId, name: it.name, group: 'Свои', met: 0, icon: it.icon || '⭐',
+              photo: it.photo || null, video: it.video || null, note: '',
+              mode: it.mode, timeSec: it.timeSec, reps: it.reps,
+              createdAt: new Date().toISOString(), custom: true
+            });
+            return { exId: exId, name: it.name, mode: it.mode, sets: it.sets, timeSec: it.timeSec,
+              reps: it.reps, restSec: it.restSec, prepSec: it.prepSec };
+          });
+          p[K.lists].push({ id: uid(), name: w.title + ' (из сообщества)', items: listItems, createdAt: new Date().toISOString() });
+          persist();
+          toast('Тренировка добавлена в «Мои списки»');
+          go('lists');
+        }).catch(function (err) { toast('Не получилось добавить: ' + (err && err.message || 'ошибка')); });
+        break;
+      }
+
+      case 'publishList': {
+        var pid = el.getAttribute('data-id');
+        var pl = workoutLists().filter(function (l) { return l.id === pid; })[0];
+        if (!pl) break;
+        var ptitle = (pl.name || '').trim();
+        if (!ptitle) { toast('Сначала дай тренировке название'); break; }
+        if (!(pl.items || []).length) { toast('Добавь хотя бы одно упражнение'); break; }
+        toast('Публикую тренировку…');
+        SRXCommunity.publish(ptitle.slice(0, 80), trainerItems(pl)).then(function () {
+          toast('Опубликовано в сообществе');
+        }).catch(function (err) { toast('Не удалось опубликовать: ' + (err && err.message || 'ошибка')); });
+        break;
+      }
+
       case 'editList':
         go('listEdit', { id: el.getAttribute('data-id') });
         break;
@@ -1491,6 +1862,18 @@
       case 'startList':
         startWorkout(el.getAttribute('data-id'));
         break;
+
+      case 'startSingle': {
+        var sx = findExercise(el.getAttribute('data-id'));
+        if (!sx) { toast('Упражнение не найдено'); break; }
+        var sd = exDefaults(sx);
+        closeSheet();
+        runItems(sx.name, [{
+          exId: sx.id, name: sx.name, mode: sd.mode, sets: sd.sets, prepSec: sd.prepSec,
+          timeSec: sd.timeSec, reps: sd.reps, restSec: sd.restSec
+        }]);
+        break;
+      }
 
       case 'delList': {
         var id = el.getAttribute('data-id');
@@ -1527,9 +1910,54 @@
         openExerciseForm();
         break;
 
-      case 'pickPhoto': {
-        var pi = $('[data-ref="photoInput"]', modalEl);
-        if (pi) pi.click();
+      case 'basketAdd': {
+        var bid = el.getAttribute('data-id');
+        var bl = getBasket();
+        if (bl.indexOf(bid) === -1) bl.push(bid);
+        setBasket(bl);
+        toast('Добавлено в корзину');
+        renderLibrary();
+        break;
+      }
+
+      case 'basketClear':
+        setBasket([]);
+        renderLibrary();
+        break;
+
+      case 'basketMake':
+        basketToList();
+        break;
+
+      case 'basketStart': {
+        var startItems = basketItems(getBasket());
+        if (!startItems.length) { toast('Корзина пуста'); break; }
+        runItems('Тренировка из корзины', startItems);
+        break;
+      }
+
+      case 'basketToExisting': {
+        var bls = workoutLists();
+        var bh = bls.length ? '' : '<div class="srx-muted" style="margin-bottom:10px">Тренировок пока нет. Соберите комплекс.</div>';
+        bls.forEach(function (l) {
+          bh += '<div class="srx-list-item" data-act="basketPickList" data-list="' + esc(l.id) + '">' +
+            '<div class="srx-grow"><div class="srx-name">' + esc(l.name || 'Без названия') + '</div>' +
+            '<div class="srx-sub">' + (l.items || []).length + ' упр.</div></div><div class="srx-sub">＋</div></div>';
+        });
+        openSheet('Добавить в тренировку', bh);
+        break;
+      }
+
+      case 'basketPickList':
+        basketToExisting(el.getAttribute('data-list'));
+        break;
+
+      case 'pickIcon': {
+        pendingIcon = el.getAttribute('data-icon');
+        var grid = $('[data-ref="emojiGrid"]', modalEl);
+        if (grid) Array.prototype.forEach.call(grid.children, function (b) {
+          b.classList.toggle('on', b.getAttribute('data-icon') === pendingIcon);
+        });
         break;
       }
 
@@ -1544,52 +1972,82 @@
         var grp = ($('[data-ref="exGroup"]', modalEl) || {}).value || 'Всё тело';
         var met = clamp(num(($('[data-ref="exMet"]', modalEl) || {}).value) || 5, 1, 20);
         var note = ($('[data-ref="exNote"]', modalEl) || {}).value || '';
+        var exMode = ($('[data-ref="exMode"]', modalEl) || {}).value || 'time';
+        var exTime = clamp(num(($('[data-ref="exTime"]', modalEl) || {}).value) || 40, 5, 3600);
+        var exReps = clamp(num(($('[data-ref="exReps"]', modalEl) || {}).value) || 10, 1, 500);
+        var exSets = clamp(num(($('[data-ref="exSets"]', modalEl) || {}).value) || 3, 1, 20);
+        var exPrep = clamp(num(($('[data-ref="exPrep"]', modalEl) || {}).value), 0, 600);
+        var exRest = clamp(num(($('[data-ref="exRest"]', modalEl) || {}).value), 0, 3600);
 
         var prof = profileData();
         if (!prof) { toast('Профиль не загружен'); break; }
 
-        prof[K.ex].push({
+        var newEx = {
           id: 'c_' + uid(),
           name: nm,
           group: grp,
           met: met,
-          photo: pendingPhoto || null,
+          icon: pendingIcon,
           note: note,
+          mode: exMode,
+          timeSec: exTime,
+          reps: exReps,
+          sets: exSets,
+          prepSec: exPrep,
+          restSec: exRest,
           createdAt: new Date().toISOString()
-        });
-        persist();
-        closeSheet();
-        toast('Упражнение добавлено');
-        if (state.view === 'library') renderLibrary();
-        break;
-      }
-
-      case 'pickAdd': {
-        var listId = el.getAttribute('data-list');
-        var exId = el.getAttribute('data-ex');
-        var ex = findExercise(exId);
-        var pr = profileData();
-        if (!ex || !pr) break;
-        var done = false;
-        pr[K.lists].forEach(function (l) {
-          if (l.id !== listId) return;
-          if (!Array.isArray(l.items)) l.items = [];
-          l.items.push({
-            exId: ex.id, name: ex.name,
-            sets: 3,
-            timeSec: ex.group === 'Кардио' ? 300 : 40,
-            restSec: ex.group === 'Кардио' ? 0 : 60
-          });
-          done = true;
-        });
-        if (done) {
-          persist(true);
-          toast(ex.name + ' добавлено');
-          closeSheet();
-          renderListEdit(listId);
+        };
+        if (pendingMedia && pendingMedia.photo) newEx.photo = pendingMedia.photo;
+        var videoBlob = pendingMedia && pendingMedia.videoBlob;
+        pendingMedia = null;
+        var finishNew = function () {
+          prof[K.ex].push(newEx);
+          persist();
+          toast('Упражнение сохранено');
+          if (state.view === 'library') renderLibrary();
+          showExerciseDone(newEx);
+        };
+        if (videoBlob) {
+          SRXMedia.put('ex-' + newEx.id, videoBlob).then(function (ref) {
+            newEx.video = ref;
+            finishNew();
+          }, function () { toast('Не удалось сохранить видео на телефон'); });
+        } else {
+          finishNew();
         }
         break;
       }
+
+      case 'chooseListForEx': {
+        var cex = el.getAttribute('data-ex');
+        var cls = workoutLists();
+        var ch = '';
+        if (!cls.length) ch += '<div class="srx-muted" style="margin-bottom:10px">Комплексов пока нет.</div>';
+        cls.forEach(function (l) {
+          ch += '<div class="srx-list-item" data-act="pickAdd" data-list="' + esc(l.id) + '" data-ex="' + esc(cex) + '">' +
+            '<div class="srx-grow"><div class="srx-name">' + esc(l.name || 'Без названия') + '</div>' +
+            '<div class="srx-sub">' + (l.items || []).length + ' упр.</div></div><div class="srx-sub">＋</div></div>';
+        });
+        ch += '<button class="srx-btn primary" style="width:100%;margin-top:10px" data-act="pickAddNew" data-ex="' +
+          esc(cex) + '">＋ Новый комплекс с этим упражнением</button>';
+        openSheet('Добавить в комплекс', ch);
+        break;
+      }
+
+      case 'pickAddNew': {
+        var pn = profileData();
+        if (!pn) break;
+        var newList = { id: uid(), name: 'Мой комплекс', items: [], createdAt: new Date().toISOString() };
+        pn[K.lists].push(newList);
+        persist(true);
+        addExerciseToList(newList.id, el.getAttribute('data-ex'));
+        break;
+      }
+
+      case 'pickAdd':
+        addExerciseToList(el.getAttribute('data-list'), el.getAttribute('data-ex'));
+        break;
+
 
       case 'exInfo': {
         var eid = el.getAttribute('data-id');
@@ -1597,6 +2055,9 @@
         if (!exx) break;
         var body = '';
         if (exx.photo) body += '<img src="' + exx.photo + '" style="width:100%;border-radius:13px;margin-bottom:12px">';
+        if (exx.video) body += SRXMedia.isRef(exx.video)
+          ? '<video data-idb="' + esc(exx.video) + '" controls style="width:100%;border-radius:13px;margin-bottom:12px"></video>'
+          : '<video src="' + exx.video + '" controls style="width:100%;border-radius:13px;margin-bottom:12px"></video>';
         body += '<div class="srx-kpi">' +
           '<div><span>Группа</span><b style="font-size:15px">' + esc(exx.group) + '</b></div>' +
           '<div><span>MET</span><b>' + exx.met + '</b></div></div>';
@@ -1606,6 +2067,7 @@
             esc(eid) + '">Удалить упражнение</button>';
         }
         openSheet(exx.name, body);
+        SRXMedia.hydrate(document);
         break;
       }
 
@@ -1642,6 +2104,16 @@
         if (T.active) { advancePhase(); paintTimer(); }
         break;
 
+      case 'repsDone': {
+        var rc = T.items[T.idx];
+        if (T.active && T.phase === 'work' && hasRepsItem(rc)) {
+          T.count = (T.count || 0) + 1;
+          if (!hasTimerItem(rc) || T.count >= rc.reps) advancePhase();
+          paintTimer();
+        }
+        break;
+      }
+
       case 'abortRun':
         if (T.active) {
           if (confirm('Прервать тренировку?')) {
@@ -1655,36 +2127,46 @@
   }
 
   /* поля ввода внутри редактора списка */
-  document.addEventListener('input', function (e) {
+  function onItemField(e) {
     var t = e.target;
     if (!t || !t.getAttribute) return;
 
     var act = t.getAttribute('data-act');
 
+    /* Числа сохраняем только при уходе из поля (change), иначе каждая цифра пишет в облако. */
+    if (act === 'itemField' && e.type === 'input' && t.tagName === 'INPUT') return;
+
     if (act === 'itemField') {
       var lid = t.getAttribute('data-id');
       var idx = num(t.getAttribute('data-idx'));
       var field = t.getAttribute('data-field');
-      var val = num(t.value);
       var p = profileData();
       if (!p) return;
+      var modeField = field === 'mode';
       p[K.lists].forEach(function (l) {
         if (l.id !== lid) return;
         if (!l.items || !l.items[idx]) return;
-        l.items[idx][field] = Math.max(0, val);
+        if (modeField) {
+          l.items[idx].mode = t.value === 'reps' || t.value === 'both' ? t.value : 'time';
+        } else {
+          l.items[idx][field] = Math.max(0, num(t.value));
+        }
       });
       persist(true);
+      if (modeField && e.type === 'change') renderListEdit(lid);
       return;
     }
 
-    if (t.getAttribute('data-ref') === 'listName') {
+    if (t.getAttribute('data-ref') === 'listName' && e.type === 'input') {
       var id = state.params.id;
       var pp = profileData();
       if (!pp) return;
       pp[K.lists].forEach(function (l) { if (l.id === id) l.name = t.value; });
       persist(true);
     }
-  });
+  }
+  document.addEventListener('input', onItemField);
+  document.addEventListener('change', onItemField);
 
   /* ==========================================================================
      21. СЛИЯНИЕ ЧЕРНОВИКА
@@ -1725,6 +2207,11 @@
       }
     }, 700);
     setTimeout(function () { clearInterval(tryMerge); }, 20000);
+
+    if (localStorage.getItem('srx_open_trainer')) {
+      localStorage.removeItem('srx_open_trainer');
+      openRoot('lists');
+    }
 
     window.addEventListener('beforeunload', function () {
       if (T.active) {
