@@ -99,7 +99,10 @@
 
     try { localStorage.setItem(LS.draft, JSON.stringify({
       ts: Date.now(), profile: p
-    })); } catch (e) { /* quota */ }
+    })); } catch (e) {
+      toast('Не хватает места в памяти телефона: видео упражнения не сохранилось. Выбери файл поменьше.');
+      return false;
+    }
 
     if (typeof currentProfileData === 'undefined' || p !== currentProfileData) {
       try { localStorage.setItem('cachedProfile', JSON.stringify(p)); } catch (e) { /* quota */ }
