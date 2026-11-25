@@ -104,11 +104,22 @@
       return false;
     }
 
-    if (typeof currentProfileData === 'undefined' || p !== currentProfileData) {
-      try { localStorage.setItem('cachedProfile', JSON.stringify(p)); } catch (e) { /* quota */ }
-    }
+    try { localStorage.setItem('cachedProfile', JSON.stringify(p)); } catch (e) { /* quota */ }
 
     var called = [];
+    if (typeof window.saveProgressToCloud === 'function') {
+      try {
+        var xp = Number(localStorage.getItem('cachedXP') || 0);
+        var burned = Number(localStorage.getItem('cachedBurned') || 0);
+        var sr = window.saveProgressToCloud(null, null, null, p, xp, burned);
+        if (sr && typeof sr.catch === 'function') {
+          sr.catch(function (err) { console.warn('[SRX] cloud save rejected:', err && err.message); });
+        }
+        called.push('saveProgressToCloud');
+      } catch (e) {
+        console.warn('[SRX] cloud save failed:', e && e.message);
+      }
+    }
     for (var i = 0; i < SAVE_FNS.length; i++) {
       var name = SAVE_FNS[i];
       var fn = window[name];
