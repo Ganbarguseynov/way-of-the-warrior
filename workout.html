@@ -645,6 +645,7 @@ let soundOn = localStorage.getItem('wkSound') !== 'off';
 let wakeLock = null;
 let locked = false;
 let restEndFired = false;
+let prepCued = false;
 
 /* очередь для варианта Б: список упражнений подряд */
 let queue = [];
@@ -754,6 +755,7 @@ function playSeg(key, from, to, gain){
 }
 
 function cue(name){
+  if (!soundOn) return;
   const s = SOUND[name];
   if (!s || !players[s.f]) return;
   stopAllClips();
@@ -1223,6 +1225,7 @@ function enterPhase(p){
   endAt = Date.now() + remainingMs;
   running = true;
   restEndFired = false;
+  prepCued = false;
 
   const run = $('run');
   run.classList.remove('prep', 'work', 'rest');
@@ -1237,9 +1240,7 @@ function enterPhase(p){
   clearCueTimers();
   if (p !== 'work') stopAllClips();
 
-  if (p === 'prep'){
-    scheduleEndingAt('prep', sec * 1000, TIMING.prepShift, 'prep');
-  } else if (p === 'rest'){
+  if (p === 'rest'){
     cue('rest');
     scheduleEndingAt('workAfterRest', sec * 1000, TIMING.restEndShift, 'rest');
   }
@@ -1254,6 +1255,14 @@ function tick(){
   const left = endAt - Date.now();
   if (left <= 0){ remainingMs = 0; render(); phaseDone(); return; }
   remainingMs = left;
+
+  if (phase === 'prep' && !prepCued){
+    const len = (SOUND.prep.to - SOUND.prep.from) * 1000;
+    if (left <= len - TIMING.prepShift * 1000 + 50){
+      prepCued = true;
+      cue('prep');
+    }
+  }
 
   if (phase === 'rest' && !restEndFired){
     const len = (SOUND.workAfterRest.to - SOUND.workAfterRest.from) * 1000;
@@ -1417,8 +1426,8 @@ function finishSession(){
   const total = cfg.prep + cfg.rounds * cfg.work + (cfg.rounds - 1) * cfg.rest;
   $('finStats').innerHTML =
     (EXERCISE ? EXERCISE.name + '<br>' : '') +
-    (isQueueDone ? 'Список из ' + (queueTotalXP ? '' : '') : '') +
-    cfg.rounds + ' ' + word(cfg.rounds) + ' · ≈ ' + Math.round(total / 60) + ' мин';
+    cfg.rounds + ' ' + word(cfg.rounds) + ' · ≈ ' + Math.round(total / 60) + ' мин' +
+    (isQueueDone ? '<br>Список выполнен' : '');
   $('finXp').textContent = '+' + queueTotalXP + ' XP';
 
   let q = { text: 'Ты не проиграл, пока не остановился.', author: 'Майк Тайсон' };
