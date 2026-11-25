@@ -540,6 +540,12 @@
         '<h2 data-ref="title">Тренировки</h2>' +
         '<button class="srx-x" data-act="library" title="Упражнения">📚</button>' +
       '</div>' +
+      '<div class="srx-chips srx-tabs" data-ref="tabs" style="padding:8px 14px 0">' +
+        '<button class="srx-chip" data-act="tab" data-tab="lists">🏋️ Тренировки</button>' +
+        '<button class="srx-chip" data-act="tab" data-tab="analysis">📊 Анализ</button>' +
+        '<button class="srx-chip" data-act="tab" data-tab="library">📚 Упражнения</button>' +
+        '<button class="srx-chip" data-act="timerPage">⏱ Таймер</button>' +
+      '</div>' +
       '<div class="srx-body" data-ref="body"></div>';
     document.body.appendChild(root);
     headTitle = $('[data-ref="title"]', root);
@@ -566,9 +572,21 @@
   function go(view, params) {
     state.view = view;
     state.params = params || {};
+    updateTabs();
     destroyCharts();
     render();
     if (bodyEl) bodyEl.scrollTop = 0;
+  }
+
+  function updateTabs() {
+    var tabs = $('[data-ref="tabs"]', root);
+    if (!tabs) return;
+    var main = state.view === 'lists' || state.view === 'analysis' || state.view === 'library';
+    tabs.style.display = main ? '' : 'none';
+    var cur = state.view;
+    Array.prototype.forEach.call(tabs.children, function (b) {
+      b.classList.toggle('on', b.getAttribute('data-tab') === cur);
+    });
   }
 
   function destroyCharts() {
@@ -604,8 +622,7 @@
       '</div>';
 
     html += '<div class="srx-row" style="margin-bottom:12px">' +
-      '<button class="srx-btn primary srx-grow" data-act="newList">＋ Новый список</button>' +
-      '<button class="srx-btn" data-act="analysis">📊</button>' +
+      '<button class="srx-btn primary srx-grow" data-act="newList">＋ Создать свою тренировку</button>' +
       '</div>';
 
     if (!lists.length) {
@@ -1445,6 +1462,8 @@
 
       case 'library': go('library'); break;
       case 'analysis': go('analysis'); break;
+      case 'timerPage': window.location.href = 'workout.html'; break;
+      case 'tab': go(el.getAttribute('data-tab')); break;
 
       case 'libFilter':
         libFilter = el.getAttribute('data-g');
@@ -1668,47 +1687,6 @@
   });
 
   /* ==========================================================================
-     20. ВСТРАИВАНИЕ В ДАШБОРД
-     ========================================================================== */
-  function injectDashButtons() {
-    var row = $('.dash-subrow');
-    if (!row) return false;
-    if (row.getAttribute('data-srx') === '1') return true;
-
-    var b1 = document.createElement('button');
-    b1.className = 'srx-dash-btn';
-    b1.type = 'button';
-    b1.innerHTML = '🏋️ Тренировки';
-    b1.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); openRoot('lists'); });
-
-    var b2 = document.createElement('button');
-    b2.className = 'srx-dash-btn';
-    b2.type = 'button';
-    b2.innerHTML = '📊 Анализ';
-    b2.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); openRoot('analysis'); });
-
-    row.appendChild(b1);
-    row.appendChild(b2);
-    row.setAttribute('data-srx', '1');
-    return true;
-  }
-
-  function watchDash() {
-    injectDashButtons();
-
-    var mo = new MutationObserver(function () {
-      if (!root || !root.classList.contains('open')) injectDashButtons();
-    });
-    mo.observe(document.body, { childList: true, subtree: true });
-
-    var tries = 0;
-    var iv = setInterval(function () {
-      tries++;
-      if (injectDashButtons() || tries > 40) clearInterval(iv);
-    }, 500);
-  }
-
-  /* ==========================================================================
      21. СЛИЯНИЕ ЧЕРНОВИКА
      ========================================================================== */
   function mergeDraft() {
@@ -1738,7 +1716,6 @@
   function init() {
     injectCSS();
     buildShell();
-    watchDash();
 
     var merged = false;
     var tryMerge = setInterval(function () {
