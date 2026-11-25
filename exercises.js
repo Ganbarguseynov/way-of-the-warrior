@@ -660,9 +660,6 @@
       '<button class="srx-btn primary srx-grow" data-act="newList">＋ Создать свою тренировку</button>' +
       '</div>' +
       '<div class="srx-row" style="margin-bottom:12px">' +
-      '<button class="srx-btn ghost srx-grow" data-act="listFromPick">🧩 Тренировка из упражнения</button>' +
-      '</div>' +
-      '<div class="srx-row" style="margin-bottom:12px">' +
       '<button class="srx-btn ghost srx-grow" data-act="openCommunity">🌍 Тренировки сообщества</button>' +
       '</div>';
     if (lists.length) {
@@ -867,24 +864,44 @@
 
   function basketToList() {
     var pr = profileData();
-    var ids = getBasket();
-    if (!pr || !ids.length) return;
-    var items = [];
-    ids.forEach(function (id) {
-      var ex = findExercise(id);
-      if (!ex) return;
-      var d = exDefaults(ex);
-      items.push({
-        exId: ex.id, name: ex.name, mode: d.mode, sets: 3, prepSec: 5,
-        timeSec: d.timeSec, reps: d.reps, restSec: ex.group === 'Кардио' ? 0 : 60
-      });
-    });
+    var items = basketItems(getBasket());
+    if (!pr || !items.length) return;
     var list = { id: uid(), name: '', items: items, createdAt: new Date().toISOString() };
     pr[K.lists].push(list);
     persist(true);
     setBasket([]);
     toast('Комплекс собран — дай ему название');
     go('listEdit', { id: list.id });
+  }
+
+  function basketItems(ids) {
+    var out = [];
+    ids.forEach(function (id) {
+      var ex = findExercise(id);
+      if (!ex) return;
+      var d = exDefaults(ex);
+      out.push({
+        exId: ex.id, name: ex.name, mode: d.mode, sets: 3, prepSec: 5,
+        timeSec: d.timeSec, reps: d.reps, restSec: ex.group === 'Кардио' ? 0 : 60
+      });
+    });
+    return out;
+  }
+
+  function basketToExisting(listId) {
+    var pr = profileData();
+    var items = basketItems(getBasket());
+    if (!pr || !items.length) return;
+    pr[K.lists].forEach(function (l) {
+      if (l.id !== listId) return;
+      if (!Array.isArray(l.items)) l.items = [];
+      items.forEach(function (it) { l.items.push(it); });
+    });
+    persist(true);
+    setBasket([]);
+    closeSheet();
+    toast('Упражнения добавлены в тренировку');
+    go('listEdit', { id: listId });
   }
 
   function renderLibrary() {
@@ -907,8 +924,10 @@
     var basket = getBasket();
     if (basket.length) {
       html += '<div class="srx-card" style="margin-bottom:12px"><div class="srx-name">🧺 В корзине: ' + basket.length + '</div>' +
-        '<div class="srx-sub" style="margin:4px 0 10px">Собери из выбранных упражнений один комплекс</div>' +
-        '<div class="srx-row"><button class="srx-btn primary srx-grow" data-act="basketMake">Собрать комплекс</button>' +
+        '<div class="srx-sub" style="margin:4px 0 10px">Собери из них комплекс, добавь в существующую тренировку или начни сразу</div>' +
+        '<div class="srx-row" style="margin-bottom:8px"><button class="srx-btn primary srx-grow" data-act="basketMake">Собрать комплекс</button>' +
+        '<button class="srx-btn ghost srx-grow" data-act="basketToExisting">В существующую</button></div>' +
+        '<div class="srx-row"><button class="srx-btn green srx-grow" data-act="basketStart">▶ Начать сразу</button>' +
         '<button class="srx-btn ghost" data-act="basketClear">Очистить</button></div></div>';
     }
 
@@ -930,7 +949,7 @@
           '<div class="srx-sub">' + esc(e.group) + ' · MET ' + e.met +
             (e.custom ? ' · своё' : '') + '</div>' +
         '<div class="srx-row" style="margin-top:6px;gap:6px">' +
-          '<button class="srx-btn sm" data-act="chooseListForEx" data-ex="' + esc(e.id) + '">＋ в комплекс</button>' +
+          '<button class="srx-btn sm" data-act="basketAdd" data-id="' + esc(e.id) + '">🧺 ＋ в корзину</button>' +
           '<button class="srx-btn sm green" data-act="startSingle" data-id="' + esc(e.id) + '">▶ Начать</button>' +
         '</div>' +
         '</div></div>';
@@ -1884,18 +1903,6 @@
         break;
       }
 
-      case 'listFromPick': {
-        var pick = allExercises();
-        var ph = pick.length ? '' : '<div class="srx-muted">Упражнений пока нет.</div>';
-        pick.forEach(function (pe) {
-          ph += '<div class="srx-list-item" data-act="pickAddNew" data-ex="' + esc(pe.id) + '">' +
-            '<div class="srx-grow"><div class="srx-name">' + esc(pe.name) + '</div>' +
-            '<div class="srx-sub">' + esc(pe.group) + '</div></div><div class="srx-sub">＋</div></div>';
-        });
-        openSheet('Тренировка из упражнения', '<div class="srx-muted" style="margin-bottom:10px">Выбери упражнение — оно станет первым в новой тренировке.</div>' + ph);
-        break;
-      }
-
       case 'delList': {
         var id = el.getAttribute('data-id');
         if (!confirm('Удалить список?')) break;
@@ -1948,6 +1955,29 @@
 
       case 'basketMake':
         basketToList();
+        break;
+
+      case 'basketStart': {
+        var startItems = basketItems(getBasket());
+        if (!startItems.length) { toast('Корзина пуста'); break; }
+        runItems('Тренировка из корзины', startItems);
+        break;
+      }
+
+      case 'basketToExisting': {
+        var bls = workoutLists();
+        var bh = bls.length ? '' : '<div class="srx-muted" style="margin-bottom:10px">Тренировок пока нет. Соберите комплекс.</div>';
+        bls.forEach(function (l) {
+          bh += '<div class="srx-list-item" data-act="basketPickList" data-list="' + esc(l.id) + '">' +
+            '<div class="srx-grow"><div class="srx-name">' + esc(l.name || 'Без названия') + '</div>' +
+            '<div class="srx-sub">' + (l.items || []).length + ' упр.</div></div><div class="srx-sub">＋</div></div>';
+        });
+        openSheet('Добавить в тренировку', bh);
+        break;
+      }
+
+      case 'basketPickList':
+        basketToExisting(el.getAttribute('data-list'));
         break;
 
       case 'pickIcon': {
