@@ -1570,7 +1570,7 @@
 
   function readMedia(file, cb) {
     if (file.type.indexOf('video/') === 0) {
-      if (file.size > 8 * 1024 * 1024) { cb('Видео больше 8 МБ — выбери короче или в меньшем качестве'); return; }
+      if (file.size > 50 * 1024 * 1024) { cb('Видео больше 50 МБ — выбери короче или в меньшем качестве'); return; }
       var probeUrl = URL.createObjectURL(file);
       var probe = document.createElement('video');
       probe.preload = 'metadata';
@@ -1578,10 +1578,7 @@
       probe.onloadedmetadata = function () {
         URL.revokeObjectURL(probeUrl);
         if (isFinite(probe.duration) && probe.duration > 10.05) { cb('Видео длиннее 10 секунд — выбери короче'); return; }
-        var fr = new FileReader();
-        fr.onload = function () { cb(null, { video: fr.result }); };
-        fr.onerror = function () { cb('Не удалось прочитать видео'); };
-        fr.readAsDataURL(file);
+        cb(null, { videoBlob: file, video: URL.createObjectURL(file) });
       };
       probe.src = probeUrl;
       return;
@@ -1750,13 +1747,23 @@
           createdAt: new Date().toISOString()
         };
         if (pendingMedia && pendingMedia.photo) newEx.photo = pendingMedia.photo;
-        if (pendingMedia && pendingMedia.video) newEx.video = pendingMedia.video;
+        var videoBlob = pendingMedia && pendingMedia.videoBlob;
         pendingMedia = null;
-        prof[K.ex].push(newEx);
-        persist();
-        toast('Упражнение сохранено');
-        if (state.view === 'library') renderLibrary();
-        showExerciseDone(newEx);
+        var finishNew = function () {
+          prof[K.ex].push(newEx);
+          persist();
+          toast('Упражнение сохранено');
+          if (state.view === 'library') renderLibrary();
+          showExerciseDone(newEx);
+        };
+        if (videoBlob) {
+          SRXMedia.put('ex-' + newEx.id, videoBlob).then(function (ref) {
+            newEx.video = ref;
+            finishNew();
+          }, function () { toast('Не удалось сохранить видео на телефон'); });
+        } else {
+          finishNew();
+        }
         break;
       }
 
@@ -1797,7 +1804,9 @@
         if (!exx) break;
         var body = '';
         if (exx.photo) body += '<img src="' + exx.photo + '" style="width:100%;border-radius:13px;margin-bottom:12px">';
-        if (exx.video) body += '<video src="' + exx.video + '" controls style="width:100%;border-radius:13px;margin-bottom:12px"></video>';
+        if (exx.video) body += SRXMedia.isRef(exx.video)
+          ? '<video data-idb="' + esc(exx.video) + '" controls style="width:100%;border-radius:13px;margin-bottom:12px"></video>'
+          : '<video src="' + exx.video + '" controls style="width:100%;border-radius:13px;margin-bottom:12px"></video>';
         body += '<div class="srx-kpi">' +
           '<div><span>Группа</span><b style="font-size:15px">' + esc(exx.group) + '</b></div>' +
           '<div><span>MET</span><b>' + exx.met + '</b></div></div>';
@@ -1807,6 +1816,7 @@
             esc(eid) + '">Удалить упражнение</button>';
         }
         openSheet(exx.name, body);
+        SRXMedia.hydrate(document);
         break;
       }
 
