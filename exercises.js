@@ -495,7 +495,11 @@
     '.srx-dash-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:10px;',
     'background:#182230;border:1px solid #26323f;color:#e8eef5;font-size:13px;font-weight:600;',
     'cursor:pointer;font-family:inherit}',
-    '.srx-dash-btn:active{transform:scale(.97)}'
+    '.srx-dash-btn:active{transform:scale(.97)}',
+    '.srx-emoji-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:6px}',
+    '.srx-emoji-btn{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:22px;',
+    'background:#141d26;border:1px solid #26323f;border-radius:11px;cursor:pointer}',
+    '.srx-emoji-btn.on{border-color:#f97316;background:#2a1a0e}'
   ].join('');
 
   function injectCSS() {
@@ -704,19 +708,30 @@
           ? '<img class="srx-thumb" src="' + ex.photo + '" alt="">'
           : '<div class="srx-thumb">' + (ex ? ex.icon : '⭐') + '</div>';
 
+        var isReps = it.mode === 'reps';
         html += '<div class="srx-list-item" style="align-items:flex-start;flex-wrap:wrap">' +
           thumb +
           '<div class="srx-grow">' +
             '<div class="srx-name">' + esc(it.name || (ex && ex.name) || 'Упражнение') + '</div>' +
+            '<select class="srx-select" style="margin-top:8px;padding:7px 8px" data-act="itemField" data-id="' +
+              esc(list.id) + '" data-idx="' + idx + '" data-field="mode">' +
+              '<option value="time"' + (isReps ? '' : ' selected') + '>⏱ По таймеру</option>' +
+              '<option value="reps"' + (isReps ? ' selected' : '') + '>🔢 По количеству</option>' +
+            '</select>' +
             '<div class="srx-grid3" style="margin-top:8px">' +
               '<div><div class="srx-muted" style="font-size:10.5px">ПОДХОДЫ</div>' +
                 '<input class="srx-input" style="padding:7px 8px" type="number" min="1" max="20" ' +
                 'data-act="itemField" data-id="' + esc(list.id) + '" data-idx="' + idx + '" data-field="sets" ' +
                 'value="' + (num(it.sets) || 3) + '"></div>' +
-              '<div><div class="srx-muted" style="font-size:10.5px">РАБОТА, с</div>' +
-                '<input class="srx-input" style="padding:7px 8px" type="number" min="5" max="1200" step="5" ' +
-                'data-act="itemField" data-id="' + esc(list.id) + '" data-idx="' + idx + '" data-field="timeSec" ' +
-                'value="' + (num(it.timeSec) || 40) + '"></div>' +
+              (isReps
+                ? '<div><div class="srx-muted" style="font-size:10.5px">ПОВТОРЫ</div>' +
+                  '<input class="srx-input" style="padding:7px 8px" type="number" min="1" max="500" ' +
+                  'data-act="itemField" data-id="' + esc(list.id) + '" data-idx="' + idx + '" data-field="reps" ' +
+                  'value="' + (num(it.reps) || 10) + '"></div>'
+                : '<div><div class="srx-muted" style="font-size:10.5px">РАБОТА, с</div>' +
+                  '<input class="srx-input" style="padding:7px 8px" type="number" min="5" max="1200" step="5" ' +
+                  'data-act="itemField" data-id="' + esc(list.id) + '" data-idx="' + idx + '" data-field="timeSec" ' +
+                  'value="' + (num(it.timeSec) || 40) + '"></div>') +
               '<div><div class="srx-muted" style="font-size:10.5px">ОТДЫХ, с</div>' +
                 '<input class="srx-input" style="padding:7px 8px" type="number" min="0" max="600" step="5" ' +
                 'data-act="itemField" data-id="' + esc(list.id) + '" data-idx="' + idx + '" data-field="restSec" ' +
@@ -801,8 +816,10 @@
       return {
         exId: it.exId, name: it.name || (ex && ex.name) || 'Упражнение',
         met: ex ? ex.met : 5, icon: ex ? ex.icon : '⭐', photo: ex ? ex.photo : null,
+        mode: it.mode === 'reps' ? 'reps' : 'time',
         sets: Math.max(1, num(it.sets) || 1),
         timeSec: Math.max(5, num(it.timeSec) || 40),
+        reps: Math.max(1, num(it.reps) || 10),
         restSec: Math.max(0, num(it.restSec) || 20)
       };
     });
@@ -827,10 +844,14 @@
 
   function tickFn() {
     if (!T.active) return;
+    if (T.phase === 'work' && isRepsItem(T.items[T.idx])) { paintTimer(); return; }
     T.left--;
     if (T.left <= 0) advancePhase();
     paintTimer();
   }
+
+  function isRepsItem(it) { return !!it && it.mode === 'reps'; }
+  function workSecOf(it) { return isRepsItem(it) ? it.reps * 3 : it.timeSec; }
 
   function advancePhase() {
     if (T.phase === 'prep') { enterWork(); return; }
@@ -867,7 +888,7 @@
   function enterWork() {
     var cur = T.items[T.idx];
     T.phase = 'work';
-    T.total = cur.timeSec;
+    T.total = isRepsItem(cur) ? 0 : cur.timeSec;
     T.left = cur.timeSec;
     beep(980, 200);
   }
@@ -879,11 +900,12 @@
     var kg = userWeight();
     var workSeconds = 0, kcal = 0;
     var detail = T.items.map(function (it) {
-      var sec = it.sets * it.timeSec;
+      var sec = it.sets * workSecOf(it);
       workSeconds += sec;
       var k = kcalFor(it.met, sec / 60, kg);
       kcal += k;
-      return { exId: it.exId, name: it.name, sets: it.sets, timeSec: it.timeSec, kcal: round1(k) };
+      return { exId: it.exId, name: it.name, mode: it.mode, sets: it.sets,
+        timeSec: isRepsItem(it) ? 0 : it.timeSec, reps: isRepsItem(it) ? it.reps : 0, kcal: round1(k) };
     });
 
     var durSec = T.startedAt ? Math.round((Date.now() - new Date(T.startedAt).getTime()) / 1000) : workSeconds;
@@ -952,7 +974,9 @@
       '</div>';
 
     html += '<div class="srx-row" style="margin-bottom:12px">' +
-      '<button class="srx-btn srx-grow" data-act="skipPhase">Пропустить →</button>' +
+      (isRepsItem(cur) && T.phase === 'work'
+        ? '<button class="srx-btn primary srx-grow" data-ref="act" data-act="repsDone">Готово ✓</button>'
+        : '<button class="srx-btn srx-grow" data-ref="act" data-act="skipPhase">Пропустить →</button>') +
       '<button class="srx-btn danger" data-act="abortRun">Стоп</button>' +
       '</div>';
 
@@ -965,7 +989,8 @@
         '<div class="srx-grow">' +
           '<div class="srx-name"' + (active ? ' style="color:#f97316"' : '') + '>' +
             esc(it.name) + '</div>' +
-          '<div class="srx-sub">' + it.sets + ' × ' + it.timeSec + ' с · отдых ' + it.restSec + ' с</div>' +
+          '<div class="srx-sub">' + it.sets + ' × ' + (isRepsItem(it) ? it.reps + ' повт.' : it.timeSec + ' с') +
+            ' · отдых ' + it.restSec + ' с</div>' +
         '</div>' +
         (done ? '<div class="srx-sub">✓</div>' : '') +
         '</div>';
@@ -1006,7 +1031,19 @@
       ph.textContent = phaseText();
       ph.className = 'srx-phase' + (T.phase === 'rest' ? ' rest' : T.phase === 'prep' ? ' prep' : T.phase === 'done' ? ' done' : '');
     }
-    if (cl) cl.textContent = T.phase === 'done' ? 'ГОТОВО' : mmss(T.left);
+    var curItem = T.items[T.idx];
+    var act = $('[data-ref="act"]', bodyEl);
+    if (act) {
+      var repsNow = T.phase === 'work' && isRepsItem(curItem);
+      act.setAttribute('data-act', repsNow ? 'repsDone' : 'skipPhase');
+      act.className = 'srx-btn srx-grow' + (repsNow ? ' primary' : '');
+      act.textContent = repsNow ? 'Готово ✓' : 'Пропустить →';
+    }
+    if (cl) {
+      if (T.phase === 'done') cl.textContent = 'ГОТОВО';
+      else if (T.phase === 'work' && isRepsItem(curItem)) cl.textContent = '× ' + curItem.reps;
+      else cl.textContent = mmss(T.left);
+    }
     if (bar) {
       var pct = T.total > 0 ? clamp((1 - T.left / T.total) * 100, 0, 100) : 0;
       bar.style.width = pct + '%';
@@ -1400,10 +1437,12 @@
   }
 
   /* --- форма своего упражнения --- */
-  var pendingPhoto = null;
+  var SPORT_ICONS = ['🏋️', '🤸', '🏃', '🚴', '🏊', '🥊', '🧘', '🤾', '🏀', '⚽', '🏐', '🎾',
+    '🥋', '🤺', '🧗', '🚣', '🏇', '⛹️', '🤼', '🏌️', '🛹', '🏹', '💪', '🦵', '🔥', '⚡', '🥇', '🎯'];
+  var pendingIcon = SPORT_ICONS[0];
 
   function openExerciseForm() {
-    pendingPhoto = null;
+    pendingIcon = SPORT_ICONS[0];
     var html = '';
 
     html += '<label class="srx-label">Название</label>' +
@@ -1419,12 +1458,13 @@
       '<div class="srx-muted" style="margin-top:4px;font-size:11.5px">' +
       '3–4 — лёгкое · 5–6 — среднее · 7–9 — тяжёлое · 10+ — очень тяжёлое</div>';
 
-    html += '<label class="srx-label">Фото (сжимается автоматически)</label>' +
-      '<div class="srx-row">' +
-        '<div data-ref="photoPrev" class="srx-thumb" style="width:64px;height:64px;font-size:24px">🖼️</div>' +
-        '<button class="srx-btn srx-grow" data-act="pickPhoto">Выбрать фото</button>' +
-      '</div>' +
-      '<input type="file" accept="image/*" data-ref="photoInput" style="display:none">';
+    html += '<label class="srx-label">Иконка</label>' +
+      '<div class="srx-emoji-grid" data-ref="emojiGrid">' +
+      SPORT_ICONS.map(function (ic) {
+        return '<button class="srx-emoji-btn' + (ic === pendingIcon ? ' on' : '') + '" data-act="pickIcon" data-icon="' +
+          ic + '">' + ic + '</button>';
+      }).join('') +
+      '</div>';
 
     html += '<label class="srx-label">Заметка (необязательно)</label>' +
       '<textarea class="srx-textarea" data-ref="exNote" rows="2" placeholder="Техника, нюансы…"></textarea>';
@@ -1433,20 +1473,6 @@
       'Сохранить упражнение</button>';
 
     openSheet('Своё упражнение', html);
-
-    var input = $('[data-ref="photoInput"]', modalEl);
-    input.addEventListener('change', function () {
-      var f = input.files && input.files[0];
-      if (!f) return;
-      var prev = $('[data-ref="photoPrev"]', modalEl);
-      prev.innerHTML = '<div class="srx-muted" style="font-size:10px">…</div>';
-      compressImage(f, 480, 0.72, function (data, err) {
-        if (!data) { toast(err || 'Не удалось загрузить фото'); prev.textContent = '🖼️'; return; }
-        pendingPhoto = data;
-        prev.innerHTML = '<img src="' + data + '" style="width:100%;height:100%;object-fit:cover;border-radius:11px">';
-        toast('Фото сжато: ' + Math.round(data.length / 1024) + ' КБ');
-      });
-    });
   }
 
   /* ==========================================================================
@@ -1527,9 +1553,12 @@
         openExerciseForm();
         break;
 
-      case 'pickPhoto': {
-        var pi = $('[data-ref="photoInput"]', modalEl);
-        if (pi) pi.click();
+      case 'pickIcon': {
+        pendingIcon = el.getAttribute('data-icon');
+        var grid = $('[data-ref="emojiGrid"]', modalEl);
+        if (grid) Array.prototype.forEach.call(grid.children, function (b) {
+          b.classList.toggle('on', b.getAttribute('data-icon') === pendingIcon);
+        });
         break;
       }
 
@@ -1553,7 +1582,7 @@
           name: nm,
           group: grp,
           met: met,
-          photo: pendingPhoto || null,
+          icon: pendingIcon,
           note: note,
           createdAt: new Date().toISOString()
         });
@@ -1576,8 +1605,10 @@
           if (!Array.isArray(l.items)) l.items = [];
           l.items.push({
             exId: ex.id, name: ex.name,
+            mode: 'time',
             sets: 3,
             timeSec: ex.group === 'Кардио' ? 300 : 40,
+            reps: 10,
             restSec: ex.group === 'Кардио' ? 0 : 60
           });
           done = true;
@@ -1642,6 +1673,10 @@
         if (T.active) { advancePhase(); paintTimer(); }
         break;
 
+      case 'repsDone':
+        if (T.active && T.phase === 'work' && isRepsItem(T.items[T.idx])) { advancePhase(); paintTimer(); }
+        break;
+
       case 'abortRun':
         if (T.active) {
           if (confirm('Прервать тренировку?')) {
@@ -1655,7 +1690,7 @@
   }
 
   /* поля ввода внутри редактора списка */
-  document.addEventListener('input', function (e) {
+  function onItemField(e) {
     var t = e.target;
     if (!t || !t.getAttribute) return;
 
@@ -1665,26 +1700,33 @@
       var lid = t.getAttribute('data-id');
       var idx = num(t.getAttribute('data-idx'));
       var field = t.getAttribute('data-field');
-      var val = num(t.value);
       var p = profileData();
       if (!p) return;
+      var modeField = field === 'mode';
       p[K.lists].forEach(function (l) {
         if (l.id !== lid) return;
         if (!l.items || !l.items[idx]) return;
-        l.items[idx][field] = Math.max(0, val);
+        if (modeField) {
+          l.items[idx].mode = t.value === 'reps' ? 'reps' : 'time';
+        } else {
+          l.items[idx][field] = Math.max(0, num(t.value));
+        }
       });
       persist(true);
+      if (modeField && e.type === 'change') renderListEdit(lid);
       return;
     }
 
-    if (t.getAttribute('data-ref') === 'listName') {
+    if (t.getAttribute('data-ref') === 'listName' && e.type === 'input') {
       var id = state.params.id;
       var pp = profileData();
       if (!pp) return;
       pp[K.lists].forEach(function (l) { if (l.id === id) l.name = t.value; });
       persist(true);
     }
-  });
+  }
+  document.addEventListener('input', onItemField);
+  document.addEventListener('change', onItemField);
 
   /* ==========================================================================
      21. СЛИЯНИЕ ЧЕРНОВИКА
