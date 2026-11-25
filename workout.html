@@ -1498,9 +1498,10 @@ function startTrainer(){
 function enterTrainerStep(){
   clearInterval(iv);
   clearCueTimers();
-  stopAllClips();
   const st = trainerSteps[stepIdx];
-  if (!st){ finishSession(); return; }
+  if (!st){ stopAllClips(); finishSession(); return; }
+  /* Клип «отдых → работа» должен доиграть на границе шагов. */
+  if (st.kind !== 'work') stopAllClips();
 
   repsCount = 0;
   prepCued = false;
@@ -1575,7 +1576,7 @@ function updateSoundIcon(){
 }
 
 function goBackToMain(){
-  if (trainerRun) { try { localStorage.setItem('srx_open_trainer', '1'); } catch (e) {} }
+  try { localStorage.setItem('srx_open_trainer', '1'); } catch (e) {}
   setTimeout(function(){ window.location.href = 'index.html'; }, 100);
 }
 
