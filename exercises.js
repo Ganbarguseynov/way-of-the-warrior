@@ -86,8 +86,9 @@
 
   /* Функции сохранения, которые может экспортировать app.js.
      Вызываем только те, что не требуют аргументов — чтобы не сломать подпись. */
+  /* app.js saveProfile() не трогаем: она читает поля формы профиля и показывает алерт. */
   var SAVE_FNS = [
-    'saveProfile', 'saveProfileData', 'persistProfile', 'persistProfileData',
+    'saveProfileData', 'persistProfile', 'persistProfileData',
     'syncProfile', 'pushProfile', 'saveCurrentProfile', 'updateProfileData',
     'saveUserProfile', 'syncToSupabase', 'saveProfileToSupabase', 'pushToCloud'
   ];
@@ -1867,6 +1868,9 @@
     if (!t || !t.getAttribute) return;
 
     var act = t.getAttribute('data-act');
+
+    /* Числа сохраняем только при уходе из поля (change), иначе каждая цифра пишет в облако. */
+    if (act === 'itemField' && e.type === 'input' && t.tagName === 'INPUT') return;
 
     if (act === 'itemField') {
       var lid = t.getAttribute('data-id');
