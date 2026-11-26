@@ -866,6 +866,7 @@
   function renderLists() {
     setTitle('Тренировки');
     var lists = workoutLists();
+    var category = trainingCategory;
     var html = '';
 
     html += '<div class="srx-kpi" style="margin-bottom:14px">' +
@@ -879,6 +880,15 @@
       '<div class="srx-row" style="margin-bottom:12px">' +
       '<button class="srx-btn ghost srx-grow" data-act="openCommunity">🌍 Найти тренировку в сообществе</button>' +
       '</div>';
+    html += '<div class="srx-card" style="padding:10px 12px">' +
+      '<div class="srx-label" style="margin-top:0">Разделы тренировок</div>' +
+      '<div class="srx-chips">';
+    TRAINING_CATEGORIES.forEach(function (item) {
+      html += '<button class="srx-chip' + (category === item.id ? ' on' : '') +
+        '" data-act="trainingCategory" data-category="' + esc(item.id) + '">' +
+        esc(item.icon + ' ' + item.name) + '</button>';
+    });
+    html += '</div><div class="srx-muted">Выбирай цель: сила, масса, скорость бойца, реакция, выносливость, растяжка и другие направления.</div></div>';
     html += '<input class="srx-input" data-ref="listsQ" placeholder="Поиск по моим тренировкам" value="' +
       esc(listsQuery) + '" style="margin-bottom:12px">';
 
@@ -888,9 +898,11 @@
       html += '<div class="srx-card"><h3>Мои тренировки</h3>';
       var lq = listsQuery.trim().toLowerCase();
       var shown = lists.filter(function (l) {
-        return !lq || String(l.name || '').toLowerCase().indexOf(lq) !== -1;
+        var matchesText = !lq || String(l.name || '').toLowerCase().indexOf(lq) !== -1;
+        var matchesCategory = category === 'all' || workoutCategory(l) === category;
+        return matchesText && matchesCategory;
       });
-      if (!shown.length) html += '<div class="srx-muted" style="padding:8px 0">Ничего не найдено.</div>';
+      if (!shown.length) html += '<div class="srx-muted" style="padding:8px 0">В этом разделе пока нет тренировок. Создай свою и выбери для неё подходящую категорию.</div>';
       shown.forEach(function (l) {
         var count = (l.items || []).length;
         var timerOnly = (l.items || []).every(function (it) { return !it.mode || it.mode === 'time'; });
@@ -908,6 +920,7 @@
           '<div class="srx-grow">' +
             '<div class="srx-name">' + esc(l.name || 'Без названия') + '</div>' +
             '<div class="srx-sub">' + count + ' упр.' + (timerOnly ? ' · ~' + Math.round(totalMin) + ' мин' : '') +
+              ' · ' + esc(workoutCategoryName(l)) +
               (l.focusGroup ? ' · акцент: ' + esc(l.focusGroup) : '') + '</div>' +
           '</div>' +
           '<div class="srx-row" style="width:calc(100% - 54px);margin-left:54px">' +
@@ -1038,6 +1051,14 @@
         MUSCLES.map(function (m) { return '<option value="' + esc(m) + '"' +
           (list.focusGroup === m ? ' selected' : '') + '>' + esc(m) + '</option>'; }).join('') +
       '</select>' +
+      '<label class="srx-label" style="display:block;margin-top:10px">Подраздел тренировки</label>' +
+      '<select class="srx-select" data-ref="listCategory">' +
+        TRAINING_CATEGORIES.filter(function (item) { return item.id !== 'all'; }).map(function (item) {
+          return '<option value="' + esc(item.id) + '"' +
+            (workoutCategory(list) === item.id ? ' selected' : '') + '>' +
+            esc(item.icon + ' ' + item.name) + '</option>';
+        }).join('') +
+      '</select>' +
       '<div class="srx-muted">Изменения сохраняются автоматически. За выполнение: рейтинг × 10 XP, минимум 10 XP.</div>' +
       '</div>';
 
@@ -1116,6 +1137,48 @@
   var libFilter = 'Все';
   var libQuery = '';
   var listsQuery = '';
+  var trainingCategory = 'all';
+  var TRAINING_CATEGORIES = [
+    { id: 'all', name: 'Все', icon: '🏋️' },
+    { id: 'strength', name: 'Сила', icon: '💪' },
+    { id: 'mass', name: 'Масса', icon: '🏆' },
+    { id: 'endurance', name: 'Выносливость', icon: '🔥' },
+    { id: 'speed', name: 'Скорость', icon: '⚡' },
+    { id: 'fighter-speed', name: 'Скорость бойца', icon: '🥊' },
+    { id: 'reaction', name: 'Реакция', icon: '🎯' },
+    { id: 'explosive', name: 'Взрывная сила', icon: '💥' },
+    { id: 'agility', name: 'Ловкость', icon: '🤸' },
+    { id: 'hiit', name: 'HIIT', icon: '⏱️' },
+    { id: 'functional', name: 'Функциональная', icon: '🔁' },
+    { id: 'core', name: 'Пресс и корпус', icon: '🧘' },
+    { id: 'legs', name: 'Ноги и ягодицы', icon: '🦵' },
+    { id: 'upper', name: 'Грудь, спина и руки', icon: '🏋️' },
+    { id: 'stretching', name: 'Растяжка', icon: '🧘‍♂️' },
+    { id: 'warmup', name: 'Разминка', icon: '🌡️' },
+    { id: 'home', name: 'Для дома', icon: '🏠' },
+    { id: 'equipment', name: 'С оборудованием', icon: '🔩' },
+    { id: 'short', name: 'До 10 минут', icon: '⏲️' },
+    { id: 'custom', name: 'Мои программы', icon: '⭐' }
+  ];
+
+  function trainingCategoryInfo(id) {
+    for (var i = 0; i < TRAINING_CATEGORIES.length; i++) {
+      if (TRAINING_CATEGORIES[i].id === id) return TRAINING_CATEGORIES[i];
+    }
+    return TRAINING_CATEGORIES[0];
+  }
+
+  function workoutCategory(list) {
+    if (list && list.category) return list.category;
+    if (list && list.focusGroup === 'Пресс') return 'core';
+    if (list && list.focusGroup === 'Ноги') return 'legs';
+    if (list && (list.focusGroup === 'Грудь' || list.focusGroup === 'Спина' || list.focusGroup === 'Руки')) return 'upper';
+    return 'custom';
+  }
+
+  function workoutCategoryName(list) {
+    return trainingCategoryInfo(workoutCategory(list)).name;
+  }
   var globalExerciseCache = {};
 
   function getBasket() {
@@ -1219,7 +1282,7 @@
           '<div class="srx-sub">' + esc(e.group) + ' · MET ' + e.met +
             (e.custom ? ' · своё' : '') + '</div>' +
         '<div class="srx-row" style="margin-top:6px;gap:6px">' +
-          '<button class="srx-btn sm" data-act="basketAdd" data-id="' + esc(e.id) + '">🧺 ＋ в корзину' +
+          '<button class="srx-btn sm" data-basket-add="' + esc(e.id) + '">🧺 ＋ в корзину' +
             (basketCounts[e.id] ? ' (' + basketCounts[e.id] + ')' : '') + '</button>' +
           '<button class="srx-btn sm green" data-act="startSingle" data-id="' + esc(e.id) + '">▶ Начать</button>' +
         '</div>' +
@@ -2115,6 +2178,16 @@
   }
 
   function onClick(e) {
+    var basketButton = e.target.closest ? e.target.closest('[data-basket-add]') : null;
+    if (basketButton) {
+      var basketId = basketButton.getAttribute('data-basket-add');
+      var basket = getBasket();
+      basket.push(String(basketId));
+      setBasket(basket);
+      toast('Добавлено в корзину: ' + basket.length + ' элементов');
+      if (state.view === 'library') renderLibrary();
+      return;
+    }
     var el = e.target.closest ? e.target.closest('[data-act]') : null;
     if (!el) return;
     var act = el.getAttribute('data-act');
@@ -2130,6 +2203,11 @@
       case 'libFilter':
         libFilter = el.getAttribute('data-g');
         renderLibrary();
+        break;
+
+      case 'trainingCategory':
+        trainingCategory = el.getAttribute('data-category') || 'all';
+        renderLists();
         break;
 
       case 'globalExerciseAdd': {
@@ -2573,6 +2651,16 @@
         if (l.id !== id) return;
         if (t.getAttribute('data-ref') === 'listName') l.name = t.value;
         else l.description = t.value.slice(0, 1000);
+      });
+      persist(true);
+    }
+
+    if (t.getAttribute('data-ref') === 'listCategory' && e.type === 'change') {
+      var categoryId = state.params.id;
+      var categoryProfile = profileData();
+      if (!categoryProfile) return;
+      categoryProfile[K.lists].forEach(function (l) {
+        if (l.id === categoryId) l.category = t.value;
       });
       persist(true);
     }
