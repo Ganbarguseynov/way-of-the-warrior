@@ -4,6 +4,7 @@
   var BUCKET = 'workout-media';
   var TABLE = 'shared_workouts';
   var RATED = 'shared_workouts_rated';
+  var EXERCISE_TABLE = 'shared_exercises';
   var VOTES = 'workout_votes';
   var REVIEWS = 'workout_reviews';
 
@@ -66,7 +67,7 @@
   }
 
   /* Публикует тренировку. items — формат trainerItems() из exercises.js. */
-  function publish(title, description, items, onProgress) {
+  function publish(title, description, items, onProgress, focusGroup) {
     var c = client();
     if (!c) return Promise.reject(new Error('Нет подключения к серверу'));
     if (Array.isArray(description)) {
@@ -91,11 +92,43 @@
     return Promise.all(uploads).then(function (clean) {
       return c.from(TABLE).insert({
         author_key: myKey(), author_name: myName(), title: title,
-        description: description, items: clean
+        description: description, focus_group: String(focusGroup || '').trim().slice(0, 40), items: clean
       }).select('id').single();
     }).then(function (res) {
       if (res.error) throw res.error;
       return res.data.id;
+    });
+  }
+
+  function publishExercise(exercise) {
+    var c = client();
+    if (!c) return Promise.reject(new Error('Нет подключения к серверу'));
+    var name = String(exercise && exercise.name || '').trim().slice(0, 80);
+    if (!name) return Promise.reject(new Error('У упражнения нет названия'));
+    return c.from(EXERCISE_TABLE).insert({
+      author_key: myKey(),
+      author_name: myName(),
+      name: name,
+      description: String(exercise.note || '').trim().slice(0, 500),
+      group_name: String(exercise.group || 'Всё тело').slice(0, 40),
+      icon: String(exercise.icon || '⭐').slice(0, 8),
+      met: Number(exercise.met) || 5
+    }).select('id').single().then(function (res) {
+      if (res.error) throw res.error;
+      return res.data;
+    });
+  }
+
+  function searchExercises(query) {
+    var c = client();
+    if (!c) return Promise.reject(new Error('Нет подключения к серверу'));
+    var q = String(query || '').replace(/[%_,()*]/g, ' ').trim();
+    var req = c.from(EXERCISE_TABLE)
+      .select('id,author_key,author_name,name,description,group_name,icon,met,created_at');
+    if (q) req = req.or('name.ilike.%' + q + '%,group_name.ilike.%' + q + '%,author_name.ilike.%' + q + '%');
+    return req.order('created_at', { ascending: false }).limit(100).then(function (res) {
+      if (res.error) throw res.error;
+      return res.data || [];
     });
   }
 
@@ -104,7 +137,7 @@
     var c = client();
     if (!c) return Promise.reject(new Error('Нет подключения к серверу'));
     var q = String(query || '').replace(/[%_,()*]/g, ' ').trim();
-    var req = c.from(RATED).select('id,title,description,author_key,author_name,items,score,likes,dislikes,avg_rating,review_count,created_at');
+    var req = c.from(RATED).select('id,title,description,focus_group,author_key,author_name,items,score,likes,dislikes,avg_rating,review_count,created_at');
     if (q) req = req.or('title.ilike.%' + q + '%,author_name.ilike.%' + q + '%');
     return req.order('avg_rating', { ascending: false }).order('review_count', { ascending: false })
       .order('score', { ascending: false }).order('created_at', { ascending: false }).limit(50)
@@ -166,7 +199,7 @@
   function fetchOne(id) {
     var c = client();
     if (!c) return Promise.reject(new Error('Нет подключения к серверу'));
-    return c.from(TABLE).select('id,title,description,author_key,author_name,items').eq('id', id).single().then(function (res) {
+    return c.from(TABLE).select('id,title,description,focus_group,author_key,author_name,items').eq('id', id).single().then(function (res) {
       if (res.error) throw res.error;
       return res.data;
     });
@@ -174,6 +207,8 @@
 
   window.SRXCommunity = {
     publish: publish,
+    publishExercise: publishExercise,
+    searchExercises: searchExercises,
     search: search,
     vote: vote,
     review: review,

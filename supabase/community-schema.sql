@@ -14,6 +14,21 @@ create table if not exists public.shared_workouts (
 alter table public.shared_workouts
   add column if not exists description text not null default '';
 
+alter table public.shared_workouts
+  add column if not exists focus_group text not null default '';
+
+create table if not exists public.shared_exercises (
+  id uuid primary key default gen_random_uuid(),
+  author_key text not null,
+  author_name text not null default 'Атлет',
+  name text not null check (char_length(name) between 1 and 80),
+  description text not null default '',
+  group_name text not null default 'Всё тело',
+  icon text not null default '⭐',
+  met numeric(4,1) not null default 5,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.workout_votes (
   workout_id uuid not null references public.shared_workouts(id) on delete cascade,
   voter_key text not null,
@@ -26,11 +41,17 @@ drop view if exists public.shared_workouts_rated cascade;
 
 alter table public.shared_workouts enable row level security;
 alter table public.workout_votes enable row level security;
+alter table public.shared_exercises enable row level security;
 
 drop policy if exists "shared_workouts read" on public.shared_workouts;
 create policy "shared_workouts read" on public.shared_workouts for select using (true);
 drop policy if exists "shared_workouts insert" on public.shared_workouts;
 create policy "shared_workouts insert" on public.shared_workouts for insert with check (true);
+
+drop policy if exists "shared_exercises read" on public.shared_exercises;
+create policy "shared_exercises read" on public.shared_exercises for select using (true);
+drop policy if exists "shared_exercises insert" on public.shared_exercises;
+create policy "shared_exercises insert" on public.shared_exercises for insert with check (true);
 
 drop policy if exists "workout_votes read" on public.workout_votes;
 create policy "workout_votes read" on public.workout_votes for select using (true);
@@ -79,7 +100,7 @@ create policy "workout_reviews delete" on public.workout_reviews for delete usin
 
 create view public.shared_workouts_rated with (security_invoker = true) as
 select
-  w.id, w.author_key, w.author_name, w.title, w.description, w.items, w.created_at,
+  w.id, w.author_key, w.author_name, w.title, w.description, w.focus_group, w.items, w.created_at,
   coalesce(v.score, 0)::int as score,
   coalesce(v.likes, 0)::int as likes,
   coalesce(v.dislikes, 0)::int as dislikes,
