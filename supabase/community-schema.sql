@@ -22,15 +22,7 @@ create table if not exists public.workout_votes (
   primary key (workout_id, voter_key)
 );
 
-create or replace view public.shared_workouts_rated with (security_invoker = true) as
-select
-  w.id, w.author_key, w.author_name, w.title, w.description, w.items, w.created_at,
-  coalesce(sum(v.value), 0)::int as score,
-  count(v.*) filter (where v.value = 1)::int as likes,
-  count(v.*) filter (where v.value = -1)::int as dislikes
-from public.shared_workouts w
-left join public.workout_votes v on v.workout_id = w.id
-group by w.id;
+drop view if exists public.shared_workouts_rated cascade;
 
 alter table public.shared_workouts enable row level security;
 alter table public.workout_votes enable row level security;
@@ -85,7 +77,7 @@ create policy "workout_reviews update" on public.workout_reviews for update usin
 drop policy if exists "workout_reviews delete" on public.workout_reviews;
 create policy "workout_reviews delete" on public.workout_reviews for delete using (true);
 
-create or replace view public.shared_workouts_rated with (security_invoker = true) as
+create view public.shared_workouts_rated with (security_invoker = true) as
 select
   w.id, w.author_key, w.author_name, w.title, w.description, w.items, w.created_at,
   coalesce(v.score, 0)::int as score,
@@ -107,7 +99,9 @@ left join (
   from public.workout_reviews group by workout_id
 ) r on r.workout_id = w.id;
 
-create or replace view public.shared_workout_author_ratings with (security_invoker = true) as
+drop view if exists public.shared_workout_author_ratings cascade;
+
+create view public.shared_workout_author_ratings with (security_invoker = true) as
 select w.author_key, max(w.author_name) as author_name,
   count(distinct w.id)::int as workout_count,
   coalesce(sum(v.score), 0)::int as score,
@@ -185,30 +179,14 @@ alter table public.sport_clans
   add column if not exists min_xp integer not null default 0
     check (min_xp between 0 and 1000000);
 
-alter table public.sport_clans enable row level security;
-drop policy if exists "sport_clans read" on public.sport_clans;
-create policy "sport_clans read" on public.sport_clans for select using (true);
-drop policy if exists "sport_clans insert" on public.sport_clans;
-create policy "sport_clans insert" on public.sport_clans for insert with check (true);
-drop policy if exists "sport_clans update" on public.sport_clans;
-create policy "sport_clans update" on public.sport_clans for update using (true) with check (true);
-drop policy if exists "sport_clans delete" on public.sport_clans;
-create policy "sport_clans delete" on public.sport_clans for delete using (true);
-alter table public.sport_clan_members enable row level security;
-drop policy if exists "sport_clan_members read" on public.sport_clan_members;
-create policy "sport_clan_members read" on public.sport_clan_members for select using (true);
-drop policy if exists "sport_clan_members insert" on public.sport_clan_members;
-create policy "sport_clan_members insert" on public.sport_clan_members for insert with check (true);
-drop policy if exists "sport_clan_members delete" on public.sport_clan_members;
-create policy "sport_clan_members delete" on public.sport_clan_members for delete using (true);
+-- Клановые таблицы используются приложением напрямую через public-ключ.
+-- RLS отключён, чтобы старые политики не мешали повторному запуску миграции.
+alter table public.sport_clans disable row level security;
+alter table public.sport_clan_members disable row level security;
 
 create index if not exists sport_clan_messages_recent
   on public.sport_clan_messages (clan_id, created_at desc);
-alter table public.sport_clan_messages enable row level security;
-drop policy if exists "sport_clan_messages read" on public.sport_clan_messages;
-create policy "sport_clan_messages read" on public.sport_clan_messages for select using (true);
-drop policy if exists "sport_clan_messages insert" on public.sport_clan_messages;
-create policy "sport_clan_messages insert" on public.sport_clan_messages for insert with check (true);
+alter table public.sport_clan_messages disable row level security;
 
 create or replace function public.require_sport_clan_message_member()
 returns trigger language plpgsql as $$
