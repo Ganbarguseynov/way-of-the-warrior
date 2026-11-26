@@ -22,7 +22,9 @@ create table if not exists public.workout_votes (
   primary key (workout_id, voter_key)
 );
 
-create or replace view public.shared_workouts_rated with (security_invoker = true) as
+drop view if exists public.shared_workouts_rated;
+
+create view public.shared_workouts_rated with (security_invoker = true) as
 select
   w.id, w.author_key, w.author_name, w.title, w.description, w.items, w.created_at,
   coalesce(sum(v.value), 0)::int as score,
