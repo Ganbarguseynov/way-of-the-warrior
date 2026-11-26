@@ -6,9 +6,13 @@ create table if not exists public.shared_workouts (
   author_key text not null,
   author_name text not null default 'Атлет',
   title text not null check (char_length(title) between 1 and 80),
+  description text not null default '' check (char_length(description) <= 1000),
   items jsonb not null,
   created_at timestamptz not null default now()
 );
+
+alter table public.shared_workouts
+  add column if not exists description text not null default '';
 
 create table if not exists public.workout_votes (
   workout_id uuid not null references public.shared_workouts(id) on delete cascade,
@@ -20,7 +24,7 @@ create table if not exists public.workout_votes (
 
 create or replace view public.shared_workouts_rated with (security_invoker = true) as
 select
-  w.id, w.author_key, w.author_name, w.title, w.items, w.created_at,
+  w.id, w.author_key, w.author_name, w.title, w.description, w.items, w.created_at,
   coalesce(sum(v.value), 0)::int as score,
   count(v.*) filter (where v.value = 1)::int as likes,
   count(v.*) filter (where v.value = -1)::int as dislikes
@@ -83,7 +87,7 @@ create policy "workout_reviews delete" on public.workout_reviews for delete usin
 
 create or replace view public.shared_workouts_rated with (security_invoker = true) as
 select
-  w.id, w.author_key, w.author_name, w.title, w.items, w.created_at,
+  w.id, w.author_key, w.author_name, w.title, w.description, w.items, w.created_at,
   coalesce(v.score, 0)::int as score,
   coalesce(v.likes, 0)::int as likes,
   coalesce(v.dislikes, 0)::int as dislikes,
@@ -137,13 +141,43 @@ create table if not exists public.sport_clans (
   created_at timestamptz not null default now()
 );
 
-create table if not exists public.sport_clan_members (
-  clan_id uuid not null references public.sport_clans(id) on delete cascade,
-  player_key text not null,
-  role text not null default 'member',
-  created_at timestamptz not null default now(),
-  primary key (clan_id, player_key)
-);
+-- Existing installations may use bigint or uuid for sport_clans.id.
+do $$
+declare
+  clan_id_type text;
+begin
+  select format_type(a.atttypid, a.atttypmod) into clan_id_type
+  from pg_attribute a
+  where a.attrelid = 'public.sport_clans'::regclass
+    and a.attname = 'id'
+    and not a.attisdropped;
+
+  if clan_id_type is null then
+    raise exception 'Не удалось определить тип public.sport_clans.id';
+  end if;
+
+  execute format($ddl$
+    create table if not exists public.sport_clan_members (
+      clan_id %s not null references public.sport_clans(id) on delete cascade,
+      player_key text not null,
+      role text not null default 'member',
+      created_at timestamptz not null default now(),
+      primary key (clan_id, player_key)
+    )
+  $ddl$, clan_id_type);
+
+  execute format($ddl$
+    create table if not exists public.sport_clan_messages (
+      id bigint generated always as identity primary key,
+      clan_id %s not null references public.sport_clans(id) on delete cascade,
+      player_key text not null,
+      author_name text not null default 'Атлет',
+      message text not null check (char_length(message) between 1 and 1000),
+      created_at timestamptz not null default now()
+    )
+  $ddl$, clan_id_type);
+end;
+$$;
 
 alter table public.sport_clans
   add column if not exists description text not null default '',
@@ -167,15 +201,6 @@ drop policy if exists "sport_clan_members insert" on public.sport_clan_members;
 create policy "sport_clan_members insert" on public.sport_clan_members for insert with check (true);
 drop policy if exists "sport_clan_members delete" on public.sport_clan_members;
 create policy "sport_clan_members delete" on public.sport_clan_members for delete using (true);
-
-create table if not exists public.sport_clan_messages (
-  id bigint generated always as identity primary key,
-  clan_id uuid not null references public.sport_clans(id) on delete cascade,
-  player_key text not null,
-  author_name text not null default 'Атлет',
-  message text not null check (char_length(message) between 1 and 1000),
-  created_at timestamptz not null default now()
-);
 
 create index if not exists sport_clan_messages_recent
   on public.sport_clan_messages (clan_id, created_at desc);

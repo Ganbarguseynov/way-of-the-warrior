@@ -66,9 +66,15 @@
   }
 
   /* Публикует тренировку. items — формат trainerItems() из exercises.js. */
-  function publish(title, items, onProgress) {
+  function publish(title, description, items, onProgress) {
     var c = client();
     if (!c) return Promise.reject(new Error('Нет подключения к серверу'));
+    if (Array.isArray(description)) {
+      onProgress = items;
+      items = description;
+      description = '';
+    }
+    description = String(description || '').trim().slice(0, 1000);
     var folder = myKey().replace(/[^a-zA-Z0-9_-]/g, '_') + '/' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     var done = 0;
     var uploads = items.map(function (it, i) {
@@ -84,7 +90,8 @@
     });
     return Promise.all(uploads).then(function (clean) {
       return c.from(TABLE).insert({
-        author_key: myKey(), author_name: myName(), title: title, items: clean
+        author_key: myKey(), author_name: myName(), title: title,
+        description: description, items: clean
       }).select('id').single();
     }).then(function (res) {
       if (res.error) throw res.error;
@@ -97,7 +104,7 @@
     var c = client();
     if (!c) return Promise.reject(new Error('Нет подключения к серверу'));
     var q = String(query || '').replace(/[%_,()*]/g, ' ').trim();
-    var req = c.from(RATED).select('id,title,author_key,author_name,items,score,likes,dislikes,avg_rating,review_count,created_at');
+    var req = c.from(RATED).select('id,title,description,author_key,author_name,items,score,likes,dislikes,avg_rating,review_count,created_at');
     if (q) req = req.or('title.ilike.%' + q + '%,author_name.ilike.%' + q + '%');
     return req.order('avg_rating', { ascending: false }).order('review_count', { ascending: false })
       .order('score', { ascending: false }).order('created_at', { ascending: false }).limit(50)
@@ -109,7 +116,7 @@
         return Promise.all([
           c.from(VOTES).select('workout_id,value').eq('voter_key', myKey()).in('workout_id', ids),
           c.from(REVIEWS).select('id,workout_id,reviewer_key,reviewer_name,stars,comment,created_at')
-            .in('workout_id', ids).order('created_at', { ascending: false }).limit(200),
+            .in('workout_id', ids).order('created_at', { ascending: false }),
           c.from(REVIEWS).select('id,workout_id,reviewer_key,reviewer_name,stars,comment,created_at')
             .eq('reviewer_key', myKey()).in('workout_id', ids)
         ]).then(function (results) {
@@ -120,7 +127,7 @@
             (results[0].data || []).forEach(function (v) { mine[v.workout_id] = v.value; });
             (results[1].data || []).forEach(function (r) {
               if (!reviews[r.workout_id]) reviews[r.workout_id] = [];
-              if (reviews[r.workout_id].length < 3) reviews[r.workout_id].push(r);
+              reviews[r.workout_id].push(r);
             });
             (results[2].data || []).forEach(function (r) { myReviews[r.workout_id] = r; });
             return { rows: rows, mine: mine, reviews: reviews, myReviews: myReviews };
@@ -159,7 +166,7 @@
   function fetchOne(id) {
     var c = client();
     if (!c) return Promise.reject(new Error('Нет подключения к серверу'));
-    return c.from(TABLE).select('id,title,author_key,author_name,items').eq('id', id).single().then(function (res) {
+    return c.from(TABLE).select('id,title,description,author_key,author_name,items').eq('id', id).single().then(function (res) {
       if (res.error) throw res.error;
       return res.data;
     });

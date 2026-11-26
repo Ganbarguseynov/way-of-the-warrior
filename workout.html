@@ -347,6 +347,20 @@
   text-align:right; font-weight:700; font-size:12px; color:#8e8e93; margin:0;
 }
 .wk-start:disabled{opacity:.65;cursor:wait}
+.trainer-nav{
+  display:grid; grid-template-columns:repeat(4, minmax(0, 1fr));
+  gap:7px; margin:4px 0 18px;
+}
+.trainer-nav button{
+  padding:10px 5px; border-radius:12px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.05); color:#d1d1d6;
+  font-size:11px; font-weight:700; cursor:pointer;
+}
+.trainer-nav button.active{
+  background:linear-gradient(135deg,#ffcc00,#ffd700);
+  color:#000; border-color:#ffcc00;
+}
 </style>
 </head>
 <body>
@@ -355,6 +369,12 @@
 <div id="setup" class="inner-screen">
 <button class="back-btn" onclick="goBackToMain()">← Назад в приложение</button>
 <h1>Тренировка</h1>
+<div class="trainer-nav" aria-label="Разделы тренера">
+  <button onclick="openTrainerTab('lists')">🏋️<br>Тренировки</button>
+  <button onclick="openTrainerTab('analysis')">📊<br>Анализ</button>
+  <button onclick="openTrainerTab('library')">📚<br>Упражнения</button>
+  <button class="active">⏱<br>Таймер</button>
+</div>
 
 <div id="paneTimer" class="pane on">
   <div class="wk-sec">
@@ -569,6 +589,12 @@ const sb = supabase.createClient(
   'https://qnpriwfxzuoymoumdtrl.supabase.co',
   'sb_publishable_1jTWcnb3WvNMi79DXYU7Tw_RWKIVcsF'
 );
+
+function openTrainerTab(view){
+  localStorage.setItem('srx_open_trainer', '1');
+  localStorage.setItem('srx_open_trainer_view', view);
+  window.location.href = 'index.html';
+}
 
 let EXERCISE = null;
 const XP_PER_ROUND = 15;

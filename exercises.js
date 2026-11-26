@@ -712,13 +712,16 @@
         var reviewCount = Number(w.review_count) || 0;
         var completionXP = Math.max(10, Math.round(rating * 10));
         return '<div class="srx-card"><h3>' + esc(w.title) + '</h3>' +
+          (w.description ? '<div class="srx-muted" style="margin-top:7px;line-height:1.5">' +
+            esc(w.description) + '</div>' : '') +
           '<div class="srx-sub">Автор: ' + esc(w.author_name) + ' · ' + n + ' упр. · ' +
             (reviewCount ? '★ ' + rating.toFixed(1) + ' (' + reviewCount + ')' : '★ пока нет оценок') + ' · ' +
             '👍 ' + w.likes + ' / 👎 ' + w.dislikes + ' · за выполнение: ' + completionXP + ' XP</div>' +
-          (reviews.length ? '<div class="srx-sub" style="margin-top:7px">' + reviews.map(function (r) {
+          (reviews.length ? '<div style="margin-top:10px"><div class="srx-label">Отзывы (' +
+            reviews.length + ')</div><div class="srx-sub">' + reviews.map(function (r) {
             return '<div style="padding:4px 0">★ ' + r.stars + ' · <b>' + esc(r.reviewer_name) +
               '</b>' + (r.comment ? ': ' + esc(r.comment) : '') + '</div>';
-          }).join('') + '</div>' : '') +
+          }).join('') + '</div></div>' : '<div class="srx-muted" style="margin-top:8px">Отзывов пока нет</div>') +
           '<div class="srx-row" style="margin-top:10px">' +
             '<button class="srx-btn sm ' + (mine === 1 ? 'green' : 'ghost') + '" data-act="commVote" data-id="' + id +
               '" data-v="1" data-cur="' + mine + '">👍 ' + w.likes + '</button>' +
@@ -757,6 +760,10 @@
     var html = '<div class="srx-card">' +
       '<label class="srx-label">Название тренировки</label>' +
       '<input class="srx-input" data-ref="listName" value="' + esc(list.name) + '" placeholder="Например: День ног">' +
+      '<label class="srx-label" style="display:block;margin-top:10px">Описание тренировки</label>' +
+      '<textarea class="srx-textarea" data-ref="listDescription" rows="3" maxlength="1000" ' +
+        'placeholder="Например: силовая тренировка на ноги для дома">' +
+        esc(list.description || '') + '</textarea>' +
       '<div class="srx-muted">Изменения сохраняются автоматически. За выполнение: рейтинг × 10 XP, минимум 10 XP.</div>' +
       '</div>';
 
@@ -1876,7 +1883,7 @@
               reps: it.reps, restSec: it.restSec, prepSec: it.prepSec };
           });
           p[K.lists].push({
-            id: uid(), name: w.title + ' (из сообщества)', items: listItems,
+            id: uid(), name: w.title + ' (из сообщества)', description: w.description || '', items: listItems,
             communityWorkoutId: w.id, communityAuthorKey: w.author_key,
             createdAt: new Date().toISOString()
           });
@@ -1895,7 +1902,7 @@
         if (!ptitle) { toast('Сначала дай тренировке название'); break; }
         if (!(pl.items || []).length) { toast('Добавь хотя бы одно упражнение'); break; }
         toast('Публикую тренировку…');
-        SRXCommunity.publish(ptitle.slice(0, 80), trainerItems(pl)).then(function () {
+        SRXCommunity.publish(ptitle.slice(0, 80), pl.description || '', trainerItems(pl)).then(function () {
           toast('Опубликовано в сообществе');
         }).catch(function (err) { toast('Не удалось опубликовать: ' + (err && err.message || 'ошибка')); });
         break;
@@ -1967,7 +1974,7 @@
       case 'basketAdd': {
         var bid = el.getAttribute('data-id');
         var bl = getBasket();
-        if (bl.indexOf(bid) === -1) bl.push(bid);
+        bl.push(bid);
         setBasket(bl);
         toast('Добавлено в корзину');
         renderLibrary();
@@ -2091,7 +2098,7 @@
       case 'pickAddNew': {
         var pn = profileData();
         if (!pn) break;
-        var newList = { id: uid(), name: 'Моя тренировка', items: [], createdAt: new Date().toISOString() };
+        var newList = { id: uid(), name: 'Моя тренировка', description: '', items: [], createdAt: new Date().toISOString() };
         pn[K.lists].push(newList);
         persist(true);
         addExerciseToList(newList.id, el.getAttribute('data-ex'));
@@ -2212,11 +2219,15 @@
       return;
     }
 
-    if (t.getAttribute('data-ref') === 'listName' && e.type === 'input') {
+    if ((t.getAttribute('data-ref') === 'listName' || t.getAttribute('data-ref') === 'listDescription') && e.type === 'input') {
       var id = state.params.id;
       var pp = profileData();
       if (!pp) return;
-      pp[K.lists].forEach(function (l) { if (l.id === id) l.name = t.value; });
+      pp[K.lists].forEach(function (l) {
+        if (l.id !== id) return;
+        if (t.getAttribute('data-ref') === 'listName') l.name = t.value;
+        else l.description = t.value.slice(0, 1000);
+      });
       persist(true);
     }
 
@@ -2266,7 +2277,9 @@
 
     if (localStorage.getItem('srx_open_trainer')) {
       localStorage.removeItem('srx_open_trainer');
-      openRoot('lists');
+      var targetView = localStorage.getItem('srx_open_trainer_view') || 'lists';
+      localStorage.removeItem('srx_open_trainer_view');
+      openRoot(targetView);
     }
 
     window.addEventListener('beforeunload', function () {
