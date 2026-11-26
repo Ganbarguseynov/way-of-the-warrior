@@ -185,30 +185,14 @@ alter table public.sport_clans
   add column if not exists min_xp integer not null default 0
     check (min_xp between 0 and 1000000);
 
-alter table public.sport_clans enable row level security;
-drop policy if exists "sport_clans read" on public.sport_clans;
-create policy "sport_clans read" on public.sport_clans for select using (true);
-drop policy if exists "sport_clans insert" on public.sport_clans;
-create policy "sport_clans insert" on public.sport_clans for insert with check (true);
-drop policy if exists "sport_clans update" on public.sport_clans;
-create policy "sport_clans update" on public.sport_clans for update using (true) with check (true);
-drop policy if exists "sport_clans delete" on public.sport_clans;
-create policy "sport_clans delete" on public.sport_clans for delete using (true);
-alter table public.sport_clan_members enable row level security;
-drop policy if exists "sport_clan_members read" on public.sport_clan_members;
-create policy "sport_clan_members read" on public.sport_clan_members for select using (true);
-drop policy if exists "sport_clan_members insert" on public.sport_clan_members;
-create policy "sport_clan_members insert" on public.sport_clan_members for insert with check (true);
-drop policy if exists "sport_clan_members delete" on public.sport_clan_members;
-create policy "sport_clan_members delete" on public.sport_clan_members for delete using (true);
+-- Клановые таблицы используются приложением напрямую через public-ключ.
+-- RLS отключён, чтобы старые политики не мешали повторному запуску миграции.
+alter table public.sport_clans disable row level security;
+alter table public.sport_clan_members disable row level security;
 
 create index if not exists sport_clan_messages_recent
   on public.sport_clan_messages (clan_id, created_at desc);
-alter table public.sport_clan_messages enable row level security;
-drop policy if exists "sport_clan_messages read" on public.sport_clan_messages;
-create policy "sport_clan_messages read" on public.sport_clan_messages for select using (true);
-drop policy if exists "sport_clan_messages insert" on public.sport_clan_messages;
-create policy "sport_clan_messages insert" on public.sport_clan_messages for insert with check (true);
+alter table public.sport_clan_messages disable row level security;
 
 create or replace function public.require_sport_clan_message_member()
 returns trigger language plpgsql as $$
