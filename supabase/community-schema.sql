@@ -232,11 +232,23 @@ insert into storage.buckets (id, name, public, file_size_limit)
 values ('clan-avatars', 'clan-avatars', true, 5242880)
 on conflict (id) do update set public = true, file_size_limit = 5242880;
 drop policy if exists "clan avatar read" on storage.objects;
-create policy "clan avatar read" on storage.objects for select using (bucket_id = 'clan-avatars');
+drop policy if exists clan_avatar_read on storage.objects;
+create policy clan_avatar_read
+on storage.objects for select
+using (bucket_id = 'clan-avatars');
+
 drop policy if exists "clan avatar upload" on storage.objects;
-create policy "clan avatar upload" on storage.objects for insert with check (bucket_id = 'clan-avatars');
+drop policy if exists clan_avatar_upload on storage.objects;
+create policy clan_avatar_upload
+on storage.objects for insert
+with check (bucket_id = 'clan-avatars');
+
 drop policy if exists "clan avatar update" on storage.objects;
-create policy "clan avatar update" on storage.objects for update using (bucket_id = 'clan-avatars') with check (bucket_id = 'clan-avatars');
+drop policy if exists clan_avatar_update on storage.objects;
+create policy clan_avatar_update
+on storage.objects for update
+using (bucket_id = 'clan-avatars')
+with check (bucket_id = 'clan-avatars');
 
 create or replace function public.enforce_sport_clan_join_rules()
 returns trigger language plpgsql as $$
