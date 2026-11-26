@@ -1190,6 +1190,8 @@
     html += '</div>';
 
     var basket = getBasket();
+    var basketCounts = {};
+    basket.forEach(function (id) { basketCounts[id] = (basketCounts[id] || 0) + 1; });
     if (basket.length) {
       html += '<div class="srx-card" style="margin-bottom:12px"><div class="srx-name">🧺 В корзине: ' + basket.length + '</div>' +
         '<div class="srx-sub" style="margin:4px 0 10px">Создай из упражнений тренировку, добавь их в уже сохранённую или начни сразу.</div>' +
@@ -1217,7 +1219,8 @@
           '<div class="srx-sub">' + esc(e.group) + ' · MET ' + e.met +
             (e.custom ? ' · своё' : '') + '</div>' +
         '<div class="srx-row" style="margin-top:6px;gap:6px">' +
-          '<button class="srx-btn sm" data-act="basketAdd" data-id="' + esc(e.id) + '">🧺 ＋ в корзину</button>' +
+          '<button class="srx-btn sm" data-act="basketAdd" data-id="' + esc(e.id) + '">🧺 ＋ в корзину' +
+            (basketCounts[e.id] ? ' (' + basketCounts[e.id] + ')' : '') + '</button>' +
           '<button class="srx-btn sm green" data-act="startSingle" data-id="' + esc(e.id) + '">▶ Начать</button>' +
         '</div>' +
         '</div></div>';
@@ -2310,7 +2313,7 @@
         var bl = getBasket();
         bl.push(bid);
         setBasket(bl);
-        toast('Добавлено в корзину');
+        toast('Добавлено в корзину. Это упражнение можно добавлять снова сколько угодно раз.');
         renderLibrary();
         break;
       }
