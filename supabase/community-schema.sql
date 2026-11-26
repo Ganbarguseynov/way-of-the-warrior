@@ -113,8 +113,8 @@ select w.author_key, max(w.author_name) as author_name,
   coalesce(sum(v.score), 0)::int as score,
   coalesce(sum(v.likes), 0)::int as likes,
   coalesce(sum(v.dislikes), 0)::int as dislikes,
-  coalesce(sum(r.avg_rating * r.review_count) / nullif(sum(r.review_count), 0), 0)::numeric(3,2) as avg_rating,
-  coalesce(sum(r.review_count), 0)::int as review_count
+  coalesce(sum(r.avg_rating * r.review_total) / nullif(sum(r.review_total), 0), 0)::numeric(3,2) as avg_rating,
+  coalesce(sum(r.review_total), 0)::int as review_count
 from public.shared_workouts w
 left join (
   select workout_id, sum(value)::int as score,
@@ -124,7 +124,7 @@ left join (
 ) v on v.workout_id = w.id
 left join (
   select workout_id, avg(stars)::numeric(3,2) as avg_rating,
-    count(*)::int as review_count
+    count(*)::int as review_total
   from public.workout_reviews group by workout_id
 ) r on r.workout_id = w.id
 group by w.author_key;
@@ -232,11 +232,23 @@ insert into storage.buckets (id, name, public, file_size_limit)
 values ('clan-avatars', 'clan-avatars', true, 5242880)
 on conflict (id) do update set public = true, file_size_limit = 5242880;
 drop policy if exists "clan avatar read" on storage.objects;
-create policy "clan avatar read" on storage.objects for select using (bucket_id = 'clan-avatars');
+drop policy if exists clan_avatar_read on storage.objects;
+create policy clan_avatar_read
+on storage.objects for select
+using (bucket_id = 'clan-avatars');
+
 drop policy if exists "clan avatar upload" on storage.objects;
-create policy "clan avatar upload" on storage.objects for insert with check (bucket_id = 'clan-avatars');
+drop policy if exists clan_avatar_upload on storage.objects;
+create policy clan_avatar_upload
+on storage.objects for insert
+with check (bucket_id = 'clan-avatars');
+
 drop policy if exists "clan avatar update" on storage.objects;
-create policy "clan avatar update" on storage.objects for update using (bucket_id = 'clan-avatars') with check (bucket_id = 'clan-avatars');
+drop policy if exists clan_avatar_update on storage.objects;
+create policy clan_avatar_update
+on storage.objects for update
+using (bucket_id = 'clan-avatars')
+with check (bucket_id = 'clan-avatars');
 
 create or replace function public.enforce_sport_clan_join_rules()
 returns trigger language plpgsql as $$
