@@ -6,9 +6,13 @@ create table if not exists public.shared_workouts (
   author_key text not null,
   author_name text not null default 'Атлет',
   title text not null check (char_length(title) between 1 and 80),
+  description text not null default '' check (char_length(description) <= 1000),
   items jsonb not null,
   created_at timestamptz not null default now()
 );
+
+alter table public.shared_workouts
+  add column if not exists description text not null default '';
 
 create table if not exists public.workout_votes (
   workout_id uuid not null references public.shared_workouts(id) on delete cascade,
@@ -20,7 +24,7 @@ create table if not exists public.workout_votes (
 
 create or replace view public.shared_workouts_rated with (security_invoker = true) as
 select
-  w.id, w.author_key, w.author_name, w.title, w.items, w.created_at,
+  w.id, w.author_key, w.author_name, w.title, w.description, w.items, w.created_at,
   coalesce(sum(v.value), 0)::int as score,
   count(v.*) filter (where v.value = 1)::int as likes,
   count(v.*) filter (where v.value = -1)::int as dislikes
@@ -83,7 +87,7 @@ create policy "workout_reviews delete" on public.workout_reviews for delete usin
 
 create or replace view public.shared_workouts_rated with (security_invoker = true) as
 select
-  w.id, w.author_key, w.author_name, w.title, w.items, w.created_at,
+  w.id, w.author_key, w.author_name, w.title, w.description, w.items, w.created_at,
   coalesce(v.score, 0)::int as score,
   coalesce(v.likes, 0)::int as likes,
   coalesce(v.dislikes, 0)::int as dislikes,
