@@ -274,6 +274,159 @@
     { id: 'b_complex_barbell', name: 'Комплекс со штангой', group: 'Всё тело', met: 9.0, icon: '🏋️' }
   ];
 
+  /*
+   * Расширенные варианты встроенных упражнений.
+   * Каждая группа получает 10 движений × 10 вариантов техники = 100 позиций.
+   * Это обычные встроенные записи, поэтому они работают как остальные упражнения:
+   * их можно искать, добавлять в корзину и включать в тренировку.
+   */
+  var EXPANDED_BASES = {
+    'Грудь': [
+      ['Жим штанги лёжа', '🏋️', 5.0],
+      ['Жим гантелей лёжа', '🏋️', 5.0],
+      ['Жим на наклонной скамье', '🏋️', 5.0],
+      ['Разводка с гантелями', '💪', 4.5],
+      ['Сведение рук в кроссовере', '💪', 4.5],
+      ['Отжимания', '💪', 8.0],
+      ['Отжимания на брусьях', '💪', 6.0],
+      ['Жим в тренажёре', '🏋️', 4.5],
+      ['Пуловер для груди', '🏋️', 4.0],
+      ['Изометрическое сжатие груди', '💪', 3.5]
+    ],
+    'Спина': [
+      ['Подтягивания', '🧗', 8.0],
+      ['Тяга верхнего блока', '🏋️', 5.0],
+      ['Тяга штанги в наклоне', '🏋️', 5.5],
+      ['Тяга гантели одной рукой', '🏋️', 5.0],
+      ['Тяга горизонтального блока', '🏋️', 5.0],
+      ['Тяга Т-грифа', '🏋️', 5.5],
+      ['Гиперэкстензия', '🧍', 4.5],
+      ['Пуловер', '🏋️', 4.0],
+      ['Тяга каната к лицу', '🏋️', 4.0],
+      ['Супермен', '🦸', 4.0]
+    ],
+    'Ноги': [
+      ['Приседания', '🦵', 6.0],
+      ['Фронтальные приседания', '🦵', 6.0],
+      ['Приседания с гирей', '🔔', 6.0],
+      ['Выпады вперёд', '🦵', 5.5],
+      ['Обратные выпады', '🦵', 5.5],
+      ['Болгарские сплит-приседания', '🦵', 6.0],
+      ['Зашагивания на платформу', '🦵', 7.0],
+      ['Ягодичный мост', '🦵', 4.5],
+      ['Жим ногами', '🦵', 5.0],
+      ['Подъёмы на носки', '🦶', 4.0]
+    ],
+    'Плечи': [
+      ['Жим гантелей сидя', '🏋️', 5.0],
+      ['Жим Арнольда', '🏋️', 5.0],
+      ['Жим штанги стоя', '🏋️', 5.0],
+      ['Махи гантелями в стороны', '🏋️', 4.0],
+      ['Подъём гантелей перед собой', '🏋️', 4.0],
+      ['Разведения в наклоне', '🏋️', 4.0],
+      ['Тяга штанги к подбородку', '🏋️', 4.5],
+      ['Мах одной рукой в кроссовере', '🏋️', 4.0],
+      ['Отжимания уголком', '🤸', 7.0],
+      ['Стойка на руках у стены', '🤸', 5.0]
+    ],
+    'Руки': [
+      ['Подъём штанги на бицепс', '💪', 4.0],
+      ['Молотковые сгибания', '💪', 4.0],
+      ['Подъём гантели на бицепс', '💪', 4.0],
+      ['Концентрированный подъём', '💪', 3.5],
+      ['Сгибания на скамье Скотта', '💪', 4.0],
+      ['Французский жим', '💪', 4.0],
+      ['Разгибание руки в наклоне', '💪', 3.5],
+      ['Разгибание из-за головы', '💪', 4.0],
+      ['Отжимания узким хватом', '💪', 7.0],
+      ['Сгибание кистей с весом', '💪', 3.0]
+    ],
+    'Пресс': [
+      ['Планка', '🧘', 4.0],
+      ['Боковая планка', '🧘', 4.0],
+      ['Скручивания', '🧘', 4.0],
+      ['Обратные скручивания', '🧘', 4.5],
+      ['Велосипед', '🧘', 6.0],
+      ['Русские повороты', '🧘', 5.0],
+      ['Подъём ног лёжа', '🧘', 4.5],
+      ['Подъём коленей в висе', '🧗', 6.0],
+      ['Складка', '🧘', 6.0],
+      ['Мёртвый жук', '🧘', 3.5]
+    ],
+    'Кардио': [
+      ['Бег трусцой', '🏃', 7.0],
+      ['Спринт', '🏃', 12.5],
+      ['Ходьба быстрым шагом', '🚶', 4.5],
+      ['Велотренажёр', '🚴', 7.5],
+      ['Гребной тренажёр', '🚣', 8.5],
+      ['Эллиптический тренажёр', '🚴', 7.0],
+      ['Прыжки на месте', '🔥', 8.0],
+      ['Бег с высоким подниманием коленей', '🏃', 9.0],
+      ['Прыжки конькобежца', '⛸️', 8.5],
+      ['Бой с тенью', '🥊', 7.0]
+    ],
+    'Всё тело': [
+      ['Бёрпи', '🔥', 10.0],
+      ['Трастеры с гантелями', '🔥', 9.0],
+      ['Махи гирей', '🔔', 9.0],
+      ['Рывок гири', '🔔', 10.0],
+      ['Взятие гири на грудь', '🔔', 8.5],
+      ['Манмейкер', '🔥', 10.0],
+      ['Медвежья ходьба', '🐻', 8.0],
+      ['Червячок', '🐛', 6.0],
+      ['Спраул', '🔥', 9.0],
+      ['Турецкий подъём', '🔔', 7.0]
+    ]
+  };
+
+  var EXPANDED_VARIANTS = {
+    'Грудь': ['обычный вариант', 'с паузой внизу', 'в медленном темпе', 'с остановкой наверху', 'с узкой постановкой', 'с широкой постановкой', 'поочерёдно', 'с коротким отдыхом', 'с контролем опускания', 'взрывной вариант'],
+    'Спина': ['обычный вариант', 'с паузой в сокращении', 'в медленном темпе', 'с узким хватом', 'с широким хватом', 'обратным хватом', 'поочерёдно', 'с контролем опускания', 'с коротким отдыхом', 'взрывной вариант'],
+    'Ноги': ['обычный вариант', 'с паузой внизу', 'в медленном темпе', 'с узкой постановкой', 'с широкой постановкой', 'поочерёдно', 'на одной ноге', 'с коротким отдыхом', 'с контролем опускания', 'взрывной вариант'],
+    'Плечи': ['обычный вариант', 'с паузой наверху', 'в медленном темпе', 'сидя', 'стоя', 'поочерёдно', 'одной рукой', 'с коротким отдыхом', 'с контролем опускания', 'взрывной вариант'],
+    'Руки': ['обычный вариант', 'с паузой в сокращении', 'в медленном темпе', 'узким хватом', 'широким хватом', 'поочерёдно', 'одной рукой', 'с коротким отдыхом', 'с контролем опускания', 'взрывной вариант'],
+    'Пресс': ['обычный вариант', 'с паузой в сокращении', 'в медленном темпе', 'с прямыми ногами', 'с согнутыми ногами', 'поочерёдно', 'с коротким отдыхом', 'с контролем движения', 'в изометрии', 'в динамичном темпе'],
+    'Кардио': ['лёгкий темп', 'средний темп', 'высокий темп', 'интервальный режим', '30 секунд работы', '45 секунд работы', '60 секунд работы', 'с коротким отдыхом', 'с ускорением', 'максимальный темп'],
+    'Всё тело': ['обычный вариант', 'с паузой', 'в медленном темпе', 'с лёгким весом', 'со средним весом', 'с тяжёлым весом', 'поочерёдно', 'с коротким отдыхом', 'интервальный режим', 'взрывной вариант']
+  };
+
+  Object.keys(EXPANDED_BASES).forEach(function (group, groupIndex) {
+    EXPANDED_BASES[group].forEach(function (base, baseIndex) {
+      EXPANDED_VARIANTS[group].forEach(function (variant, variantIndex) {
+        BUILTIN.push({
+          id: 'x_' + groupIndex + '_' + baseIndex + '_' + variantIndex,
+          name: base[0] + ' — ' + variant,
+          group: group,
+          met: base[2],
+          icon: base[1]
+        });
+      });
+    });
+  });
+
+  var EXACT_EXTRA_NAMES = {
+    'Грудь': ['Жим в тренажёре под углом', 'Жим одной рукой лёжа', 'Жим с пола', 'Жим-выжимание гантелей', 'Жим в кроссовере стоя', 'Сведение снизу вверх', 'Сведение сверху вниз', 'Отжимания лучника', 'Отжимания с паузой', 'Изометрический упор'],
+    'Спина': ['Тяга в тренажёре', 'Тяга одной рукой в блоке', 'Тяга прямыми руками', 'Тяга каната сверху', 'Тяга к поясу сидя', 'Шраги со штангой', 'Шраги с гантелями', 'Разведение на заднюю дельту', 'Лодочка с удержанием', 'Планка с тягой'],
+    'Ноги': ['Румынская тяга', 'Становая тяга на прямых ногах', 'Сумо-тяга', 'Приседания на одной ноге', 'Пистолетик с опорой', 'Выпад с подъёмом колена', 'Выпад в реверансе', 'Разведение ног в тренажёре', 'Сведение ног в тренажёре', 'Подъём таза на одной ноге'],
+    'Плечи': ['Жим гири одной рукой', 'Жим лендмайна', 'Махи блином в стороны', 'Махи в планке', 'Разведение в тренажёре', 'Тяга каната к подбородку', 'Круги руками', 'Отведение руки с резинкой', 'Подъём рук над головой', 'Удержание веса над головой'],
+    'Руки': ['Сгибание рук на блоке', 'Сгибание с канатной рукоятью', 'Сгибание Зоттмана', 'Обратные сгибания', 'Сгибание с резинкой', 'Разгибание на блоке', 'Разгибание каната вниз', 'Разгибание одной рукой', 'Жим узким хватом', 'Удержание гантелей'],
+    'Пресс': ['Планка с подъёмом ноги', 'Планка с подъёмом руки', 'Планка на локтях', 'Планка с колен', 'Касание пяток', 'Касание носков', 'Ножницы', 'Маятник ногами', 'Повороты корпуса стоя', 'Скручивания с паузой'],
+    'Кардио': ['Степпер', 'Аэробика', 'Танцевальная разминка', 'Ходьба в гору', 'Велосипед на улице', 'Прыжки через линию', 'Прыжки через барьер', 'Бег боком', 'Челночный бег', 'Интервальный бег'],
+    'Всё тело': ['Комплекс с гантелями', 'Комплекс с гирей', 'Комплекс с собственным весом', 'Силовая лестница', 'Кардио-лестница', 'Приседание и жим', 'Выпад и сгибание', 'Тяга и подъём', 'Прыжок и приседание']
+  };
+
+  Object.keys(EXACT_EXTRA_NAMES).forEach(function (group, groupIndex) {
+    EXACT_EXTRA_NAMES[group].forEach(function (name, nameIndex) {
+      BUILTIN.push({
+        id: 'z_' + groupIndex + '_' + nameIndex,
+        name: name,
+        group: group,
+        met: 5.0,
+        icon: group === 'Кардио' ? '🏃' : (group === 'Пресс' ? '🧘' : '💪')
+      });
+    });
+  });
+
   function allExercises() {
     var custom = customExercises().map(function (e) {
       return {
@@ -726,10 +879,8 @@
       '<div class="srx-row" style="margin-bottom:12px">' +
       '<button class="srx-btn ghost srx-grow" data-act="openCommunity">🌍 Найти тренировку в сообществе</button>' +
       '</div>';
-    if (lists.length) {
-      html += '<input class="srx-input" data-ref="listsQ" placeholder="Поиск по моим тренировкам" value="' +
-        esc(listsQuery) + '" style="margin-bottom:12px">';
-    }
+    html += '<input class="srx-input" data-ref="listsQ" placeholder="Поиск по моим тренировкам" value="' +
+      esc(listsQuery) + '" style="margin-bottom:12px">';
 
     if (!lists.length) {
       html += '<div class="srx-empty">Сохранённых тренировок пока нет.<br>Создай тренировку и добавь упражнения из вкладки «Упражнения».</div>';
@@ -756,7 +907,8 @@
           '<div class="srx-thumb">🏋️</div>' +
           '<div class="srx-grow">' +
             '<div class="srx-name">' + esc(l.name || 'Без названия') + '</div>' +
-            '<div class="srx-sub">' + count + ' упр.' + (timerOnly ? ' · ~' + Math.round(totalMin) + ' мин' : '') + '</div>' +
+            '<div class="srx-sub">' + count + ' упр.' + (timerOnly ? ' · ~' + Math.round(totalMin) + ' мин' : '') +
+              (l.focusGroup ? ' · акцент: ' + esc(l.focusGroup) : '') + '</div>' +
           '</div>' +
           '<div class="srx-row" style="width:calc(100% - 54px);margin-left:54px">' +
             '<button class="srx-btn sm green srx-grow" data-act="startList" data-id="' + esc(l.id) + '">▶ Начать</button>' +
@@ -819,7 +971,8 @@
         return '<div class="srx-card"><h3>' + esc(w.title) + '</h3>' +
           (w.description ? '<div class="srx-muted" style="margin-top:7px;line-height:1.5">' +
             esc(w.description) + '</div>' : '') +
-          '<div class="srx-sub">Автор: ' + esc(w.author_name) + ' · ' + n + ' упр. · ' +
+          '<div class="srx-sub">Автор: ' + esc(w.author_name) + ' · ' + n + ' упр.' +
+            (w.focus_group ? ' · акцент: ' + esc(w.focus_group) : '') + ' · ' +
             (reviewCount ? '★ ' + rating.toFixed(1) + ' (' + reviewCount + ')' : '★ пока нет оценок') + ' · ' +
             '👍 ' + w.likes + ' / 👎 ' + w.dislikes + ' · за выполнение: ' + completionXP + ' XP</div>' +
           (reviews.length ? '<div style="margin-top:10px"><div class="srx-label">Отзывы (' +
@@ -860,6 +1013,16 @@
       persist(true);
     }
 
+    if (t.getAttribute('data-ref') === 'listFocusGroup' && e.type === 'change') {
+      var focusId = state.params.id;
+      var focusProfile = profileData();
+      if (!focusProfile) return;
+      focusProfile[K.lists].forEach(function (l) {
+        if (l.id === focusId) l.focusGroup = t.value;
+      });
+      persist(true);
+    }
+
     setTitle(id ? 'Редактор тренировки' : 'Новая тренировка');
 
     var html = '<div class="srx-card">' +
@@ -869,6 +1032,12 @@
       '<textarea class="srx-textarea" data-ref="listDescription" rows="3" maxlength="1000" ' +
         'placeholder="Например: силовая тренировка на ноги для дома">' +
         esc(list.description || '') + '</textarea>' +
+      '<label class="srx-label" style="display:block;margin-top:10px">Главный акцент на группу мышц</label>' +
+      '<select class="srx-select" data-ref="listFocusGroup">' +
+        '<option value="">Не указан</option>' +
+        MUSCLES.map(function (m) { return '<option value="' + esc(m) + '"' +
+          (list.focusGroup === m ? ' selected' : '') + '>' + esc(m) + '</option>'; }).join('') +
+      '</select>' +
       '<div class="srx-muted">Изменения сохраняются автоматически. За выполнение: рейтинг × 10 XP, минимум 10 XP.</div>' +
       '</div>';
 
@@ -947,6 +1116,7 @@
   var libFilter = 'Все';
   var libQuery = '';
   var listsQuery = '';
+  var globalExerciseCache = {};
 
   function getBasket() {
     try {
@@ -1055,6 +1225,34 @@
     html += '</div>';
 
     bodyEl.innerHTML = html;
+    var remote = document.createElement('div');
+    remote.setAttribute('data-ref', 'globalExerciseResults');
+    remote.innerHTML = '<div class="srx-card"><h3>🌍 Глобальные упражнения</h3><div class="srx-muted">Загрузка…</div></div>';
+    bodyEl.appendChild(remote);
+    if (window.SRXCommunity && SRXCommunity.searchExercises) {
+      SRXCommunity.searchExercises(libQuery).then(function (rows) {
+        if (state.view !== 'library' || !remote.isConnected) return;
+        globalExerciseCache = {};
+        rows.forEach(function (row) { globalExerciseCache[row.id] = row; });
+        if (!rows.length) {
+          remote.innerHTML = '<div class="srx-card"><h3>🌍 Глобальные упражнения</h3><div class="srx-muted">Публичных упражнений по этому запросу пока нет.</div></div>';
+          return;
+        }
+        remote.innerHTML = '<div class="srx-card"><h3>🌍 Глобальные упражнения</h3>' +
+          rows.map(function (e) {
+            return '<div class="srx-list-item"><div class="srx-thumb">' + esc(e.icon || '⭐') + '</div>' +
+              '<div class="srx-grow"><div class="srx-name">' + esc(e.name) + '</div>' +
+              '<div class="srx-sub">' + esc(e.group_name || 'Всё тело') + ' · автор: ' + esc(e.author_name || 'Атлет') +
+              ' · MET ' + (Number(e.met) || 5) + '</div>' +
+              (e.description ? '<div class="srx-muted">' + esc(e.description) + '</div>' : '') + '</div>' +
+              '<button class="srx-btn sm" data-act="globalExerciseAdd" data-id="' + esc(e.id) + '">＋</button></div>';
+          }).join('') + '</div>';
+      }).catch(function () {
+        if (remote.isConnected) remote.innerHTML = '';
+      });
+    } else {
+      remote.innerHTML = '';
+    }
   }
 
   /* ==========================================================================
@@ -1795,6 +1993,11 @@
     html += '<label class="srx-label">Заметка (необязательно)</label>' +
       '<textarea class="srx-textarea" data-ref="exNote" rows="2" placeholder="Техника, нюансы…"></textarea>';
 
+    html += '<label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px">' +
+      '<input type="checkbox" data-ref="exPublish" style="width:auto">' +
+      'Добавить упражнение в глобальный поиск для всех пользователей</label>' +
+      '<div class="srx-muted" style="margin-top:4px;font-size:11.5px">Название и выбранная группа будут видны другим людям.</div>';
+
     html += '<button class="srx-btn primary" style="width:100%;margin-top:16px" data-act="saveExercise">' +
       'Сохранить упражнение</button>';
 
@@ -1926,6 +2129,32 @@
         renderLibrary();
         break;
 
+      case 'globalExerciseAdd': {
+        var ge = globalExerciseCache[el.getAttribute('data-id')];
+        var gp = profileData();
+        if (!ge || !gp) break;
+        var localEx = {
+          id: 'c_' + uid(),
+          name: ge.name,
+          group: ge.group_name || 'Всё тело',
+          met: num(ge.met) || 5,
+          icon: ge.icon || '⭐',
+          note: ge.description || '',
+          mode: 'time',
+          timeSec: 40,
+          reps: 10,
+          sets: 3,
+          prepSec: 5,
+          restSec: 60,
+          createdAt: new Date().toISOString()
+        };
+        gp[K.ex].push(localEx);
+        persist();
+        toast('Упражнение добавлено в твою библиотеку');
+        renderLibrary();
+        break;
+      }
+
       case 'range':
         rangeDays = num(el.getAttribute('data-n')) || 30;
         renderAnalysis();
@@ -2007,7 +2236,7 @@
         if (!ptitle) { toast('Сначала дай тренировке название'); break; }
         if (!(pl.items || []).length) { toast('Добавь хотя бы одно упражнение'); break; }
         toast('Публикую тренировку…');
-        SRXCommunity.publish(ptitle.slice(0, 80), pl.description || '', trainerItems(pl)).then(function () {
+        SRXCommunity.publish(ptitle.slice(0, 80), pl.description || '', trainerItems(pl), null, pl.focusGroup || '').then(function () {
           toast('Опубликовано в сообществе');
         }).catch(function (err) { toast('Не удалось опубликовать: ' + (err && err.message || 'ошибка')); });
         break;
@@ -2138,6 +2367,7 @@
         var grp = ($('[data-ref="exGroup"]', modalEl) || {}).value || 'Всё тело';
         var met = clamp(num(($('[data-ref="exMet"]', modalEl) || {}).value) || 5, 1, 20);
         var note = ($('[data-ref="exNote"]', modalEl) || {}).value || '';
+        var publishGlobal = !!($('[data-ref="exPublish"]', modalEl) || {}).checked;
         var exMode = ($('[data-ref="exMode"]', modalEl) || {}).value || 'time';
         var exTime = clamp(num(($('[data-ref="exTime"]', modalEl) || {}).value) || 40, 5, 3600);
         var exReps = clamp(num(($('[data-ref="exReps"]', modalEl) || {}).value) || 10, 1, 500);
@@ -2169,7 +2399,15 @@
         var finishNew = function () {
           prof[K.ex].push(newEx);
           persist();
-          toast('Упражнение сохранено');
+          if (publishGlobal && window.SRXCommunity && SRXCommunity.publishExercise) {
+            SRXCommunity.publishExercise(newEx).then(function () {
+              toast('Упражнение сохранено и добавлено в глобальный поиск');
+            }).catch(function () {
+              toast('Упражнение сохранено локально; публикация не удалась');
+            });
+          } else {
+            toast('Упражнение сохранено');
+          }
           if (state.view === 'library') renderLibrary();
           showExerciseDone(newEx);
         };
