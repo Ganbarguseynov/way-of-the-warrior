@@ -22,17 +22,7 @@ create table if not exists public.workout_votes (
   primary key (workout_id, voter_key)
 );
 
-drop view if exists public.shared_workouts_rated;
-
-create view public.shared_workouts_rated with (security_invoker = true) as
-select
-  w.id, w.author_key, w.author_name, w.title, w.description, w.items, w.created_at,
-  coalesce(sum(v.value), 0)::int as score,
-  count(v.*) filter (where v.value = 1)::int as likes,
-  count(v.*) filter (where v.value = -1)::int as dislikes
-from public.shared_workouts w
-left join public.workout_votes v on v.workout_id = w.id
-group by w.id;
+drop view if exists public.shared_workouts_rated cascade;
 
 alter table public.shared_workouts enable row level security;
 alter table public.workout_votes enable row level security;
@@ -87,7 +77,7 @@ create policy "workout_reviews update" on public.workout_reviews for update usin
 drop policy if exists "workout_reviews delete" on public.workout_reviews;
 create policy "workout_reviews delete" on public.workout_reviews for delete using (true);
 
-create or replace view public.shared_workouts_rated with (security_invoker = true) as
+create view public.shared_workouts_rated with (security_invoker = true) as
 select
   w.id, w.author_key, w.author_name, w.title, w.description, w.items, w.created_at,
   coalesce(v.score, 0)::int as score,
@@ -109,7 +99,9 @@ left join (
   from public.workout_reviews group by workout_id
 ) r on r.workout_id = w.id;
 
-create or replace view public.shared_workout_author_ratings with (security_invoker = true) as
+drop view if exists public.shared_workout_author_ratings cascade;
+
+create view public.shared_workout_author_ratings with (security_invoker = true) as
 select w.author_key, max(w.author_name) as author_name,
   count(distinct w.id)::int as workout_count,
   coalesce(sum(v.score), 0)::int as score,
