@@ -113,8 +113,8 @@ select w.author_key, max(w.author_name) as author_name,
   coalesce(sum(v.score), 0)::int as score,
   coalesce(sum(v.likes), 0)::int as likes,
   coalesce(sum(v.dislikes), 0)::int as dislikes,
-  coalesce(sum(r.avg_rating * r.review_count) / nullif(sum(r.review_count), 0), 0)::numeric(3,2) as avg_rating,
-  coalesce(sum(r.review_count), 0)::int as review_count
+  coalesce(sum(r.avg_rating * r.review_total) / nullif(sum(r.review_total), 0), 0)::numeric(3,2) as avg_rating,
+  coalesce(sum(r.review_total), 0)::int as review_count
 from public.shared_workouts w
 left join (
   select workout_id, sum(value)::int as score,
@@ -124,7 +124,7 @@ left join (
 ) v on v.workout_id = w.id
 left join (
   select workout_id, avg(stars)::numeric(3,2) as avg_rating,
-    count(*)::int as review_count
+    count(*)::int as review_total
   from public.workout_reviews group by workout_id
 ) r on r.workout_id = w.id
 group by w.author_key;
