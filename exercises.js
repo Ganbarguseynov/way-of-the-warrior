@@ -1152,12 +1152,20 @@
     { id: 'functional', name: 'Функциональная', icon: '🔁' },
     { id: 'core', name: 'Пресс и корпус', icon: '🧘' },
     { id: 'legs', name: 'Ноги и ягодицы', icon: '🦵' },
+    { id: 'glutes', name: 'Ягодицы', icon: '🍑' },
     { id: 'upper', name: 'Грудь, спина и руки', icon: '🏋️' },
+    { id: 'shoulders-back', name: 'Плечи и спина', icon: '🏋️' },
+    { id: 'forearms', name: 'Предплечья', icon: '💪' },
     { id: 'stretching', name: 'Растяжка', icon: '🧘‍♂️' },
     { id: 'warmup', name: 'Разминка', icon: '🌡️' },
     { id: 'home', name: 'Для дома', icon: '🏠' },
+    { id: 'no-equipment', name: 'Без оборудования', icon: '🙌' },
     { id: 'equipment', name: 'С оборудованием', icon: '🔩' },
+    { id: 'beginner', name: 'Новичок', icon: '🌱' },
+    { id: 'advanced', name: 'Продвинутый', icon: '🚀' },
     { id: 'short', name: 'До 10 минут', icon: '⏲️' },
+    { id: 'boxing', name: 'Бокс и единоборства', icon: '🥊' },
+    { id: 'mobility', name: 'Мобильность', icon: '🔄' },
     { id: 'custom', name: 'Мои программы', icon: '⭐' }
   ];
 
@@ -1247,8 +1255,9 @@
     groups.forEach(function (g) {
       var has = g === 'Все' || all.some(function (e) { return e.group === g; });
       if (!has) return;
+      var groupCount = g === 'Все' ? all.length : all.filter(function (e) { return e.group === g; }).length;
       html += '<button class="srx-chip' + (g === libFilter ? ' on' : '') + '" data-act="libFilter" data-g="' +
-        esc(g) + '">' + esc(g) + '</button>';
+        esc(g) + '">' + esc(g) + ' (' + groupCount + ')</button>';
     });
     html += '</div>';
 
@@ -1267,6 +1276,7 @@
     html += '<input class="srx-input" data-ref="libQ" placeholder="Поиск упражнения" value="' + esc(libQuery) +
       '" style="margin-bottom:10px">';
 
+    html += '<div class="srx-muted" style="margin:0 0 8px">Встроенная библиотека: 1 000 упражнений. Одно упражнение можно добавлять в корзину повторно без ограничений.</div>';
     html += '<button class="srx-btn primary" style="width:100%;margin:4px 0 14px" data-act="newExercise">' +
       '＋ Своё упражнение с фото</button>';
 
